@@ -143,6 +143,46 @@
         </div>
 
     </div>
+</section><section class="py-5 bg-primary text-white">
+    <div class="container">
+
+        <h2 class="text-center mb-5">શા માટે Sai Consulting પસંદ કરો?</h2>
+
+        <div class="row text-center">
+
+            <div class="col-md-4 mb-4">
+                <h1>20+</h1>
+                <h5>વર્ષનો અનુભવ</h5>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <h1>100%</h1>
+                <h5>ગોપનીય સેવા</h5>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <h1>✔</h1>
+                <h5>અનુભવ આધારિત માર્ગદર્શન</h5>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <h1>📄</h1>
+                <h5>દસ્તાવેજ ડ્રાફ્ટિંગમાં વિશેષતા</h5>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <h1>🌾</h1>
+                <h5>ખેતીની જમીનનું ટાઇટલ ચેકિંગ</h5>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <h1>⚡</h1>
+                <h5>ઝડપી અને વિશ્વસનીય સેવા</h5>
+            </div>
+
+        </div>
+
+    </div>
 </section>
 
 @endsection
