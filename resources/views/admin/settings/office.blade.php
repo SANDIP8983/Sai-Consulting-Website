@@ -1,11 +1,15 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Office Settings')
+
+@section('breadcrumbs')
+    <li class="breadcrumb-item">Settings</li>
+    <li class="breadcrumb-item active" aria-current="page">Office</li>
+@endsection
 
 @section('content')
 <div class="container py-5"><div class="row justify-content-center"><div class="col-lg-9">
     <h1 class="h2 mb-4">Office Settings</h1>
-    @include('admin.settings._navigation')
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     <div class="card shadow-sm"><div class="card-body p-4"><form method="POST" action="{{ route('admin.settings.office.update') }}">
         @csrf @method('PUT')

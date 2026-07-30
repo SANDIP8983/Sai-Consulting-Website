@@ -6,7 +6,7 @@ use App\Models\CustomerRequest;
 
 class ReferenceNumberService
 {
-    public static function generate(): string
+    public function generate(): string
     {
         $year = date('Y');
 

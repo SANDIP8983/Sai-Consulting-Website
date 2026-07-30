@@ -1,11 +1,15 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Holidays')
+
+@section('breadcrumbs')
+    <li class="breadcrumb-item">Settings</li>
+    <li class="breadcrumb-item active" aria-current="page">Holidays</li>
+@endsection
 
 @section('content')
 <div class="container py-5"><div class="row justify-content-center"><div class="col-xl-10">
     <h1 class="h2 mb-4">Holidays</h1>
-    @include('admin.settings._navigation')
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @php($isEditing = $editingHoliday !== null)
     <div class="card shadow-sm mb-4"><div class="card-body p-4"><h2 class="h5 mb-3">{{ $isEditing ? 'Edit Holiday' : 'Add Holiday' }}</h2>

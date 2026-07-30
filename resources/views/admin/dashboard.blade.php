@@ -2,6 +2,10 @@
 
 @section('title', 'Dashboard')
 
+@section('breadcrumbs')
+    <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+@endsection
+
 @section('content')
 <div class="container py-5">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">

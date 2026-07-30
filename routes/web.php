@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\SettingsController;
 
 Route::get('/', function () {
@@ -31,6 +32,19 @@ Route::prefix('admin')->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('admin.logout');
     });
 });
+
+Route::middleware('auth')
+    ->prefix('admin/services')
+    ->name('admin.services.')
+    ->controller(ServiceController::class)
+    ->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/create', 'create')->name('create');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{service}/edit', 'edit')->name('edit');
+        Route::put('/{service}', 'update')->name('update');
+        Route::delete('/{service}', 'destroy')->name('destroy');
+    });
 
 Route::middleware('auth')
     ->prefix('admin/settings')
