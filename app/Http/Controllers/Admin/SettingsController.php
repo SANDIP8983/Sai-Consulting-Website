@@ -1,0 +1,115 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StoreHolidayRequest;
+use App\Http\Requests\Admin\UpdateContactSettingsRequest;
+use App\Http\Requests\Admin\UpdateHolidayRequest;
+use App\Http\Requests\Admin\UpdateOfficeSettingsRequest;
+use App\Http\Requests\Admin\UpdateOfficeTimingsRequest;
+use App\Http\Requests\Admin\UpdateWebsiteSettingsRequest;
+use App\Models\Holiday;
+use App\Services\SettingsService;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
+
+class SettingsController extends Controller
+{
+    public function __construct(private readonly SettingsService $settingsService)
+    {
+    }
+
+    public function website(): View
+    {
+        return view('admin.settings.website', [
+            'settings' => $this->settingsService->websiteSettings(),
+        ]);
+    }
+
+    public function updateWebsite(UpdateWebsiteSettingsRequest $request): RedirectResponse
+    {
+        $this->settingsService->updateWebsiteSettings($request->validated());
+
+        return to_route('admin.settings.website')->with('success', 'Website settings updated successfully.');
+    }
+
+    public function office(): View
+    {
+        return view('admin.settings.office', [
+            'settings' => $this->settingsService->officeSettings(),
+        ]);
+    }
+
+    public function updateOffice(UpdateOfficeSettingsRequest $request): RedirectResponse
+    {
+        $this->settingsService->updateOfficeSettings($request->validated());
+
+        return to_route('admin.settings.office')->with('success', 'Office settings updated successfully.');
+    }
+
+    public function contact(): View
+    {
+        return view('admin.settings.contact', [
+            'settings' => $this->settingsService->contactSettings(),
+        ]);
+    }
+
+    public function updateContact(UpdateContactSettingsRequest $request): RedirectResponse
+    {
+        $this->settingsService->updateContactSettings($request->validated());
+
+        return to_route('admin.settings.contact')->with('success', 'Contact settings updated successfully.');
+    }
+
+    public function officeTimings(): View
+    {
+        return view('admin.settings.office-timings', [
+            'timings' => $this->settingsService->officeTimings(),
+        ]);
+    }
+
+    public function updateOfficeTimings(UpdateOfficeTimingsRequest $request): RedirectResponse
+    {
+        $this->settingsService->updateOfficeTimings($request->validated('timings'));
+
+        return to_route('admin.settings.office-timings')->with('success', 'Office timings updated successfully.');
+    }
+
+    public function holidays(): View
+    {
+        return view('admin.settings.holidays', [
+            'holidays' => $this->settingsService->holidays(),
+            'editingHoliday' => null,
+        ]);
+    }
+
+    public function editHoliday(Holiday $holiday): View
+    {
+        return view('admin.settings.holidays', [
+            'holidays' => $this->settingsService->holidays(),
+            'editingHoliday' => $holiday,
+        ]);
+    }
+
+    public function storeHoliday(StoreHolidayRequest $request): RedirectResponse
+    {
+        $this->settingsService->createHoliday($request->validated());
+
+        return to_route('admin.settings.holidays')->with('success', 'Holiday created successfully.');
+    }
+
+    public function updateHoliday(UpdateHolidayRequest $request, Holiday $holiday): RedirectResponse
+    {
+        $this->settingsService->updateHoliday($holiday, $request->validated());
+
+        return to_route('admin.settings.holidays')->with('success', 'Holiday updated successfully.');
+    }
+
+    public function destroyHoliday(Holiday $holiday): RedirectResponse
+    {
+        $this->settingsService->deleteHoliday($holiday);
+
+        return to_route('admin.settings.holidays')->with('success', 'Holiday deleted successfully.');
+    }
+}
