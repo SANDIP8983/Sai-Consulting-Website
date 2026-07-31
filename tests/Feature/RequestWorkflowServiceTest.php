@@ -53,6 +53,13 @@ class RequestWorkflowServiceTest extends TestCase
         ]);
     }
 
+    public function test_approval_preserves_an_existing_file_number(): void
+    {
+        $request = $this->createRequest('under_review', ['file_number' => 'SC/2025/F000099']);
+        app(RequestWorkflowService::class)->transition($request, ['status' => 'approved'], User::factory()->create());
+        $this->assertSame('SC/2025/F000099', $request->fresh()->file_number);
+    }
+
     public function test_forbidden_transition_does_not_change_the_request_or_create_history(): void
     {
         $request = $this->createRequest('received');

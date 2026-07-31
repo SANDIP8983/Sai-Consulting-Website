@@ -14,6 +14,14 @@ class DashboardController extends Controller
     public function index(): View
     {
         return view('admin.dashboard', [
+            'requestSummary' => [
+                'received' => CustomerRequest::query()->where('status', 'received')->count(),
+                'under_review' => CustomerRequest::query()->where('status', 'under_review')->count(),
+                'need_documents' => CustomerRequest::query()->where('status', 'need_documents')->count(),
+                'payment_pending' => CustomerRequest::query()->where('status', 'payment_pending')->count(),
+                'in_progress' => CustomerRequest::query()->whereIn('status', ['approved', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched'])->count(),
+                'completed' => CustomerRequest::query()->where('status', 'completed')->count(),
+            ],
             'summary' => [
                 'requests' => CustomerRequest::query()->count(),
                 'settings' => Setting::query()->count(),

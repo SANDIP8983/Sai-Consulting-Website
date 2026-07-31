@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequestController;
+use App\Http\Controllers\Admin\RequestDocumentController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\CustomerRequestController;
@@ -41,6 +43,20 @@ Route::prefix('admin')->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('admin.logout');
     });
 });
+
+Route::middleware('auth')
+    ->prefix('admin/requests')
+    ->name('admin.requests.')
+    ->controller(AdminCustomerRequestController::class)
+    ->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/{customerRequest}', 'show')->name('show');
+        Route::patch('/{customerRequest}/status', 'transition')->name('transition');
+        Route::patch('/{customerRequest}/estimate', 'estimate')->name('estimate');
+        Route::post('/{customerRequest}/remarks', 'remark')->name('remarks.store');
+        Route::post('/{customerRequest}/payments', 'payment')->name('payments.store');
+        Route::get('/{customerRequest}/documents/{document}', RequestDocumentController::class)->name('documents.download');
+    });
 
 Route::middleware('auth')
     ->prefix('admin/services')

@@ -35,6 +35,7 @@
                         <a class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}">Dashboard</a>
 
                         <div class="pt-3 pb-1 text-uppercase small fw-semibold text-white-50">Management</div>
+                        <a class="nav-link {{ request()->routeIs('admin.requests.*') ? 'active' : '' }}" href="{{ route('admin.requests.index') }}">Requests</a>
                         <a class="nav-link {{ request()->routeIs('admin.services.*') ? 'active' : '' }}" href="{{ route('admin.services.index') }}">Services</a>
 
                         <div class="pt-3 pb-1 text-uppercase small fw-semibold text-white-50">Configuration</div>

@@ -1,0 +1,2 @@
+@php($colors = ['received'=>'primary','under_review'=>'info','need_documents'=>'warning','approved'=>'success','rejected'=>'danger','payment_pending'=>'warning','payment_received'=>'success','draft_in_progress'=>'info','ready_for_verification'=>'primary','customer_approved'=>'success','ready_for_registration'=>'primary','dispatched'=>'secondary','completed'=>'success','archived'=>'dark'])
+<span class="badge text-bg-{{ $colors[$status] ?? 'secondary' }}">{{ str($status)->replace('_', ' ')->title() }}</span>

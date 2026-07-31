@@ -18,7 +18,10 @@ class RequestWorkflowService
 
     private const TRANSITIONS = ['received' => ['under_review'], 'under_review' => ['need_documents', 'approved', 'rejected'], 'need_documents' => ['under_review'], 'approved' => ['payment_pending'], 'rejected' => ['archived'], 'payment_pending' => ['payment_received'], 'payment_received' => ['draft_in_progress'], 'draft_in_progress' => ['ready_for_verification'], 'ready_for_verification' => ['customer_approved', 'ready_for_registration'], 'customer_approved' => ['ready_for_registration'], 'ready_for_registration' => ['dispatched', 'completed'], 'dispatched' => ['completed'], 'completed' => ['archived'], 'archived' => []];
 
-    public function __construct(private readonly ReferenceNumberService $referenceNumbers) {}
+    public function __construct(
+        private readonly ReferenceNumberService $referenceNumbers,
+        private readonly FileNumberService $fileNumbers,
+    ) {}
 
     public function transitions(CustomerRequest $request): array
     {
@@ -82,12 +85,25 @@ class RequestWorkflowService
         }
         DB::transaction(function () use ($request, $attributes, $user, $from, $to): void {
             $changes = ['status' => $to, 'last_status_changed_at' => now()];
+            if ($to === 'approved' && ! $request->file_number) {
+                $this->fileNumbers->assign($request);
+            }
             if ($to === 'payment_pending') {
                 $changes['payment_status'] = 'pending';
             }
             $request->update($changes);
             $this->history($request, $from, $to, $attributes['remarks'] ?? null, (bool) ($attributes['is_visible_to_customer'] ?? false), $user->id);
         });
+    }
+
+    public function updateEstimate(CustomerRequest $request, ?string $date): void
+    {
+        $request->update(['estimated_completion_date' => $date]);
+    }
+
+    public function addRemark(CustomerRequest $request, string $remarks, bool $visible, User $user): void
+    {
+        DB::transaction(fn () => $this->history($request, $request->status, $request->status, $remarks, $visible, $user->id));
     }
 
     /** @param array<string,mixed> $attributes */

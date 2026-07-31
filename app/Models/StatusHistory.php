@@ -19,4 +19,9 @@ class StatusHistory extends Model
     {
         return $this->belongsTo(CustomerRequest::class, 'request_id');
     }
+
+    public function changedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'changed_by');
+    }
 }
