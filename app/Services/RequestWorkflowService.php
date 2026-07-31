@@ -40,6 +40,7 @@ class RequestWorkflowService
                     $request = CustomerRequest::query()->create([
                         ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'email', 'address', 'survey_numbers', 'khata_number', 'details']),
                         'reference_no' => $this->referenceNumbers->generate(),
+                        'request_origin' => 'online',
                         'status' => 'received',
                         'amount_due' => $service->service_fee ?? 0,
                         'estimated_completion_date' => $service->estimated_days ? now()->addDays($service->estimated_days)->toDateString() : null,
@@ -109,13 +110,42 @@ class RequestWorkflowService
     /** @param array<string,mixed> $attributes */
     public function recordPayment(CustomerRequest $request, array $attributes, User $user): void
     {
-        if ($request->status !== 'payment_pending') {
-            throw ValidationException::withMessages(['payment' => 'Payments can only be recorded while payment is pending.']);
-        }
         DB::transaction(function () use ($request, $attributes, $user): void {
-            $request->payments()->create([...$attributes, 'received_by' => $user->id]);
-            $request->update(['amount_paid' => $request->payments()->sum('amount'), 'payment_status' => 'received', 'status' => 'payment_received', 'last_status_changed_at' => now()]);
-            $this->history($request, 'payment_pending', 'payment_received', $attributes['notes'] ?? 'Payment received.', true, $user->id);
+            $lockedRequest = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
+            $eligibleStatuses = ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
+            if (! $lockedRequest->file_number || ! in_array($lockedRequest->status, $eligibleStatuses, true)) {
+                throw ValidationException::withMessages(['payment' => 'Payment can only be recorded after approval and file-number assignment.']);
+            }
+
+            if (! in_array($attributes['payment_status'], ['pending', 'received', 'failed', 'refunded'], true)) {
+                throw ValidationException::withMessages(['payment_status' => 'The selected payment status is invalid.']);
+            }
+
+            $allowedMethods = $lockedRequest->isOffline() ? ['upi', 'bank_transfer', 'cheque', 'cash', 'other'] : ['upi', 'bank_transfer', 'other'];
+            if (! in_array($attributes['payment_method'], $allowedMethods, true)) {
+                throw ValidationException::withMessages(['payment_method' => 'This payment method is not allowed for an online request.']);
+            }
+
+            $paymentStatus = $attributes['payment_status'];
+            $lockedRequest->payments()->create([...$attributes, 'received_by' => $user->id]);
+            $received = (float) $lockedRequest->payments()->where('payment_status', 'received')->sum('amount');
+            $refunded = (float) $lockedRequest->payments()->where('payment_status', 'refunded')->sum('amount');
+            $changes = ['amount_paid' => max(0, $received - $refunded), 'payment_status' => $paymentStatus];
+
+            if ($paymentStatus === 'pending' && $lockedRequest->status === 'approved') {
+                $changes += ['status' => 'payment_pending', 'last_status_changed_at' => now()];
+                $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
+            }
+            if ($paymentStatus === 'received' && in_array($lockedRequest->status, ['approved', 'payment_pending'], true)) {
+                if ($lockedRequest->status === 'approved') {
+                    $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
+                }
+                $changes += ['status' => 'payment_received', 'last_status_changed_at' => now()];
+                $this->history($lockedRequest, 'payment_pending', 'payment_received', 'Payment received.', true, $user->id);
+            }
+
+            $lockedRequest->update($changes);
+            $request->setRawAttributes($lockedRequest->getAttributes(), true);
         });
     }
 

@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\CustomerRequest;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AdminRequestManagementService
 {
@@ -16,6 +19,18 @@ class AdminRequestManagementService
 
     public function load(CustomerRequest $request): CustomerRequest
     {
-        return $request->load(['service', 'documents', 'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(), 'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at')]);
+        return $request->load(['service', 'feeUpdatedBy:id,name', 'documents', 'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(), 'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at')]);
+    }
+
+    public function updateFinalFee(CustomerRequest $request, float $fee, User $user): void
+    {
+        DB::transaction(function () use ($request, $fee, $user): void {
+            $lockedRequest = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
+            $eligibleStatuses = ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
+            if (! $lockedRequest->file_number || ! in_array($lockedRequest->status, $eligibleStatuses, true)) {
+                throw ValidationException::withMessages(['final_fee' => 'Final fee can only be set after approval and file-number assignment.']);
+            }
+            $lockedRequest->update(['amount_due' => $fee, 'fee_updated_by' => $user->id, 'fee_updated_at' => now()]);
+        });
     }
 }

@@ -109,10 +109,10 @@ class CustomerRequestManagementTest extends TestCase
     public function test_admin_can_update_estimate_and_record_manual_payment_safely(): void
     {
         $admin = User::factory()->create();
-        $request = $this->customerRequest(['status' => 'payment_pending', 'payment_status' => 'pending', 'amount_due' => 500]);
+        $request = $this->customerRequest(['status' => 'payment_pending', 'payment_status' => 'pending', 'amount_due' => 500, 'file_number' => 'SC/2026/F000001']);
 
         $this->actingAs($admin)->patch(route('admin.requests.estimate', $request), ['estimated_completion_date' => '2026-08-15'])->assertSessionHasNoErrors();
-        $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), ['amount' => 500, 'payment_method' => 'cash', 'received_at' => '2026-08-01 11:00:00'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), ['amount' => 500, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => '2026-08-01 11:00:00'])->assertSessionHasNoErrors();
 
         $request->refresh();
         $this->assertSame('2026-08-15', $request->estimated_completion_date->toDateString());

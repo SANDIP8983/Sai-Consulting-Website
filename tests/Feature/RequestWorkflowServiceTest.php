@@ -80,10 +80,11 @@ class RequestWorkflowServiceTest extends TestCase
 
     public function test_payment_records_belong_to_the_request_and_update_payment_state(): void
     {
-        $request = $this->createRequest('payment_pending', ['payment_status' => 'pending']);
+        $request = $this->createRequest('payment_pending', ['payment_status' => 'pending', 'file_number' => 'SC/2026/F000001', 'request_origin' => 'offline']);
 
         app(RequestWorkflowService::class)->recordPayment($request, [
             'amount' => 250,
+            'payment_status' => 'received',
             'payment_method' => 'cash',
             'received_at' => now(),
             'notes' => 'Received.',
@@ -102,7 +103,7 @@ class RequestWorkflowServiceTest extends TestCase
 
     public function test_payment_workflow_rolls_back_when_payment_creation_fails(): void
     {
-        $request = $this->createRequest('payment_pending', ['payment_status' => 'pending']);
+        $request = $this->createRequest('payment_pending', ['payment_status' => 'pending', 'file_number' => 'SC/2026/F000001', 'request_origin' => 'offline']);
 
         StatusHistory::creating(function (): void {
             throw new RuntimeException('Unable to create status history.');
@@ -111,6 +112,7 @@ class RequestWorkflowServiceTest extends TestCase
         try {
             app(RequestWorkflowService::class)->recordPayment($request, [
                 'amount' => 250,
+                'payment_status' => 'received',
                 'payment_method' => 'cash',
                 'received_at' => now(),
             ], User::factory()->create());

@@ -22,6 +22,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $response = $this->post(route('request.store'), $this->validPayload($service));
 
         $request = CustomerRequest::query()->sole();
+        $this->assertSame('online', $request->request_origin);
         $this->assertSame('Chanasma, Chanasma, Patan, Gujarat 384220', $request->address);
         $this->assertNull($request->village);
         $this->assertNull($request->taluka);

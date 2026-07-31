@@ -10,12 +10,15 @@ class PublicRequestTrackingService
     public function find(string $trackingNumber, string $mobile): CustomerRequest
     {
         $request = CustomerRequest::query()
-            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'estimated_completion_date', 'last_status_changed_at', 'updated_at'])
+            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'estimated_completion_date', 'last_status_changed_at', 'updated_at'])
             ->where(fn ($query) => $query->where('reference_no', $trackingNumber)->orWhere('file_number', $trackingNumber))
             ->where('mobile', $mobile)
             ->with([
                 'service:id,name_en,name_gu',
                 'service.requiredDocuments:id,service_id,name_en,name_gu,sort_order',
+                'payments' => fn ($query) => $query
+                    ->select(['id', 'request_id', 'amount', 'payment_status', 'payment_method', 'received_at', 'customer_remark'])
+                    ->latest('received_at'),
                 'statusHistory' => fn ($query) => $query
                     ->select(['id', 'request_id', 'to_status', 'remarks', 'created_at'])
                     ->where('is_visible_to_customer', true)

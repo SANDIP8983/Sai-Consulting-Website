@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\RecordRequestPaymentRequest;
 use App\Http\Requests\Admin\StoreRequestRemarkRequest;
 use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
 use App\Http\Requests\Admin\UpdateRequestEstimateRequest;
+use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
 use App\Models\CustomerRequest;
 use App\Models\Service;
 use App\Services\AdminRequestManagementService;
@@ -45,5 +46,10 @@ class CustomerRequestController extends Controller
     {
         $this->workflow->recordPayment($customerRequest, $request->validated(), $request->user());
         return back()->with('success', 'Payment recorded successfully.');
+    }
+    public function fee(UpdateRequestFinalFeeRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    {
+        $this->management->updateFinalFee($customerRequest, (float) $request->validated('final_fee'), $request->user());
+        return back()->with('success', 'Final service fee updated successfully.');
     }
 }
