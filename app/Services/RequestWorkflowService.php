@@ -84,6 +84,11 @@ class RequestWorkflowService
         if (! in_array($to, self::TRANSITIONS[$from] ?? [], true)) {
             throw ValidationException::withMessages(['status' => 'This status transition is not allowed.']);
         }
+        if ($to === 'dispatched' && ($request->payment_status !== 'received' || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {
+            throw ValidationException::withMessages([
+                'status' => 'Use Dispatch Management to record dispatch details before changing this status.',
+            ]);
+        }
         DB::transaction(function () use ($request, $attributes, $user, $from, $to): void {
             $changes = ['status' => $to, 'last_status_changed_at' => now()];
             if ($to === 'approved' && ! $request->file_number) {

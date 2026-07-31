@@ -19,6 +19,9 @@ class PublicRequestTrackingService
                 'payments' => fn ($query) => $query
                     ->select(['id', 'request_id', 'amount', 'payment_status', 'payment_method', 'received_at', 'customer_remark'])
                     ->latest('received_at'),
+                'dispatches' => fn ($query) => $query
+                    ->select(['id', 'request_id', 'dispatch_status', 'dispatch_method', 'dispatch_date', 'tracking_number', 'carrier_name', 'customer_remark'])
+                    ->latest('dispatch_date'),
                 'statusHistory' => fn ($query) => $query
                     ->select(['id', 'request_id', 'to_status', 'remarks', 'created_at'])
                     ->where('is_visible_to_customer', true)

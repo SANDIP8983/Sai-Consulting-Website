@@ -69,6 +69,11 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestPayment::class, 'request_id');
     }
 
+    public function dispatches(): HasMany
+    {
+        return $this->hasMany(RequestDispatch::class, 'request_id')->latest('dispatch_date');
+    }
+
     public function feeUpdatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'fee_updated_by');

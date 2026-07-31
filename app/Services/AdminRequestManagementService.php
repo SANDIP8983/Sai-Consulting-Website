@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\CustomerRequest;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,7 +19,14 @@ class AdminRequestManagementService
 
     public function load(CustomerRequest $request): CustomerRequest
     {
-        return $request->load(['service', 'feeUpdatedBy:id,name', 'documents', 'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(), 'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at')]);
+        return $request->load([
+            'service',
+            'feeUpdatedBy:id,name',
+            'documents',
+            'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
+            'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at'),
+            'dispatches' => fn ($q) => $q->with('performedBy:id,name')->latest('dispatch_date'),
+        ]);
     }
 
     public function updateFinalFee(CustomerRequest $request, float $fee, User $user): void

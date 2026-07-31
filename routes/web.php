@@ -60,6 +60,7 @@ Route::middleware('auth')
         Route::patch('/{customerRequest}/estimate', 'estimate')->name('estimate');
         Route::post('/{customerRequest}/remarks', 'remark')->name('remarks.store');
         Route::post('/{customerRequest}/payments', 'payment')->name('payments.store');
+        Route::post('/{customerRequest}/dispatches', 'dispatch')->name('dispatches.store');
         Route::patch('/{customerRequest}/fee', 'fee')->name('fee.update');
         Route::get('/{customerRequest}/documents/{document}', RequestDocumentController::class)->name('documents.download');
     });
