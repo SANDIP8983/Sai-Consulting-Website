@@ -1,16 +1,14 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\SettingsController;
-
-Route::get('/', function () {
-    return view('frontend.home');
-});
-
 use App\Http\Controllers\CustomerRequestController;
+use App\Http\Controllers\HomeController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', HomeController::class)->name('home');
 
 Route::get('/request', [CustomerRequestController::class, 'create'])
     ->name('request.create');
@@ -20,6 +18,13 @@ Route::post('/request', [CustomerRequestController::class, 'store'])
 
 Route::get('/request/success', [CustomerRequestController::class, 'success'])
     ->name('request.success');
+
+Route::get('/request/track', [CustomerRequestController::class, 'track'])
+    ->name('request.track');
+
+Route::post('/request/track', [CustomerRequestController::class, 'lookup'])
+    ->middleware('throttle:10,1')
+    ->name('request.track.lookup');
 
 Route::prefix('admin')->group(function () {
     Route::middleware('guest')->controller(LoginController::class)->group(function () {

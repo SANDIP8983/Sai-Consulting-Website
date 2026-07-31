@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\HomepageService;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +21,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        View::composer(['partials.header', 'partials.footer'], function ($view): void {
+            $view->with('site', app(HomepageService::class)->publicSiteData());
+        });
     }
 }

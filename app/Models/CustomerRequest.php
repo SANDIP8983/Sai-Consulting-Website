@@ -18,6 +18,7 @@ class CustomerRequest extends Model
      */
     protected $fillable = [
         'reference_no',
+        'file_number',
         'service_id',
         'name',
         'mobile',
@@ -32,7 +33,10 @@ class CustomerRequest extends Model
         'payment_status', 'amount_due', 'amount_paid', 'estimated_completion_date', 'last_status_changed_at',
     ];
 
-    protected function casts(): array { return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'estimated_completion_date' => 'date', 'last_status_changed_at' => 'datetime']; }
+    protected function casts(): array
+    {
+        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'estimated_completion_date' => 'date', 'last_status_changed_at' => 'datetime'];
+    }
 
     /**
      * Service Relationship
@@ -58,5 +62,8 @@ class CustomerRequest extends Model
         return $this->hasMany(StatusHistory::class, 'request_id');
     }
 
-    public function payments(): HasMany { return $this->hasMany(RequestPayment::class, 'request_id'); }
+    public function payments(): HasMany
+    {
+        return $this->hasMany(RequestPayment::class, 'request_id');
+    }
 }

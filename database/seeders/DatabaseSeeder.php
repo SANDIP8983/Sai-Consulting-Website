@@ -14,13 +14,14 @@ class DatabaseSeeder extends Seeder
     {
         // Test User
         User::factory()->create([
-            'name'  => 'Test User',
+            'name' => 'Test User',
             'email' => 'test@example.com',
         ]);
 
         // Seed Services
         $this->call([
             ServiceSeeder::class,
+            SubRegistrarTokenBookingServiceSeeder::class,
         ]);
     }
 }
