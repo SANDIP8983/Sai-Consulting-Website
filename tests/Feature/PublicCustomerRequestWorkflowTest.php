@@ -38,6 +38,48 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $this->assertDatabaseCount('requests', 0);
     }
 
+    public function test_request_form_preselects_active_service_and_shows_its_documents(): void
+    {
+        $service = $this->createService();
+        $service->requiredDocuments()->create(['name_en' => 'Property Card', 'name_gu' => 'પ્રોપર્ટી કાર્ડ', 'sort_order' => 1]);
+
+        $this->get(route('request.create', ['service' => $service->id]))
+            ->assertOk()
+            ->assertSee('value="'.$service->id.'" selected', false)
+            ->assertSee('Property Card')
+            ->assertSee('પ્રોપર્ટી કાર્ડ')
+            ->assertSee('Do not upload Aadhaar, PAN, passport, voter ID, bank documents, or other identity proofs.')
+            ->assertDontSee('tel:', false);
+    }
+
+    public function test_inactive_or_unknown_service_cannot_be_selected(): void
+    {
+        $inactive = $this->createService();
+        $inactive->update(['is_active' => false]);
+
+        $this->get(route('request.create', ['service' => $inactive->id]))
+            ->assertOk()
+            ->assertDontSee('<option value="'.$inactive->id.'"', false);
+
+        $payload = $this->validPayload($inactive);
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors('service_id');
+    }
+
+    public function test_old_input_is_preserved_after_validation_failure(): void
+    {
+        $service = $this->createService();
+
+        $this->from(route('request.create'))->post(route('request.store'), [
+            'service_id' => $service->id,
+            'name' => 'Preserved Customer',
+            'mobile' => 'invalid',
+        ])->assertRedirect(route('request.create'));
+
+        $this->get(route('request.create'))
+            ->assertSee('value="Preserved Customer"', false)
+            ->assertSee('value="'.$service->id.'" selected', false);
+    }
+
     public function test_submission_rejects_an_invalid_file_type(): void
     {
         Storage::fake('local');

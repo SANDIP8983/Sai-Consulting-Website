@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Service;
 use App\Models\Setting;
+use Database\Seeders\ServiceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -86,6 +87,48 @@ class PublicServicesTest extends TestCase
             ->assertDontSee('Sale Deed');
         $this->get(route('services.index', ['q' => str_repeat('a', 101)]))
             ->assertSessionHasErrors('q');
+    }
+
+    public function test_service_seeder_restores_all_approved_services_idempotently(): void
+    {
+        $existing = $this->service([
+            'name_en' => 'Sale Deed Drafting',
+            'name_gu' => 'જૂનું વેચાણ નામ',
+            'slug' => 'sale-deed-drafting',
+            'service_fee' => 2500,
+            'estimated_days' => 5,
+            'notes' => 'Preserve this note.',
+            'is_active' => false,
+        ]);
+        $document = $existing->requiredDocuments()->create([
+            'name_en' => 'Property Card',
+            'name_gu' => 'પ્રોપર્ટી કાર્ડ',
+            'sort_order' => 1,
+        ]);
+
+        $this->seed(ServiceSeeder::class);
+        $this->seed(ServiceSeeder::class);
+
+        $existing->refresh();
+        $this->assertSame('Sale Deed', $existing->name_en);
+        $this->assertSame('વેચાણ દસ્તાવેજ', $existing->name_gu);
+        $this->assertSame('sale-deed', $existing->slug);
+        $this->assertTrue($existing->is_active);
+        $this->assertSame('2500.00', $existing->service_fee);
+        $this->assertSame(5, $existing->estimated_days);
+        $this->assertSame('Preserve this note.', $existing->notes);
+        $this->assertDatabaseHas('service_required_documents', ['id' => $document->id, 'service_id' => $existing->id]);
+        $this->assertDatabaseCount('services', 13);
+        $this->assertSame(13, Service::query()->where('is_active', true)->count());
+        $this->assertSame(13, Service::query()->distinct('slug')->count('slug'));
+
+        $approvedNames = Service::query()->orderBy('sort_order')->pluck('name_en');
+        $servicesPage = $this->get(route('services.index'))->assertOk();
+        $requestPage = $this->get(route('request.create'))->assertOk();
+        foreach ($approvedNames as $name) {
+            $servicesPage->assertSee($name);
+            $requestPage->assertSee($name);
+        }
     }
 
     private function service(array $attributes = []): Service

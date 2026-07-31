@@ -1,138 +1,20 @@
 @extends('layouts.app')
-
-@section('title', 'Submit Customer Request | ગ્રાહક વિનંતી')
-
+@section('title', 'ઓનલાઇન અરજી કરો | Apply Online | Sai Consulting')
+@section('description', 'Sai Consulting સાથે દસ્તાવેજ સેવા માટે સુરક્ષિત રીતે ઓનલાઇન અરજી કરો.')
 @section('content')
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-xl-9">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
-                <div>
-                    <h1 class="h2 mb-1">Customer Request <span class="text-muted">/ ગ્રાહક વિનંતી</span></h1>
-                    <p class="text-muted mb-0">Submit land-record documents securely for review.</p>
-                </div>
-                <a href="{{ route('request.track') }}" class="btn btn-outline-primary">Track Request / સ્થિતિ તપાસો</a>
-            </div>
-
-            <div class="alert alert-danger" role="alert">
-                <strong>Identity documents are not accepted.</strong> Do not upload Aadhaar, PAN, passport, voter ID, bank documents, or any other identity proof.
-                <div class="mt-1">ઓળખના પુરાવા અપલોડ કરશો નહીં: આધાર, PAN, પાસપોર્ટ, મતદાર કાર્ડ અથવા બેંક દસ્તાવેજ.</div>
-            </div>
-            <div class="alert alert-info" role="alert">
-                This upload is intended only for records such as <strong>7/12, 8-A, Hak Patrak and Property Card</strong>.
-            </div>
-
-            @if($errors->any())
-                <div class="alert alert-danger">Please correct the highlighted fields. / કૃપા કરીને દર્શાવેલ વિગતો સુધારો.</div>
-            @endif
-
-            <form method="POST" action="{{ route('request.store') }}" enctype="multipart/form-data" class="card border-0 shadow-sm">
-                @csrf
-                <div class="card-body p-4 p-lg-5">
-                    <div class="row g-4">
-                        <div class="col-12">
-                            <label for="service_id" class="form-label">Service / સેવા <span class="text-danger">*</span></label>
-                            <select id="service_id" name="service_id" class="form-select @error('service_id') is-invalid @enderror" required>
-                                <option value="">Select Service / સેવા પસંદ કરો</option>
-                                @foreach($services as $service)
-                                    <option value="{{ $service->id }}" @selected(old('service_id', request('service')) == $service->id)>{{ $service->name_en }} / {{ $service->name_gu }}</option>
-                                @endforeach
-                            </select>
-                            @error('service_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="name" class="form-label">Customer Name / ગ્રાહકનું નામ <span class="text-danger">*</span></label>
-                            <input id="name" name="name" value="{{ old('name') }}" class="form-control @error('name') is-invalid @enderror" required maxlength="100">
-                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="mobile" class="form-label">Mobile Number / મોબાઇલ નંબર <span class="text-danger">*</span></label>
-                            <input id="mobile" name="mobile" value="{{ old('mobile') }}" class="form-control @error('mobile') is-invalid @enderror" inputmode="numeric" autocomplete="tel" maxlength="10" required>
-                            @error('mobile')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="email" class="form-label">Email / ઇમેઇલ <span class="text-muted">(optional)</span></label>
-                            <input id="email" type="email" name="email" value="{{ old('email') }}" class="form-control @error('email') is-invalid @enderror" autocomplete="email">
-                            @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="village" class="form-label">Village / ગામ <span class="text-danger">*</span></label>
-                            <input id="village" name="village" value="{{ old('village') }}" class="form-control @error('village') is-invalid @enderror" required maxlength="100">
-                            @error('village')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="taluka" class="form-label">Taluka / તાલુકો <span class="text-danger">*</span></label>
-                            <input id="taluka" name="taluka" value="{{ old('taluka') }}" class="form-control @error('taluka') is-invalid @enderror" required maxlength="100">
-                            @error('taluka')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="district" class="form-label">District / જિલ્લો <span class="text-danger">*</span></label>
-                            <input id="district" name="district" value="{{ old('district') }}" class="form-control @error('district') is-invalid @enderror" required maxlength="100">
-                            @error('district')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="survey_numbers" class="form-label">Survey / Block Numbers <span class="text-danger">*</span></label>
-                            <input id="survey_numbers" name="survey_numbers" value="{{ old('survey_numbers') }}" class="form-control @error('survey_numbers') is-invalid @enderror" required>
-                            @error('survey_numbers')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label for="khata_number" class="form-label">Khata Number / ખાતા નંબર <span class="text-danger">*</span></label>
-                            <input id="khata_number" name="khata_number" value="{{ old('khata_number') }}" class="form-control @error('khata_number') is-invalid @enderror" required maxlength="100">
-                            @error('khata_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-12">
-                            <label for="details" class="form-label">Request Details / વિનંતીની વિગત <span class="text-danger">*</span></label>
-                            <textarea id="details" name="details" rows="4" class="form-control @error('details') is-invalid @enderror" required maxlength="2000">{{ old('details') }}</textarea>
-                            @error('details')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-12 d-none" id="required-documents">
-                            <div class="alert alert-secondary mb-0">
-                                <strong>Documents for selected service / પસંદ કરેલી સેવા માટે દસ્તાવેજો</strong>
-                                <ul class="mb-0 mt-2" id="required-documents-list"></ul>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <label for="documents" class="form-label">Documents / દસ્તાવેજો <span class="text-danger">*</span></label>
-                            <input id="documents" type="file" name="documents[]" class="form-control @error('documents') is-invalid @enderror @error('documents.*') is-invalid @enderror" multiple accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required>
-                            @error('documents')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            @error('documents.*')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            <div class="form-text">PDF, JPG, JPEG or PNG only. Maximum 10 files and 10 MB per file.</div>
-                        </div>
-                        <div class="col-12">
-                            <div class="form-check">
-                                <input type="checkbox" name="declaration" value="1" class="form-check-input @error('declaration') is-invalid @enderror" id="declaration" required @checked(old('declaration'))>
-                                <label class="form-check-label" for="declaration">I declare that the information is accurate and that I have not uploaded identity proofs. / આપેલી માહિતી સાચી છે અને ઓળખના પુરાવા અપલોડ કર્યા નથી.</label>
-                                @error('declaration')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                        </div>
-                    </div>
-                    <button class="btn btn-primary btn-lg mt-4" type="submit">Submit Request / વિનંતી મોકલો</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+@php($selectedService = $services->firstWhere('id', (int) old('service_id', request('service'))))
+<section class="request-page-hero py-5"><div class="container py-lg-4"><nav class="service-breadcrumb mb-3" aria-label="Breadcrumb"><a href="{{ route('home') }}">Home</a><span class="mx-2">/</span><a href="{{ route('services.index') }}">Services</a><span class="mx-2">/</span><span>Apply Online</span></nav><div class="row align-items-end g-4"><div class="col-lg-8"><span class="eyebrow"><span></span>Secure Online Request</span><h1>સેવા માટે ઓનલાઇન અરજી કરો</h1><p>તમારી વિગતો અને મિલકતના દસ્તાવેજો સુરક્ષિત રીતે મોકલો. અરજી પછી તમને ટ્રેકિંગ માટે અનન્ય રેફરન્સ નંબર મળશે.</p></div><div class="col-lg-4 d-flex flex-wrap justify-content-lg-end gap-2"><a href="{{ route('services.index') }}" class="btn btn-secondary-action rounded-pill"><i class="bi bi-arrow-left"></i> Back to Services</a><a href="{{ route('request.track') }}" class="btn btn-outline-primary rounded-pill"><i class="bi bi-search"></i> Track Request</a></div></div></div></section>
+<div class="request-page-body py-5"><div class="container">
+<ol class="request-progress premium-card" aria-label="Application sections">@foreach([['service-section','સેવા','Service'],['customer-section','ગ્રાહક','Customer'],['property-section','વિગતો','Details'],['upload-section','દસ્તાવેજ','Documents'],['declaration-section','ઘોષણા','Declaration']] as $step)<li><a href="#{{ $step[0] }}"><span>{{ $loop->iteration }}</span><strong>{{ $step[1] }}<small>{{ $step[2] }}</small></strong></a></li>@endforeach</ol>
+@if($errors->any())<div class="alert alert-danger request-error-summary mt-4" role="alert"><i class="bi bi-exclamation-circle-fill"></i><div><strong>કૃપા કરીને દર્શાવેલી વિગતો સુધારો.</strong><span>Please correct the highlighted fields.</span></div></div>@endif
+<form id="customer-request-form" method="POST" action="{{ route('request.store') }}" enctype="multipart/form-data" class="request-form-stack mt-4">@csrf
+<x-request-form-section id="service-section" step="1" icon="briefcase" title-gu="સેવા પસંદ કરો" title-en="Select Service" description="સેવા બદલતાં તેની ફી, સમય અને જરૂરી દસ્તાવેજો તરત દેખાશે."><div class="row g-4"><div class="col-lg-5"><label for="service_id" class="form-label">સેવા <span>Service</span> <b>*</b></label><select id="service_id" name="service_id" class="form-select form-select-lg @error('service_id') is-invalid @enderror" required><option value="">સેવા પસંદ કરો / Select Service</option>@foreach($services as $service)<option value="{{ $service->id }}" @selected((string)old('service_id',request('service'))===(string)$service->id)>{{ $service->name_gu }} / {{ $service->name_en }}</option>@endforeach</select>@error('service_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div><div class="col-lg-7"><div class="request-service-summary" aria-live="polite"><div id="service-empty" class="service-summary-empty {{ $selectedService ? 'd-none' : '' }}"><i class="bi bi-hand-index-thumb"></i><span>સેવા પસંદ કરો<small>Select a service to view details.</small></span></div><div id="service-content" class="{{ $selectedService ? '' : 'd-none' }}"><span class="detail-kicker">Selected Service</span><h3 id="service-gu">{{ $selectedService?->name_gu }}</h3><p id="service-en">{{ $selectedService?->name_en }}</p><div id="service-meta" class="request-service-meta {{ $selectedService && ($selectedService->estimated_days || $selectedService->service_fee !== null) ? '' : 'd-none' }}"><div id="service-time" class="{{ $selectedService?->estimated_days ? '' : 'd-none' }}"><i class="bi bi-clock-history"></i><span><small>Estimated Completion</small><strong>{{ $selectedService?->estimated_days ? $selectedService->estimated_days.' day(s)' : '' }}</strong></span></div><div id="service-fee" class="{{ $selectedService?->service_fee !== null ? '' : 'd-none' }}"><i class="bi bi-currency-rupee"></i><span><small>Service Fee</small><strong>{{ $selectedService?->service_fee !== null ? '₹'.number_format((float)$selectedService->service_fee, 2) : '' }}</strong></span></div></div><div id="service-docs" class="request-required-documents {{ $selectedService?->requiredDocuments->isNotEmpty() ? '' : 'd-none' }}"><h4><i class="bi bi-files"></i> જરૂરી દસ્તાવેજો <small>Required Documents</small></h4><ul id="required-documents-list">@foreach($selectedService?->requiredDocuments ?? [] as $document)<li><i class="bi bi-file-earmark-check"></i><span><strong>{{ $document->name_gu }}</strong><small>{{ $document->name_en }}</small></span></li>@endforeach</ul></div></div></div></div></div></x-request-form-section>
+<x-request-form-section id="customer-section" step="2" icon="person" title-gu="ગ્રાહકની વિગતો" title-en="Customer Details"><div class="row g-4">@foreach([['name','પૂરું નામ','Full Name','text','name'],['mobile','મોબાઇલ નંબર','Mobile Number','text','tel'],['email','ઇમેઇલ','Email · Optional','email','email'],['village','ગામ','Village','text',''],['taluka','તાલુકો','Taluka','text',''],['district','જિલ્લો','District','text','']] as $field)<div class="col-md-6"><label for="{{ $field[0] }}" class="form-label">{{ $field[1] }} <span>{{ $field[2] }}</span> @if($field[0]!=='email')<b>*</b>@endif</label><input id="{{ $field[0] }}" type="{{ $field[3] }}" name="{{ $field[0] }}" value="{{ old($field[0]) }}" class="form-control @error($field[0]) is-invalid @enderror" @if($field[4]) autocomplete="{{ $field[4] }}" @endif @if($field[0]==='mobile') inputmode="numeric" maxlength="10" @else maxlength="{{ $field[0]==='email' ? 255 : 100 }}" @endif @required($field[0]!=='email')>@error($field[0])<div class="invalid-feedback">{{ $message }}</div>@enderror</div>@endforeach</div></x-request-form-section>
+<x-request-form-section id="property-section" step="3" icon="file-earmark-text" title-gu="મિલકત / વિનંતીની વિગતો" title-en="Property / Request Details"><div class="row g-4"><div class="col-md-6"><label for="survey_numbers" class="form-label">સર્વે અથવા બ્લોક નંબર <span>Survey or Block Numbers</span> <b>*</b></label><input id="survey_numbers" name="survey_numbers" value="{{ old('survey_numbers') }}" maxlength="1000" required class="form-control @error('survey_numbers') is-invalid @enderror">@error('survey_numbers')<div class="invalid-feedback">{{ $message }}</div>@enderror</div><div class="col-md-6"><label for="khata_number" class="form-label">ખાતા નંબર <span>Khata Number</span> <b>*</b></label><input id="khata_number" name="khata_number" value="{{ old('khata_number') }}" maxlength="100" required class="form-control @error('khata_number') is-invalid @enderror">@error('khata_number')<div class="invalid-feedback">{{ $message }}</div>@enderror</div><div class="col-12"><label for="details" class="form-label">વિનંતીની વિગતો <span>Request Details</span> <b>*</b></label><textarea id="details" name="details" rows="5" maxlength="2000" required class="form-control @error('details') is-invalid @enderror">{{ old('details') }}</textarea>@error('details')<div class="invalid-feedback">{{ $message }}</div>@enderror</div></div></x-request-form-section>
+<x-request-form-section id="upload-section" step="4" icon="cloud-arrow-up" title-gu="મિલકતના દસ્તાવેજો અપલોડ કરો" title-en="Document Upload"><div class="identity-document-warning" role="alert"><i class="bi bi-shield-exclamation"></i><div><strong>ઓળખના પુરાવા અપલોડ કરશો નહીં.</strong><span>Do not upload Aadhaar, PAN, passport, voter ID, bank documents, or other identity proofs.</span></div></div><div class="property-document-note"><i class="bi bi-file-earmark-check"></i><span>Uploads are intended only for property documents such as <strong>7/12, 8-A, Hak Patrak, and Property Card.</strong></span></div><label id="upload-dropzone" for="documents" class="request-upload-zone @error('documents') is-invalid @enderror @error('documents.*') is-invalid @enderror"><input id="documents" type="file" name="documents[]" multiple accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required><i class="bi bi-cloud-arrow-up upload-zone-icon"></i><strong>ફાઇલો અહીં ખેંચો અથવા પસંદ કરો</strong><span>Drag and drop files here or click to browse</span><span class="btn btn-outline-primary rounded-pill mt-2">Choose Documents</span><div class="upload-rules"><span>Maximum 10 files</span><span>Maximum 10 MB each</span><span>PDF, JPG, JPEG, PNG</span></div></label>@error('documents')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror @error('documents.*')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror<div id="file-error" class="text-danger small mt-2 d-none" role="alert"></div><ul id="selected-files" class="selected-file-list d-none" aria-live="polite"></ul></x-request-form-section>
+<x-request-form-section id="declaration-section" step="5" icon="shield-check" title-gu="ઘોષણા અને સંમતિ" title-en="Declaration"><div class="request-declaration"><div class="form-check"><input type="checkbox" name="declaration" value="1" id="declaration" required @checked(old('declaration')) class="form-check-input @error('declaration') is-invalid @enderror"><label for="declaration" class="form-check-label"><strong>આપેલી માહિતી સાચી છે અને મેં કોઈ ઓળખનો પુરાવો અપલોડ કર્યો નથી.</strong><span>I confirm the information is accurate, property documents may be handled securely for this request, and no identity proofs were uploaded.</span></label>@error('declaration')<div class="invalid-feedback">{{ $message }}</div>@enderror</div></div><div class="request-submit-row"><div class="secure-handling-note"><i class="bi bi-lock-fill"></i> Documents are stored privately and used only for this request.</div><button id="submit-request" class="btn btn-primary btn-lg rounded-pill px-4" type="submit"><span class="submit-label">ઓનલાઇન અરજી મોકલો · Apply Online</span><span class="submit-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Submitting securely…</span></button></div></x-request-form-section>
+</form></div></div>
 @endsection
-
-@push('scripts')
-<script>
-    const serviceDocuments = @json($services->mapWithKeys(fn ($service) => [$service->id => $service->requiredDocuments->map(fn ($document) => [$document->name_en, $document->name_gu])->values()]));
-    const serviceSelect = document.getElementById('service_id');
-    const documentPanel = document.getElementById('required-documents');
-    const documentList = document.getElementById('required-documents-list');
-
-    function renderRequiredDocuments() {
-        const documents = serviceDocuments[serviceSelect.value] || [];
-        documentList.replaceChildren();
-        documents.forEach(([english, gujarati]) => {
-            const item = document.createElement('li');
-            item.textContent = `${english} / ${gujarati}`;
-            documentList.append(item);
-        });
-        documentPanel.classList.toggle('d-none', documents.length === 0);
-    }
-
-    serviceSelect.addEventListener('change', renderRequiredDocuments);
-    renderRequiredDocuments();
-</script>
-@endpush
+@push('scripts')<script>
+document.addEventListener('DOMContentLoaded',()=>{const services={{ Illuminate\Support\Js::from($services->mapWithKeys(fn($s)=>[(string)$s->id=>['gu'=>$s->name_gu,'en'=>$s->name_en,'days'=>$s->estimated_days,'fee'=>$s->service_fee,'docs'=>$s->requiredDocuments->map(fn($d)=>['gu'=>$d->name_gu,'en'=>$d->name_en])->values()]])) }};const select=document.getElementById('service_id'),empty=document.getElementById('service-empty'),content=document.getElementById('service-content'),time=document.getElementById('service-time'),fee=document.getElementById('service-fee'),meta=document.getElementById('service-meta'),docs=document.getElementById('service-docs'),list=document.getElementById('required-documents-list');function renderService(){const s=services[select.value];empty.classList.toggle('d-none',!!s);content.classList.toggle('d-none',!s);if(!s)return;document.getElementById('service-gu').textContent=s.gu;document.getElementById('service-en').textContent=s.en;time.classList.toggle('d-none',!s.days);fee.classList.toggle('d-none',s.fee===null||s.fee==='');meta.classList.toggle('d-none',!s.days&&(s.fee===null||s.fee===''));if(s.days)time.querySelector('strong').textContent=`${s.days} day(s)`;if(s.fee!==null&&s.fee!=='')fee.querySelector('strong').textContent=new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(s.fee);list.replaceChildren();s.docs.forEach(d=>{const li=document.createElement('li'),i=document.createElement('i'),span=document.createElement('span'),strong=document.createElement('strong'),small=document.createElement('small');i.className='bi bi-file-earmark-check';strong.textContent=d.gu;small.textContent=d.en;span.append(strong,small);li.append(i,span);list.append(li)});docs.classList.toggle('d-none',!s.docs.length)}select.addEventListener('change',renderService);renderService();const input=document.getElementById('documents'),zone=document.getElementById('upload-dropzone'),files=document.getElementById('selected-files'),error=document.getElementById('file-error');function renderFiles(){const selected=[...input.files];files.replaceChildren();const invalid=selected.find(f=>!['pdf','jpg','jpeg','png'].includes(f.name.split('.').pop().toLowerCase())||f.size>10485760);error.textContent=selected.length>10?'Please select no more than 10 files.':invalid?'Each file must be PDF, JPG, JPEG or PNG and no larger than 10 MB.':'';error.classList.toggle('d-none',!error.textContent);selected.forEach(f=>{const li=document.createElement('li');li.textContent=`${f.name} · ${(f.size/1048576).toFixed(2)} MB`;files.append(li)});files.classList.toggle('d-none',!selected.length)}input.addEventListener('change',renderFiles);['dragenter','dragover'].forEach(n=>zone.addEventListener(n,e=>{e.preventDefault();zone.classList.add('is-dragging')}));['dragleave','drop'].forEach(n=>zone.addEventListener(n,e=>{e.preventDefault();zone.classList.remove('is-dragging')}));zone.addEventListener('drop',e=>{input.files=e.dataTransfer.files;renderFiles()});document.getElementById('customer-request-form').addEventListener('submit',()=>{const b=document.getElementById('submit-request');b.disabled=true;b.querySelector('.submit-label').classList.add('d-none');b.querySelector('.submit-loading').classList.remove('d-none')})});
+</script>@endpush

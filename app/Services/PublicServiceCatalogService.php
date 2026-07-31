@@ -20,7 +20,7 @@ class PublicServiceCatalogService
             }))
             ->orderBy('sort_order')
             ->orderBy('name_en')
-            ->paginate(12)
+            ->paginate(24)
             ->withQueryString();
     }
 
