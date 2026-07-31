@@ -6,6 +6,7 @@ use App\Http\Requests\StoreCustomerRequestRequest;
 use App\Http\Requests\TrackCustomerRequestRequest;
 use App\Models\Service;
 use App\Services\PublicRequestTrackingService;
+use App\Services\HomepageService;
 use App\Services\RequestWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -41,18 +42,18 @@ class CustomerRequestController extends Controller
             : redirect()->route('request.create');
     }
 
-    public function track(): View
+    public function track(HomepageService $homepage): View
     {
-        return view('frontend.request.track');
+        return view('frontend.request.track', ['whatsappUrl' => $homepage->publicSiteData()['whatsappUrl']]);
     }
 
-    public function lookup(TrackCustomerRequestRequest $request, PublicRequestTrackingService $tracking): View
+    public function lookup(TrackCustomerRequestRequest $request, PublicRequestTrackingService $tracking, HomepageService $homepage): View
     {
         $customerRequest = $tracking->find(
             $request->validated('reference_no'),
             $request->validated('mobile'),
         );
 
-        return view('frontend.request.track', compact('customerRequest'));
+        return view('frontend.request.track', ['customerRequest' => $customerRequest, 'whatsappUrl' => $homepage->publicSiteData()['whatsappUrl']]);
     }
 }

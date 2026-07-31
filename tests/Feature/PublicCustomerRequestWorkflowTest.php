@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CustomerRequest;
 use App\Models\Service;
+use App\Models\Setting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -167,9 +168,43 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             ->assertSee('Under Review')
             ->assertSee('Not Required')
             ->assertSee('Public update.')
-            ->assertSee('FILE-EXISTING-1')
+            ->assertSee('SC/2026/F000001')
             ->assertDontSee('Private internal note.')
             ->assertDontSee('private-document.pdf');
+    }
+
+    public function test_customer_can_track_by_file_number_with_public_details_only(): void
+    {
+        $request = $this->createTrackedRequest();
+        $request->update(['status' => 'dispatched', 'last_status_changed_at' => now()]);
+        $request->service->requiredDocuments()->create(['name_en' => 'Property Card', 'name_gu' => 'પ્રોપર્ટી કાર્ડ', 'sort_order' => 1]);
+        $request->statusHistory()->create(['from_status' => 'ready_for_registration', 'to_status' => 'dispatched', 'remarks' => 'Sent through registered post.', 'is_visible_to_customer' => true]);
+        $request->statusHistory()->create(['from_status' => 'dispatched', 'to_status' => 'dispatched', 'remarks' => 'Private courier tracking detail.', 'is_visible_to_customer' => false]);
+        Setting::query()->create(['setting_key' => 'contact.whatsapp_number', 'setting_value' => '919687621876', 'value_type' => 'string', 'setting_group' => 'contact', 'is_public' => true]);
+
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->file_number, 'mobile' => $request->mobile])
+            ->assertOk()
+            ->assertSee('Private Customer Name')
+            ->assertSee($request->reference_no)
+            ->assertSee($request->file_number)
+            ->assertSee('Property Card')
+            ->assertSee('પ્રોપર્ટી કાર્ડ')
+            ->assertSee('Sent through registered post.')
+            ->assertSee('Dispatch Information')
+            ->assertSee('https://wa.me/919687621876', false)
+            ->assertDontSee('Private courier tracking detail.')
+            ->assertDontSee('private/path.pdf');
+    }
+
+    public function test_customer_can_track_an_existing_legacy_file_number(): void
+    {
+        $request = $this->createTrackedRequest();
+        $request->update(['file_number' => 'LEGACY-FILE-42']);
+
+        $this->post(route('request.track.lookup'), ['reference_no' => 'legacy-file-42', 'mobile' => $request->mobile])
+            ->assertOk()
+            ->assertSee('LEGACY-FILE-42')
+            ->assertSee($request->reference_no);
     }
 
     public function test_tracking_fails_for_an_incorrect_mobile_number_without_exposing_request_data(): void
@@ -215,7 +250,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
     {
         $request = CustomerRequest::query()->create([
             'reference_no' => 'SC/2026/000001',
-            'file_number' => 'FILE-EXISTING-1',
+            'file_number' => 'SC/2026/F000001',
             'service_id' => $this->createService()->id,
             'name' => 'Private Customer Name',
             'mobile' => '9999999999',

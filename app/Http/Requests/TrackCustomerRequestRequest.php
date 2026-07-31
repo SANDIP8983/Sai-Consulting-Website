@@ -14,7 +14,7 @@ class TrackCustomerRequestRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'reference_no' => ['required', 'string', 'max:30', 'regex:/^SC\/\d{4}\/\d{6}$/i'],
+            'reference_no' => ['required', 'string', 'max:50', 'regex:/^[A-Z0-9\/_-]+$/i'],
             'mobile' => ['required', 'digits:10'],
         ];
     }
