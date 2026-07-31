@@ -35,7 +35,7 @@ class RequestWorkflowService
                 return DB::transaction(function () use ($attributes, $files, &$storedPaths): CustomerRequest {
                     $service = Service::query()->findOrFail($attributes['service_id']);
                     $request = CustomerRequest::query()->create([
-                        ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'email', 'village', 'taluka', 'district', 'survey_numbers', 'khata_number', 'details']),
+                        ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'email', 'address', 'survey_numbers', 'khata_number', 'details']),
                         'reference_no' => $this->referenceNumbers->generate(),
                         'status' => 'received',
                         'amount_due' => $service->service_fee ?? 0,

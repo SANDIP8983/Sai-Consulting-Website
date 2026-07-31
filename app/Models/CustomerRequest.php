@@ -23,6 +23,7 @@ class CustomerRequest extends Model
         'name',
         'mobile',
         'email',
+        'address',
         'village',
         'taluka',
         'district',

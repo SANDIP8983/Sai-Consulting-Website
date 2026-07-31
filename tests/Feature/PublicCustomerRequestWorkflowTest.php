@@ -21,6 +21,10 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $response = $this->post(route('request.store'), $this->validPayload($service));
 
         $request = CustomerRequest::query()->sole();
+        $this->assertSame('Chanasma, Chanasma, Patan, Gujarat 384220', $request->address);
+        $this->assertNull($request->village);
+        $this->assertNull($request->taluka);
+        $this->assertNull($request->district);
         $response->assertRedirect(route('request.success'));
         $this->get(route('request.success'))
             ->assertOk()
@@ -34,7 +38,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $response = $this->from(route('request.create'))->post(route('request.store'), []);
 
         $response->assertRedirect(route('request.create'));
-        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'village', 'taluka', 'district', 'survey_numbers', 'khata_number', 'details', 'documents', 'declaration']);
+        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'address', 'survey_numbers', 'khata_number', 'details', 'documents', 'declaration']);
         $this->assertDatabaseCount('requests', 0);
     }
 
@@ -73,10 +77,12 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             'service_id' => $service->id,
             'name' => 'Preserved Customer',
             'mobile' => 'invalid',
+            'address' => 'Preserved full address',
         ])->assertRedirect(route('request.create'));
 
         $this->get(route('request.create'))
             ->assertSee('value="Preserved Customer"', false)
+            ->assertSee('Preserved full address')
             ->assertSee('value="'.$service->id.'" selected', false);
     }
 
@@ -196,9 +202,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             'name' => 'Test Customer',
             'mobile' => '9999999999',
             'email' => 'customer@example.com',
-            'village' => 'Chanasma',
-            'taluka' => 'Chanasma',
-            'district' => 'Patan',
+            'address' => 'Chanasma, Chanasma, Patan, Gujarat 384220',
             'survey_numbers' => '12/1, Block 15',
             'khata_number' => 'KH-100',
             'details' => 'Please review the land record.',
