@@ -32,6 +32,11 @@ Route::post('/request/track', [CustomerRequestController::class, 'lookup'])
     ->middleware('throttle:10,1')
     ->name('request.track.lookup');
 
+Route::get('/admin', fn () => auth()->check()
+    ? to_route('admin.dashboard')
+    : to_route('login'))
+    ->name('admin.index');
+
 Route::prefix('admin')->group(function () {
     Route::middleware('guest')->controller(LoginController::class)->group(function () {
         Route::get('/login', 'create')->name('login');

@@ -13,6 +13,12 @@ class CustomerRequestManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_entry_redirects_guests_to_login_and_users_to_dashboard(): void
+    {
+        $this->get('/admin')->assertRedirect(route('login'));
+        $this->actingAs(User::factory()->create())->get('/admin')->assertRedirect(route('admin.dashboard'));
+    }
+
     public function test_guest_cannot_access_admin_requests_or_private_documents(): void
     {
         $request = $this->customerRequest();
@@ -32,6 +38,22 @@ class CustomerRequestManagementTest extends TestCase
             ->assertOk()->assertSee($match->reference_no)->assertDontSee($hidden->reference_no);
         $this->actingAs($admin)->get(route('admin.requests.show', $match))
             ->assertOk()->assertSee('Matching Customer')->assertSee($match->address)->assertSee($match->service->name_en);
+    }
+
+    public function test_payment_service_and_date_filters_are_applied_together(): void
+    {
+        $admin = User::factory()->create();
+        $match = $this->customerRequest(['reference_no' => 'SC/2026/000311', 'payment_status' => 'pending']);
+        $hidden = $this->customerRequest(['reference_no' => 'SC/2026/000322', 'payment_status' => 'received']);
+        $match->forceFill(['created_at' => '2026-08-01 10:00:00'])->save();
+        $hidden->forceFill(['created_at' => '2026-07-01 10:00:00'])->save();
+
+        $this->actingAs($admin)->get(route('admin.requests.index', [
+            'payment_status' => 'pending',
+            'service_id' => $match->service_id,
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-01',
+        ]))->assertOk()->assertSee($match->reference_no)->assertDontSee($hidden->reference_no);
     }
 
     public function test_private_document_download_is_authenticated_scoped_and_hides_path(): void
@@ -82,6 +104,33 @@ class CustomerRequestManagementTest extends TestCase
 
         $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
             ->assertOk()->assertSee('Upload a clearer Property Card.')->assertDontSee('Internal review note.');
+    }
+
+    public function test_admin_can_update_estimate_and_record_manual_payment_safely(): void
+    {
+        $admin = User::factory()->create();
+        $request = $this->customerRequest(['status' => 'payment_pending', 'payment_status' => 'pending', 'amount_due' => 500]);
+
+        $this->actingAs($admin)->patch(route('admin.requests.estimate', $request), ['estimated_completion_date' => '2026-08-15'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), ['amount' => 500, 'payment_method' => 'cash', 'received_at' => '2026-08-01 11:00:00'])->assertSessionHasNoErrors();
+
+        $request->refresh();
+        $this->assertSame('2026-08-15', $request->estimated_completion_date->toDateString());
+        $this->assertSame('payment_received', $request->status);
+        $this->assertSame('received', $request->payment_status);
+        $this->assertDatabaseHas('request_payments', ['request_id' => $request->id, 'amount' => 500]);
+        $this->assertDatabaseHas('request_status_histories', ['request_id' => $request->id, 'to_status' => 'payment_received']);
+    }
+
+    public function test_dashboard_displays_request_summary_cards(): void
+    {
+        $admin = User::factory()->create();
+        $this->customerRequest(['status' => 'received']);
+        $this->customerRequest(['reference_no' => 'SC/2026/000002', 'status' => 'completed']);
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()
+            ->assertSee('New / Received')->assertSee('Under Review')->assertSee('Need Documents')
+            ->assertSee('Payment Pending')->assertSee('In Progress')->assertSee('Completed');
     }
 
     private function customerRequest(array $attributes = []): CustomerRequest
