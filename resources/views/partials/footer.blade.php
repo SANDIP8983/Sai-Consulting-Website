@@ -9,7 +9,7 @@
                     @if($site['whatsappUrl'])<a class="footer-contact-card" href="{{ $site['whatsappUrl'] }}" target="_blank" rel="noopener"><span class="footer-contact-icon whatsapp"><x-public-icon name="message" size="20" /></span><span><small>WhatsApp</small><strong>{{ $site['whatsappNumber'] }}</strong></span></a>@endif
                 </div>
             </div>
-            <div class="col-6 col-lg-2"><h2>Explore</h2><ul><li><a href="{{ route('home') }}#services">Services</a></li><li><a href="{{ route('home') }}#process">How It Works</a></li><li><a href="{{ route('home') }}#about">About Us</a></li><li><a href="{{ route('home') }}#faq">FAQ</a></li></ul></div>
+            <div class="col-6 col-lg-2"><h2>Explore</h2><ul><li><a href="{{ route('services.index') }}">Services</a></li><li><a href="{{ route('home') }}#process">How It Works</a></li><li><a href="{{ route('home') }}#about">About Us</a></li><li><a href="{{ route('home') }}#faq">FAQ</a></li></ul></div>
             <div class="col-6 col-lg-2"><h2>Requests</h2><ul><li><a href="{{ route('request.create') }}">Apply Online</a></li><li><a href="{{ route('request.track') }}">Track Request</a></li><li><a href="{{ route('home') }}#contact">Office Information</a></li></ul></div>
             <div class="col-lg-4"><h2>Office Information</h2>
                 @if($site['address'])<div class="footer-info-row"><x-public-icon name="location" size="21" /><div><small>Office Address</small><strong>{{ $site['address'] }}</strong></div></div>@endif

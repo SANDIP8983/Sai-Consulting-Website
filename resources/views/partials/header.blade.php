@@ -10,7 +10,7 @@
             <div class="collapse navbar-collapse" id="mainMenu">
                 <ul class="navbar-nav ms-auto align-items-xl-center gap-xl-1">
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('home') ? 'active' : '' }}" href="{{ route('home') }}">Home</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#services">Services</a></li>
+                    <li class="nav-item"><a class="nav-link {{ request()->routeIs('services.*') ? 'active' : '' }}" href="{{ route('services.index') }}">Services</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#process">How It Works</a></li>
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('request.track*') ? 'active' : '' }}" href="{{ route('request.track') }}">Track Request</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#about">About Us</a></li>

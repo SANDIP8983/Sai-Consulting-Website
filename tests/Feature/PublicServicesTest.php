@@ -1,0 +1,114 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Service;
+use App\Models\Setting;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class PublicServicesTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_index_displays_active_services_and_hides_inactive_services(): void
+    {
+        $active = $this->service(['name_en' => 'Active Drafting', 'name_gu' => 'સક્રિય ડ્રાફ્ટિંગ', 'slug' => 'active-drafting']);
+        $inactive = $this->service(['name_en' => 'Hidden Drafting', 'name_gu' => 'છુપાયેલી ડ્રાફ્ટિંગ', 'slug' => 'hidden-drafting', 'is_active' => false]);
+
+        $this->get(route('services.index'))
+            ->assertOk()
+            ->assertSee($active->name_gu)
+            ->assertSee($active->name_en)
+            ->assertDontSee($inactive->name_en);
+    }
+
+    public function test_active_service_detail_loads_by_slug_with_documents_and_actions(): void
+    {
+        $service = $this->service([
+            'name_en' => 'Property Verification',
+            'name_gu' => 'મિલકત ચકાસણી',
+            'slug' => 'property-verification',
+            'service_fee' => 1250,
+            'advance_percentage' => 50,
+            'estimated_days' => 7,
+            'notes' => 'Original records may be requested after review.',
+        ]);
+        $service->requiredDocuments()->create(['name_en' => 'Property Card', 'name_gu' => 'પ્રોપર્ટી કાર્ડ', 'sort_order' => 1]);
+        $this->publicSetting('contact.whatsapp_number', '9687621876');
+
+        $this->get(route('services.show', $service->slug))
+            ->assertOk()
+            ->assertSee('Home')
+            ->assertSee('Services')
+            ->assertSee($service->name_gu)
+            ->assertSee('₹1,250.00')
+            ->assertSee('50%')
+            ->assertSee('7 days')
+            ->assertSee('Property Card')
+            ->assertSee('પ્રોપર્ટી કાર્ડ')
+            ->assertSee('Original records may be requested')
+            ->assertSee(route('request.create', ['service' => $service->id]), false)
+            ->assertSee(route('request.track'), false)
+            ->assertSee(route('services.index'), false)
+            ->assertSee('https://wa.me/9687621876', false)
+            ->assertSee('Need Help?')
+            ->assertDontSee('tel:');
+    }
+
+    public function test_invalid_or_inactive_service_slug_returns_not_found(): void
+    {
+        $inactive = $this->service(['slug' => 'inactive-service', 'is_active' => false]);
+
+        $this->get(route('services.show', 'missing-service'))->assertNotFound();
+        $this->get(route('services.show', $inactive->slug))->assertNotFound();
+    }
+
+    public function test_missing_fee_and_timeline_fields_are_hidden(): void
+    {
+        $service = $this->service(['slug' => 'no-commercial-details', 'service_fee' => null, 'estimated_days' => null]);
+
+        $this->get(route('services.show', $service->slug))
+            ->assertOk()
+            ->assertDontSee('Service Fee')
+            ->assertDontSee('Estimated Completion')
+            ->assertDontSee('Advance');
+    }
+
+    public function test_service_search_matches_bilingual_names_and_validates_length(): void
+    {
+        $service = $this->service(['name_en' => 'Token Booking', 'name_gu' => 'ગરવી ટોકન બુકિંગ', 'slug' => 'token-booking']);
+        $this->service(['name_en' => 'Sale Deed', 'name_gu' => 'વેચાણ દસ્તાવેજ', 'slug' => 'sale-deed']);
+
+        $this->get(route('services.index', ['q' => 'ગરવી']))
+            ->assertOk()
+            ->assertSee($service->name_en)
+            ->assertDontSee('Sale Deed');
+        $this->get(route('services.index', ['q' => str_repeat('a', 101)]))
+            ->assertSessionHasErrors('q');
+    }
+
+    private function service(array $attributes = []): Service
+    {
+        return Service::query()->create([
+            'name_en' => 'Documentation Service',
+            'name_gu' => 'દસ્તાવેજ સેવા',
+            'slug' => 'documentation-service-'.fake()->unique()->numberBetween(1, 999999),
+            'description' => 'Professional documentation assistance.',
+            'is_active' => true,
+            'sort_order' => 1,
+            ...$attributes,
+        ]);
+    }
+
+    private function publicSetting(string $key, string $value): void
+    {
+        Setting::query()->create([
+            'setting_key' => $key,
+            'setting_value' => $value,
+            'value_type' => 'string',
+            'setting_group' => str($key)->before('.')->toString(),
+            'is_public' => true,
+        ]);
+    }
+}

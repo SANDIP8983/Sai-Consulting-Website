@@ -6,9 +6,13 @@ use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\CustomerRequestController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PublicServiceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
+
+Route::get('/services', [PublicServiceController::class, 'index'])->name('services.index');
+Route::get('/services/{slug}', [PublicServiceController::class, 'show'])->name('services.show');
 
 Route::get('/request', [CustomerRequestController::class, 'create'])
     ->name('request.create');

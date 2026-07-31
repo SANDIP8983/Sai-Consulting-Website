@@ -13,7 +13,7 @@ class SubRegistrarTokenBookingServiceSeeder extends Seeder
             ['slug' => 'sub-registrar-office-token-booking'],
             [
                 'name_en' => 'Sub Registrar Office Token Booking',
-                'name_gu' => 'સબ રજિસ્ટ્રાર ઓફિસ ટોકન બુકિંગ',
+                'name_gu' => 'સબ રજિસ્ટ્રાર કચેરી માટે ગરવી પોર્ટલ ટોકન બુકિંગ',
                 'description' => 'Sub Registrar Office appointment token booking assistance.',
                 'is_active' => true,
                 'sort_order' => 6,
