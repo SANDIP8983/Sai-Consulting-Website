@@ -30,10 +30,10 @@ class DispatchManagementService
                 throw ValidationException::withMessages(['dispatch' => 'The request must be ready for registration before dispatch.']);
             }
 
-            if ($attributes['dispatch_status'] === 'dispatched' && ! in_array($lockedRequest->status, ['ready_for_registration', 'dispatched'], true)) {
+            if ($attributes['dispatch_status'] === 'dispatched' && ! in_array($lockedRequest->status, ['ready_for_registration', 'completed', 'dispatched'], true)) {
                 throw ValidationException::withMessages(['dispatch_status' => 'This request cannot be marked dispatched from its current workflow status.']);
             }
-            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing && $lockedRequest->processing->processing_stage !== 'ready_for_dispatch') {
+            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing && ! in_array($lockedRequest->processing->processing_stage, ['ready_for_dispatch', 'completed'], true)) {
                 throw ValidationException::withMessages(['dispatch' => 'The processing stage must be Ready for Dispatch.']);
             }
             if ($attributes['dispatch_status'] === 'delivered' && ! $lockedRequest->dispatches()->where('dispatch_status', 'dispatched')->exists()) {
@@ -44,7 +44,7 @@ class DispatchManagementService
             if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->status === 'ready_for_registration') {
                 $this->workflow->transition($lockedRequest, ['status' => 'dispatched', 'remarks' => 'Request dispatched.', 'is_visible_to_customer' => true], $user);
             }
-            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing) {
+            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing?->processing_stage === 'ready_for_dispatch') {
                 $this->processing->markDispatched($lockedRequest, $user);
             }
 

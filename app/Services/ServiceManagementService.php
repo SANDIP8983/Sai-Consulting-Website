@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Service;
 use App\Models\CommonRequiredDocument;
+use App\Models\Service;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +41,7 @@ class ServiceManagementService
 
             $this->syncRequiredDocuments($service, $attributes['documents'] ?? []);
             $this->syncGovernmentCharges($service, $attributes['government_charge_items'] ?? []);
+            $this->syncWorkScopeDefaults($service, $attributes['work_scope_item_ids'] ?? []);
 
             return $service;
         });
@@ -55,6 +56,7 @@ class ServiceManagementService
             $service->update($this->serviceAttributes($attributes));
             $this->syncRequiredDocuments($service, $attributes['documents'] ?? []);
             $this->syncGovernmentCharges($service, $attributes['government_charge_items'] ?? []);
+            $this->syncWorkScopeDefaults($service, $attributes['work_scope_item_ids'] ?? []);
         });
     }
 
@@ -170,6 +172,11 @@ class ServiceManagementService
         }
         $service->governmentChargeItems()->whereNotIn('id', $retained)->delete();
         $service->updateQuietly(['government_charges' => $service->governmentChargeItems()->where('is_active', true)->sum('amount')]);
+    }
+
+    private function syncWorkScopeDefaults(Service $service, array $ids): void
+    {
+        $service->defaultWorkScopes()->sync(collect($ids)->values()->mapWithKeys(fn ($id, $order) => [(int) $id => ['is_default' => true, 'display_order' => $order + 1]])->all());
     }
 
     private function uniqueSlug(string $name): string

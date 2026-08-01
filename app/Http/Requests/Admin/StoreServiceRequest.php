@@ -3,9 +3,9 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Service;
+use App\Support\PublicDocumentPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use App\Support\PublicDocumentPolicy;
 
 class StoreServiceRequest extends FormRequest
 {
@@ -50,9 +50,15 @@ class StoreServiceRequest extends FormRequest
             'requires_token_booking' => ['nullable', 'boolean'],
             'requires_registration' => ['nullable', 'boolean'],
             'requires_certified_copy' => ['nullable', 'boolean'],
+            'work_scope_item_ids' => ['nullable', 'array', 'max:30'],
+            'work_scope_item_ids.*' => ['integer', 'distinct', 'exists:work_scope_items,id'],
             'documents' => ['nullable', 'array', 'max:30'],
             'documents.*.id' => ['nullable', 'integer'],
-            'documents.*.name_en' => ['required_with:documents', 'string', 'max:150', function (string $attribute, mixed $value, \Closure $fail): void { if (! PublicDocumentPolicy::isSafe((string) $value)) { $fail('Personal KYC documents cannot be added to the public document library.'); } }],
+            'documents.*.name_en' => ['required_with:documents', 'string', 'max:150', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (! PublicDocumentPolicy::isSafe((string) $value)) {
+                    $fail('Personal KYC documents cannot be added to the public document library.');
+                }
+            }],
             'documents.*.name_gu' => ['required_with:documents', 'string', 'max:150'],
             'documents.*.is_mandatory' => ['nullable', 'boolean'],
             'documents.*.allowed_file_types' => ['nullable', 'array', 'max:10'],

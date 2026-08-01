@@ -24,6 +24,8 @@ class AdminRequestManagementService
             'requestServices.service',
             'requestServices.decidedBy:id,name',
             'requestServices.approvalHistory' => fn ($q) => $q->with('approvedBy:id,name')->latest(),
+            'requestServices.workScopes',
+            'requestServices.service.defaultWorkScopes',
             'billing.charges',
             'billing.appliedBy:id,name',
             'billing.unlockedBy:id,name',

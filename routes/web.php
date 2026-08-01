@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\Auth\LoginController;
-use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequestController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\RequestDocumentController;
 use App\Http\Controllers\Admin\RequestProcessingController;
 use App\Http\Controllers\Admin\ServiceController;
@@ -62,6 +62,11 @@ Route::middleware('auth')
         Route::get('/{customerRequest}', 'show')->name('show');
         Route::patch('/{customerRequest}/status', 'transition')->name('transition');
         Route::patch('/{customerRequest}/services/{requestService}', 'decideService')->name('services.decision');
+        Route::patch('/{customerRequest}/case-planning', 'saveCasePlanning')->name('case-planning.save');
+        Route::post('/{customerRequest}/services', 'addService')->name('services.add');
+        Route::patch('/{customerRequest}/case-planning/reject', 'rejectCase')->name('case-planning.reject');
+        Route::patch('/{customerRequest}/case-planning/complete', 'completePlanned')->name('case-planning.complete');
+        Route::patch('/{customerRequest}/work-scopes/{workScope}', 'updateWorkScope')->name('work-scopes.update');
         Route::patch('/{customerRequest}/billing/finalize', 'finalizeBilling')->name('billing.finalize');
         Route::patch('/{customerRequest}/billing/unlock', 'unlockBilling')->name('billing.unlock');
         Route::patch('/{customerRequest}/estimate', 'estimate')->name('estimate');

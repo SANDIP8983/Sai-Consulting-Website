@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             ServiceSeeder::class,
             SubRegistrarTokenBookingServiceSeeder::class,
+            WorkScopeItemSeeder::class,
         ]);
     }
 }

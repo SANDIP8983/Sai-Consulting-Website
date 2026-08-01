@@ -3,19 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\FilterServicesRequest;
 use App\Http\Requests\Admin\StoreServiceRequest;
 use App\Http\Requests\Admin\UpdateServiceRequest;
-use App\Http\Requests\Admin\FilterServicesRequest;
 use App\Models\Service;
+use App\Models\WorkScopeItem;
 use App\Services\ServiceManagementService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
 class ServiceController extends Controller
 {
-    public function __construct(private readonly ServiceManagementService $serviceManagementService)
-    {
-    }
+    public function __construct(private readonly ServiceManagementService $serviceManagementService) {}
 
     public function index(FilterServicesRequest $request): View
     {
@@ -26,7 +25,7 @@ class ServiceController extends Controller
 
     public function create(): View
     {
-        return view('admin.services.create');
+        return view('admin.services.create', ['workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->get()]);
     }
 
     public function store(StoreServiceRequest $request): RedirectResponse
@@ -38,9 +37,9 @@ class ServiceController extends Controller
 
     public function edit(Service $service): View
     {
-        $service->load(['requiredDocuments', 'governmentChargeItems']);
+        $service->load(['requiredDocuments', 'governmentChargeItems', 'defaultWorkScopes']);
 
-        return view('admin.services.edit', compact('service'));
+        return view('admin.services.edit', ['service' => $service, 'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->get()]);
     }
 
     public function update(UpdateServiceRequest $request, Service $service): RedirectResponse

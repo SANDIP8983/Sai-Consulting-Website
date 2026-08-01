@@ -22,6 +22,7 @@ class CustomerRequest extends Model
         'submission_fingerprint',
         'file_number',
         'request_origin',
+        'case_planning_version',
         'service_id',
         'name',
         'mobile',
@@ -35,12 +36,13 @@ class CustomerRequest extends Model
         'tp_number', 'final_plot_number', 'revenue_village',
         'details',
         'status',
+        'case_approved_at', 'case_approved_by',
         'payment_status', 'amount_due', 'fee_updated_by', 'fee_updated_at', 'amount_paid', 'estimated_completion_date', 'last_status_changed_at',
     ];
 
     protected function casts(): array
     {
-        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'last_status_changed_at' => 'datetime'];
+        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'last_status_changed_at' => 'datetime', 'case_approved_at' => 'datetime', 'case_planning_version' => 'integer'];
     }
 
     /**

@@ -2,9 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Support\PublicDocumentPolicy;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Service extends Model
 {
@@ -17,6 +18,7 @@ class Service extends Model
             ));
         });
     }
+
     protected $fillable = [
         'name_en',
         'name_gu',
@@ -81,6 +83,11 @@ class Service extends Model
         return $this->hasMany(RequestService::class);
     }
 
+    public function defaultWorkScopes(): BelongsToMany
+    {
+        return $this->belongsToMany(WorkScopeItem::class, 'service_work_scope_defaults')->withPivot(['is_default', 'display_order'])->withTimestamps()->orderByPivot('display_order');
+    }
+
     public function governmentChargeItems(): HasMany
     {
         return $this->hasMany(ServiceGovernmentCharge::class)->orderBy('sort_order')->orderBy('id');
@@ -107,6 +114,7 @@ class Service extends Model
         foreach (PublicDocumentPolicy::PROHIBITED_TERMS as $term) {
             $query->whereRaw('LOWER(name_en) NOT LIKE ?', ['%'.$term.'%']);
         }
+
         return $query;
     }
 }

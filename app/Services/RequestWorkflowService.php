@@ -3,8 +3,9 @@
 namespace App\Services;
 
 use App\Models\CustomerRequest;
-use App\Models\Service;
+use App\Models\RequestBilling;
 use App\Models\RequestService;
+use App\Models\Service;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -205,18 +206,38 @@ class RequestWorkflowService
                 throw ValidationException::withMessages(['pricing' => 'Historical paid or frozen pricing is preserved and cannot be converted automatically.']);
             }
             $services = $lockedRequest->requestServices()->where('status', 'approved')->lockForUpdate()->get();
-            if ($services->isEmpty()) throw ValidationException::withMessages(['pricing' => 'Approve at least one selected service before freezing billing.']);
-            if ($lockedRequest->requestServices()->whereNotIn('status', ['approved', 'rejected'])->exists()) throw ValidationException::withMessages(['pricing' => 'Decide every selected service before freezing billing.']);
-            if ($lockedRequest->billing?->isLocked()) throw ValidationException::withMessages(['pricing' => 'Request pricing is locked. Use the audited Unlock Pricing action before changing it.']);
+            if ($services->isEmpty()) {
+                throw ValidationException::withMessages(['pricing' => 'Approve at least one selected service before freezing billing.']);
+            }
+            if ($lockedRequest->case_planning_version > 0 && $lockedRequest->requestServices()->whereNull('decided_at')->exists()) {
+                throw ValidationException::withMessages(['pricing' => 'Record a decision for every selected service before approving the case.']);
+            }
+            if ($lockedRequest->requestServices()->whereNotIn('status', ['approved', 'rejected', 'under_review'])->exists()) {
+                throw ValidationException::withMessages(['pricing' => 'Decide every selected service before approving the case.']);
+            }
+            if ($lockedRequest->case_planning_version > 0 && $services->contains(fn ($service) => ! $service->workScopes()->exists())) {
+                throw ValidationException::withMessages(['pricing' => 'Every accepted service requires at least one selected work-scope item.']);
+            }
+            if ($lockedRequest->billing?->isLocked()) {
+                throw ValidationException::withMessages(['pricing' => 'Request pricing is locked. Use the audited Unlock Pricing action before changing it.']);
+            }
 
             $original = round((float) $services->sum('professional_fee'), 2);
             $type = $attributes['discount_type'];
             $value = round((float) $attributes['discount_value'], 2);
-            if ($type === 'percentage' && $value > 100) throw ValidationException::withMessages(['discount_value' => 'Percentage discount must be between 0 and 100.']);
-            $discount = match ($type) { 'fixed' => $value, 'percentage' => round($original * $value / 100, 2), default => 0.0 };
-            if ($discount > $original) throw ValidationException::withMessages(['discount_value' => 'Discount cannot exceed the total original professional fee.']);
+            if ($type === 'percentage' && $value > 100) {
+                throw ValidationException::withMessages(['discount_value' => 'Percentage discount must be between 0 and 100.']);
+            }
+            $discount = match ($type) {
+                'fixed' => $value, 'percentage' => round($original * $value / 100, 2), default => 0.0
+            };
+            if ($discount > $original) {
+                throw ValidationException::withMessages(['discount_value' => 'Discount cannot exceed the total original professional fee.']);
+            }
             $net = round($original - $discount, 2);
-            if ($net < 0) throw ValidationException::withMessages(['discount_value' => 'Net professional fee cannot be negative.']);
+            if ($net < 0) {
+                throw ValidationException::withMessages(['discount_value' => 'Net professional fee cannot be negative.']);
+            }
             $gstRate = round((float) $attributes['gst_rate'], 2);
             $gst = round($net * $gstRate / 100, 2);
             $charges = collect($attributes['government_charges'] ?? [])->map(fn ($charge, $index) => ['name' => $charge['name'], 'amount' => round((float) $charge['amount'], 2), 'note' => $charge['note'] ?? null, 'display_order' => (int) ($charge['display_order'] ?? $index)])->values();
@@ -227,16 +248,18 @@ class RequestWorkflowService
                 'total_original_professional_fee' => $original, 'discount_type' => $type, 'discount_value' => $type === 'none' ? 0 : $value,
                 'discount_amount' => $discount, 'discount_reason' => $type === 'none' ? null : $attributes['discount_reason'], 'internal_note' => $attributes['internal_note'] ?? null,
                 'net_professional_fee' => $net, 'gst_rate' => $gstRate, 'gst_amount' => $gst, 'government_charges_total' => $government,
-                'grand_total' => $grandTotal, 'applied_by' => $user->id, 'applied_at' => now(), 'pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null,
+                'grand_total' => $grandTotal, 'applied_by' => $user->id, 'applied_at' => now(), 'pricing_locked_at' => $lockedRequest->case_planning_version > 0 ? null : now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null,
             ]);
             $billing->charges()->delete();
             $billing->charges()->createMany($charges->all());
-            $billing->history()->create(['request_id' => $lockedRequest->id, 'changed_by' => $user->id, 'action' => 'frozen', 'pricing_snapshot' => $this->requestBillingSnapshot($billing->fresh('charges')), 'reason' => null]);
+            $billing->history()->create(['request_id' => $lockedRequest->id, 'changed_by' => $user->id, 'action' => $lockedRequest->case_planning_version > 0 ? 'saved' : 'frozen', 'pricing_snapshot' => $this->requestBillingSnapshot($billing->fresh('charges')), 'reason' => null]);
             $lockedRequest->update(['amount_due' => $grandTotal, 'fee_updated_by' => $user->id, 'fee_updated_at' => now()]);
 
             if ($lockedRequest->status === 'under_review') {
-                if (! $lockedRequest->file_number) $this->fileNumbers->assign($lockedRequest);
-                $lockedRequest->update(['status' => 'approved', 'last_status_changed_at' => now()]);
+                if (! $lockedRequest->file_number) {
+                    $this->fileNumbers->assign($lockedRequest);
+                }
+                $lockedRequest->update(['status' => 'approved', 'case_approved_at' => now(), 'case_approved_by' => $user->id, 'last_status_changed_at' => now()]);
                 $this->history($lockedRequest, 'under_review', 'approved', 'Request pricing approved.', true, $user->id);
                 $lockedRequest->update(['status' => 'payment_pending', 'payment_status' => 'pending', 'last_status_changed_at' => now()]);
                 $this->history($lockedRequest, 'approved', 'payment_pending', 'Payment summary generated.', true, $user->id);
@@ -248,15 +271,17 @@ class RequestWorkflowService
     {
         DB::transaction(function () use ($request, $reason, $user): void {
             $billing = $request->billing()->with('charges')->lockForUpdate()->first();
-            if (! $billing || ! $billing->isLocked()) throw ValidationException::withMessages(['pricing' => 'Request pricing is not currently locked.']);
+            if (! $billing || ! $billing->isLocked()) {
+                throw ValidationException::withMessages(['pricing' => 'Request pricing is not currently locked.']);
+            }
             $billing->history()->create(['request_id' => $request->id, 'changed_by' => $user->id, 'action' => 'unlocked', 'pricing_snapshot' => $this->requestBillingSnapshot($billing), 'reason' => $reason]);
             $billing->update(['pricing_unlocked_at' => now(), 'pricing_unlocked_by' => $user->id]);
         });
     }
 
-    private function requestBillingSnapshot(\App\Models\RequestBilling $billing): array
+    private function requestBillingSnapshot(RequestBilling $billing): array
     {
-        return [...$billing->only(['total_original_professional_fee','discount_type','discount_value','discount_amount','discount_reason','internal_note','net_professional_fee','gst_rate','gst_amount','government_charges_total','grand_total','applied_by','applied_at','pricing_locked_at']), 'government_charges' => $billing->charges->map->only(['name','amount','note','display_order'])->all()];
+        return [...$billing->only(['total_original_professional_fee', 'discount_type', 'discount_value', 'discount_amount', 'discount_reason', 'internal_note', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'applied_by', 'applied_at', 'pricing_locked_at']), 'government_charges' => $billing->charges->map->only(['name', 'amount', 'note', 'display_order'])->all()];
     }
 
     public function addRemark(CustomerRequest $request, string $remarks, bool $visible, User $user): void
@@ -294,7 +319,7 @@ class RequestWorkflowService
                 $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
             }
             if ($paymentStatus === 'received' && in_array($lockedRequest->status, ['approved', 'payment_pending'], true)) {
-                $lockedRequest->requestServices()->whereNotNull('pricing_locked_at')->update(['pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null]);
+                $lockedRequest->requestServices()->where('status', 'approved')->update(['pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null]);
                 $lockedRequest->billing()->update(['pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null]);
                 if ($lockedRequest->status === 'approved') {
                     $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
