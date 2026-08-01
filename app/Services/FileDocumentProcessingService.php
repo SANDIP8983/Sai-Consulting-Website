@@ -113,6 +113,16 @@ class FileDocumentProcessingService
         }
     }
 
+    public function markDispatched(CustomerRequest $request, User $user): void
+    {
+        $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
+        if ($processing->processing_stage !== 'ready_for_dispatch' || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists()) {
+            throw ValidationException::withMessages(['dispatch' => 'Processing must be ready for dispatch and have a dispatched record.']);
+        }
+        $processing->update(['processing_stage' => 'dispatched']);
+        $request->processingHistory()->create(['from_stage' => 'ready_for_dispatch', 'to_stage' => 'dispatched', 'remarks' => 'Documents dispatched.', 'is_visible_to_customer' => true, 'changed_by' => $user->id]);
+    }
+
     private function updateInformation(CustomerRequest $request, array $attributes, User $user, string $auditRemark, ?string $customerRemarkKey = null): RequestProcessingDetail
     {
         return DB::transaction(function () use ($request, $attributes, $user, $auditRemark, $customerRemarkKey): RequestProcessingDetail {
@@ -131,6 +141,7 @@ class FileDocumentProcessingService
             'draft_ready', 'customer_verification_pending', 'correction_required' => 'ready_for_verification',
             'final_draft_ready' => 'customer_approved',
             'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch' => 'ready_for_registration',
+            'completed' => 'completed',
             default => null,
         };
         if ($target && $request->status !== $target && in_array($target, $this->workflow->transitions($request), true)) {

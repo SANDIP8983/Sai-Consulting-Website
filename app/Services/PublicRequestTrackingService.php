@@ -22,6 +22,11 @@ class PublicRequestTrackingService
                 'dispatches' => fn ($query) => $query
                     ->select(['id', 'request_id', 'dispatch_status', 'dispatch_method', 'dispatch_date', 'tracking_number', 'carrier_name', 'customer_remark'])
                     ->latest('dispatch_date'),
+                'processing' => fn ($query) => $query->select(['id', 'request_id', 'processing_stage', 'token_booking_status', 'token_scheduled_at', 'registration_date', 'registration_number', 'registration_number_public', 'certified_copy_status']),
+                'processingHistory' => fn ($query) => $query
+                    ->select(['id', 'request_id', 'to_stage', 'remarks', 'created_at'])
+                    ->where('is_visible_to_customer', true)
+                    ->latest('created_at'),
                 'statusHistory' => fn ($query) => $query
                     ->select(['id', 'request_id', 'to_status', 'remarks', 'created_at'])
                     ->where('is_visible_to_customer', true)

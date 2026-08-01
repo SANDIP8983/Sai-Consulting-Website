@@ -13,7 +13,8 @@
     $latestDispatch = $customerRequest->dispatches->first();
     $dispatchEligible = $customerRequest->file_number
         && $customerRequest->payment_status === 'received'
-        && in_array($customerRequest->status, ['ready_for_registration', 'dispatched', 'completed', 'archived'], true);
+        && in_array($customerRequest->status, ['ready_for_registration', 'dispatched', 'completed', 'archived'], true)
+        && (!$customerRequest->processing || in_array($customerRequest->processing->processing_stage, ['ready_for_dispatch','dispatched','completed'], true));
 @endphp
 
 <div class="card border-0 shadow-sm mb-4">

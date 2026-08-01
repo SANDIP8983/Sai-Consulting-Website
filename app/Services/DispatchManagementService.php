@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 class DispatchManagementService
 {
-    public function __construct(private readonly RequestWorkflowService $workflow) {}
+    public function __construct(private readonly RequestWorkflowService $workflow, private readonly FileDocumentProcessingService $processing) {}
 
     public function record(CustomerRequest $request, array $attributes, User $user): RequestDispatch
     {
@@ -28,6 +28,9 @@ class DispatchManagementService
             if ($attributes['dispatch_status'] === 'dispatched' && ! in_array($lockedRequest->status, ['ready_for_registration', 'dispatched'], true)) {
                 throw ValidationException::withMessages(['dispatch_status' => 'This request cannot be marked dispatched from its current workflow status.']);
             }
+            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing && $lockedRequest->processing->processing_stage !== 'ready_for_dispatch') {
+                throw ValidationException::withMessages(['dispatch' => 'The processing stage must be Ready for Dispatch.']);
+            }
             if ($attributes['dispatch_status'] === 'delivered' && ! $lockedRequest->dispatches()->where('dispatch_status', 'dispatched')->exists()) {
                 throw ValidationException::withMessages(['dispatch_status' => 'A dispatched record is required before delivery can be recorded.']);
             }
@@ -35,6 +38,9 @@ class DispatchManagementService
             $dispatch = $lockedRequest->dispatches()->create([...$attributes, 'performed_by' => $user->id]);
             if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->status === 'ready_for_registration') {
                 $this->workflow->transition($lockedRequest, ['status' => 'dispatched', 'remarks' => 'Request dispatched.', 'is_visible_to_customer' => true], $user);
+            }
+            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing) {
+                $this->processing->markDispatched($lockedRequest, $user);
             }
 
             return $dispatch;

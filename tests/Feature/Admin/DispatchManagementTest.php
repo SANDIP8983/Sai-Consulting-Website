@@ -121,6 +121,19 @@ class DispatchManagementTest extends TestCase
         $this->assertSame('ready_for_registration', $request->fresh()->status);
     }
 
+    public function test_processing_managed_request_must_be_ready_for_dispatch(): void
+    {
+        $admin=User::factory()->create(); $request=$this->request();
+        $request->processing()->create(['processing_stage'=>'registered']);
+        $this->actingAs($admin)->post(route('admin.requests.dispatches.store',$request),$this->dispatchPayload())->assertSessionHasErrors('dispatch');
+        $this->assertSame('ready_for_registration',$request->fresh()->status);
+        $request->processing->update(['processing_stage'=>'ready_for_dispatch']);
+        $this->actingAs($admin)->post(route('admin.requests.dispatches.store',$request),$this->dispatchPayload())->assertSessionHasNoErrors();
+        $this->assertSame('dispatched',$request->fresh()->status);
+        $this->assertSame('dispatched',$request->processing->fresh()->processing_stage);
+        $this->assertDatabaseHas('request_processing_histories',['request_id'=>$request->id,'from_stage'=>'ready_for_dispatch','to_stage'=>'dispatched']);
+    }
+
     public function test_public_tracking_shows_safe_dispatch_information_including_carrier_name(): void
     {
         $admin = User::factory()->create(['name' => 'Private Dispatch Admin']);
