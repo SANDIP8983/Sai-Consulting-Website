@@ -25,4 +25,21 @@ class AdminUserSeederTest extends TestCase
         $this->assertSame($originalHash, $admin->fresh()->password);
         $this->assertTrue(Hash::check(config('admin.password'), $admin->fresh()->password));
     }
+
+    public function test_admin_seeder_renames_the_legacy_account_without_changing_its_password(): void
+    {
+        $legacy = User::factory()->create([
+            'name' => 'Test User',
+            'email' => config('admin.legacy_email'),
+        ]);
+        $originalHash = $legacy->password;
+
+        $this->seed(AdminUserSeeder::class);
+
+        $admin = User::query()->sole();
+        $this->assertSame('Admin', $admin->name);
+        $this->assertSame(config('admin.email'), $admin->email);
+        $this->assertSame($originalHash, $admin->password);
+        $this->assertDatabaseMissing('users', ['email' => config('admin.legacy_email')]);
+    }
 }

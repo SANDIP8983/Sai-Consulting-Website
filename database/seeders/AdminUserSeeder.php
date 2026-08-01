@@ -10,13 +10,23 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        User::query()->firstOrCreate(
-            ['email' => config('admin.email')],
-            [
+        $admin = User::query()->where('email', config('admin.email'))->first()
+            ?? User::query()->where('email', config('admin.legacy_email'))->first();
+
+        if ($admin) {
+            $admin->update([
                 'name' => config('admin.name'),
-                'password' => Hash::make(config('admin.password')),
-                'email_verified_at' => now(),
-            ],
-        );
+                'email' => config('admin.email'),
+            ]);
+
+            return;
+        }
+
+        User::query()->create([
+            'name' => config('admin.name'),
+            'email' => config('admin.email'),
+            'password' => Hash::make(config('admin.password')),
+            'email_verified_at' => now(),
+        ]);
     }
 }
