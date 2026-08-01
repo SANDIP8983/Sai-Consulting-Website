@@ -14,10 +14,16 @@ class AdminUserSeeder extends Seeder
             ?? User::query()->where('email', config('admin.legacy_email'))->first();
 
         if ($admin) {
-            $admin->update([
+            $changes = [
                 'name' => config('admin.name'),
                 'email' => config('admin.email'),
-            ]);
+            ];
+
+            if (! Hash::check(config('admin.password'), $admin->password)) {
+                $changes['password'] = Hash::make(config('admin.password'));
+            }
+
+            $admin->update($changes);
 
             return;
         }
