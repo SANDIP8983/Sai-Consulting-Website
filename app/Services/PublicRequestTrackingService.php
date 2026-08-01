@@ -10,7 +10,7 @@ class PublicRequestTrackingService
     public function find(string $trackingNumber, string $mobile): CustomerRequest
     {
         $request = CustomerRequest::query()
-            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'estimated_completion_date', 'last_status_changed_at', 'updated_at'])
+            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'property_village', 'property_taluka', 'property_district', 'survey_numbers', 'khata_number', 'estimated_completion_date', 'last_status_changed_at', 'updated_at'])
             ->where(fn ($query) => $query->where('reference_no', $trackingNumber)->orWhere('file_number', $trackingNumber))
             ->where('mobile', $mobile)
             ->with([

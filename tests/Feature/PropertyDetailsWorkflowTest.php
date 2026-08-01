@@ -15,7 +15,7 @@ class PropertyDetailsWorkflowTest extends TestCase
     public function test_online_and_offline_forms_group_location_under_property_details(): void
     {
         $service=$this->service(true);
-        $this->get(route('request.create'))->assertOk()->assertDontSee('name="village"',false)->assertDontSee('name="taluka"',false)->assertDontSee('name="district"',false)->assertSee('Property Details')->assertSee('name="property_village"',false)->assertSee('name="tp_number"',false)->assertSee('name="final_plot_number"',false);
+        $this->get(route('request.create'))->assertOk()->assertDontSee('name="village"',false)->assertDontSee('name="taluka"',false)->assertDontSee('name="district"',false)->assertSee('Property Details')->assertSee('name="property_village"',false)->assertSee('name="tp_number"',false)->assertSee('name="final_plot_number"',false)->assertSee('#property-details-section{display:block!important}',false)->assertSee("value('survey_numbers')",false)->assertSee("value('khata_number')",false);
         $this->actingAs(User::factory()->create())->get(route('admin.requests.create'))->assertOk()->assertSee('name="property_village"',false)->assertSee('name="property_taluka"',false)->assertSee('name="property_district"',false)->assertSee('Property Address / Remarks');
     }
 
@@ -37,11 +37,12 @@ class PropertyDetailsWorkflowTest extends TestCase
 
     public function test_property_values_are_persisted_and_admin_detail_displays_them(): void
     {
-        $service=$this->service(true); $payload=$this->payload($service)+['property_village'=>'Santej','property_taluka'=>'Kalol','property_district'=>'Gandhinagar','property_address_remarks'=>'Near village lake','tp_number'=>'TP-4','final_plot_number'=>'FP-20','revenue_village'=>'Santej','declaration'=>'1'];
+        $service=$this->service(true); $payload=$this->payload($service)+['property_village'=>'Santej','property_taluka'=>'Kalol','property_district'=>'Gandhinagar','survey_numbers'=>'12/1, Block 15','khata_number'=>'KH-100','property_address_remarks'=>'Near village lake','tp_number'=>'TP-4','final_plot_number'=>'FP-20','revenue_village'=>'Santej','declaration'=>'1'];
         $this->post(route('request.store'),$payload)->assertRedirect(route('request.success'));
         $request=CustomerRequest::query()->sole();
         $this->assertSame('Santej',$request->property_village); $this->assertNull($request->village);
-        $this->actingAs(User::factory()->create())->get(route('admin.requests.show',$request))->assertOk()->assertSee('Santej, Kalol, Gandhinagar')->assertSee('Near village lake')->assertSee('TP-4')->assertSee('FP-20');
+        $this->actingAs(User::factory()->create())->get(route('admin.requests.show',$request))->assertOk()->assertSee('Santej, Kalol, Gandhinagar')->assertSee('12/1, Block 15')->assertSee('KH-100')->assertSee('Near village lake')->assertSee('TP-4')->assertSee('FP-20');
+        $this->post(route('request.track.lookup'),['reference_no'=>$request->reference_no,'mobile'=>$request->mobile])->assertOk()->assertSee('Property Details')->assertSee('Santej, Kalol, Gandhinagar')->assertSee('12/1, Block 15')->assertSee('KH-100');
     }
 
     private function service(bool $property): Service

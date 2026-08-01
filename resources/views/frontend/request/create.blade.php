@@ -13,3 +13,24 @@
 @include('frontend.request.partials.final-form-review')
 </form></div></section>
 @endsection
+@push('styles')
+<style>#property-details-section{display:block!important}</style>
+@endpush
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const review = document.getElementById('request-review');
+    const value = id => document.getElementById(id)?.value?.trim() ?? '';
+    const escape = text => { const node = document.createElement('span'); node.textContent = text; return node.innerHTML; };
+    new MutationObserver(() => {
+        const heading = [...review.querySelectorAll('h3')].find(node => node.textContent.trim() === 'Property Details');
+        if (! heading) return;
+        const card = heading.closest('.review-card');
+        if (card.querySelector('[data-property-review]')) return;
+        const location = [value('property_village'), value('property_taluka'), value('property_district')].filter(Boolean).join(', ');
+        heading.insertAdjacentHTML('afterend', `<div data-property-review><strong>${escape(location || 'Not provided')}</strong><div>Survey / Block: ${escape(value('survey_numbers') || 'Not provided')}</div>${value('khata_number') ? `<div>Khata Number: ${escape(value('khata_number'))}</div>` : ''}</div>`);
+        heading.nextElementSibling?.nextElementSibling?.remove();
+    }).observe(review, { childList: true });
+});
+</script>
+@endpush
