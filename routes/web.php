@@ -73,6 +73,9 @@ Route::middleware('auth')->prefix('admin/requests/{customerRequest}/processing')
     Route::patch('/file', 'updateFile')->name('file.update');
     Route::patch('/drafting', 'updateDrafting')->name('drafting.update');
     Route::patch('/stage', 'transition')->name('stage.update');
+    Route::patch('/registration', 'updateRegistration')->name('registration.update');
+    Route::patch('/post-registration', 'updatePostRegistration')->name('post-registration.update');
+    Route::post('/registered-scan', 'storeRegisteredScan')->name('registered-scan.store');
 });
 
 Route::middleware('auth')

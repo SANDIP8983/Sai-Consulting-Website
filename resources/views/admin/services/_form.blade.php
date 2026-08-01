@@ -34,6 +34,10 @@
 </div>
 
 <hr class="my-4">
+<div><h2 class="h5 mb-1">Internal Processing Capabilities</h2><p class="text-muted small">Controls which drafting and registration sections apply to this service.</p></div>
+<div class="row g-3">@foreach(['uses_drafting_workflow'=>'Drafting workflow','requires_token_booking'=>'Token booking','requires_registration'=>'Registration','requires_certified_copy'=>'Certified copy'] as $field=>$label)<div class="col-sm-6 col-lg-3"><input type="hidden" name="{{ $field }}" value="0"><div class="form-check"><input id="{{ $field }}" name="{{ $field }}" value="1" type="checkbox" class="form-check-input" @checked(old($field,$service?->{$field} ?? false))><label for="{{ $field }}" class="form-check-label">{{ $label }}</label></div></div>@endforeach</div>
+
+<hr class="my-4">
 <div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="h5 mb-1">Required Documents</h2><p class="text-muted small mb-0">Add only the documents required for this service.</p></div><button id="add-document" class="btn btn-outline-primary btn-sm" type="button">Add Document</button></div>
 @error('documents')<div class="alert alert-danger">{{ $message }}</div>@enderror
 <div id="document-rows" class="vstack gap-3">

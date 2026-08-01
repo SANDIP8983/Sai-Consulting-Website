@@ -6,6 +6,8 @@ use App\Models\CustomerRequest;
 use App\Models\RequestProcessingDetail;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class FileDocumentProcessingService
@@ -81,6 +83,34 @@ class FileDocumentProcessingService
     public function updateDrafting(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
     {
         return $this->updateInformation($request, $attributes, $user, 'Drafting information updated.', 'drafting_customer_remark');
+    }
+
+    public function updateRegistration(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
+    {
+        return $this->updateInformation($request, $attributes, $user, 'Registration information updated.', 'registration_customer_remark');
+    }
+
+    public function updatePostRegistration(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
+    {
+        return $this->updateInformation($request, $attributes, $user, 'Post-registration information updated.');
+    }
+
+    public function storeRegisteredScan(CustomerRequest $request, UploadedFile $file, User $user): RequestProcessingDetail
+    {
+        $path = $file->store("customer-requests/{$request->id}", 'local');
+        if ($path === false) { throw new \RuntimeException('The registered document scan could not be stored.'); }
+        try {
+            return DB::transaction(function () use ($request, $file, $path, $user): RequestProcessingDetail {
+                $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
+                $document = $request->documents()->create(['file_name' => $file->getClientOriginalName(), 'file_path' => $path, 'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(), 'source' => 'admin']);
+                $processing->update(['registered_document_id' => $document->id, 'registered_scan_received_at' => now()]);
+                $request->processingHistory()->create(['from_stage' => $processing->processing_stage, 'to_stage' => $processing->processing_stage, 'remarks' => 'Registered document scan received.', 'is_visible_to_customer' => false, 'changed_by' => $user->id]);
+                return $processing->refresh();
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($path);
+            throw $exception;
+        }
     }
 
     private function updateInformation(CustomerRequest $request, array $attributes, User $user, string $auditRemark, ?string $customerRemarkKey = null): RequestProcessingDetail

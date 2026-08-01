@@ -44,5 +44,16 @@ class ServiceSeeder extends Seeder
                 ],
             );
         }
+
+        Service::query()->whereIn('slug', [
+            'sale-deed', 'relinquishment-deed', 'partition-deed', 'rent-agreement',
+            'power-of-attorney', 'gift-deed', 'mortgage', 'mortgage-release',
+            'banakhat-agreement-to-sell',
+        ])->update([
+            'uses_drafting_workflow' => true,
+            'requires_token_booking' => true,
+            'requires_registration' => true,
+            'requires_certified_copy' => true,
+        ]);
     }
 }

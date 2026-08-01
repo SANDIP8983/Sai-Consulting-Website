@@ -64,13 +64,19 @@ class ServiceManagementService
      */
     private function serviceAttributes(array $attributes): array
     {
-        return Arr::only($attributes, [
+        return [
+            ...Arr::only($attributes, [
             'name_en',
             'name_gu',
             'description',
             'sort_order',
             'is_active',
-        ]);
+            ]),
+            'uses_drafting_workflow' => (bool) ($attributes['uses_drafting_workflow'] ?? false),
+            'requires_token_booking' => (bool) ($attributes['requires_token_booking'] ?? false),
+            'requires_registration' => (bool) ($attributes['requires_registration'] ?? false),
+            'requires_certified_copy' => (bool) ($attributes['requires_certified_copy'] ?? false),
+        ];
     }
 
     /**

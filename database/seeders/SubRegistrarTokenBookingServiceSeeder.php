@@ -16,6 +16,7 @@ class SubRegistrarTokenBookingServiceSeeder extends Seeder
                 'name_gu' => 'સબ રજિસ્ટ્રાર કચેરી માટે ગરવી પોર્ટલ ટોકન બુકિંગ',
                 'is_active' => true,
                 'sort_order' => 11,
+                'requires_token_booking' => true,
             ],
         );
     }

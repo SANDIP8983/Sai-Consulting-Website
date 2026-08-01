@@ -7,6 +7,9 @@ use App\Http\Requests\Admin\OpenRequestFileRequest;
 use App\Http\Requests\Admin\TransitionRequestProcessingStageRequest;
 use App\Http\Requests\Admin\UpdateRequestDraftingRequest;
 use App\Http\Requests\Admin\UpdateRequestFileInformationRequest;
+use App\Http\Requests\Admin\UpdateRequestRegistrationRequest;
+use App\Http\Requests\Admin\UpdateRequestPostRegistrationRequest;
+use App\Http\Requests\Admin\StoreRegisteredDocumentScanRequest;
 use App\Models\CustomerRequest;
 use App\Services\FileDocumentProcessingService;
 use App\Services\RequestWorkflowService;
@@ -40,5 +43,23 @@ class RequestProcessingController extends Controller
     {
         $this->processing->transition($customerRequest, $request->validated('processing_stage'), $request->safe()->except('processing_stage'), $request->user());
         return back()->with('success', 'Processing stage updated successfully.');
+    }
+
+    public function updateRegistration(UpdateRequestRegistrationRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    {
+        $this->processing->updateRegistration($customerRequest, $request->validated(), $request->user());
+        return back()->with('success', 'Registration information updated successfully.');
+    }
+
+    public function updatePostRegistration(UpdateRequestPostRegistrationRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    {
+        $this->processing->updatePostRegistration($customerRequest, $request->validated(), $request->user());
+        return back()->with('success', 'Post-registration information updated successfully.');
+    }
+
+    public function storeRegisteredScan(StoreRegisteredDocumentScanRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    {
+        $this->processing->storeRegisteredScan($customerRequest, $request->file('registered_document'), $request->user());
+        return back()->with('success', 'Registered document scan stored privately.');
     }
 }
