@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\FilterCustomerRequestsRequest;
 use App\Http\Requests\Admin\RecordRequestPaymentRequest;
+use App\Http\Requests\Admin\StoreOfflineCustomerRequestRequest;
 use App\Http\Requests\Admin\StoreRequestDispatchRequest;
 use App\Http\Requests\Admin\StoreRequestRemarkRequest;
 use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
@@ -29,6 +30,25 @@ class CustomerRequestController extends Controller
     public function index(FilterCustomerRequestsRequest $request): View
     {
         return view('admin.requests.index', ['requests' => $this->management->paginate($request->validated()), 'services' => Service::query()->orderBy('name_en')->get(['id', 'name_en']), 'statuses' => RequestWorkflowService::STATUSES]);
+    }
+
+    public function create(): View
+    {
+        return view('admin.requests.create', [
+            'services' => Service::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name_en')->get(),
+        ]);
+    }
+
+    public function store(StoreOfflineCustomerRequestRequest $request): RedirectResponse
+    {
+        $customerRequest = $this->workflow->submitOffline(
+            $request->safe()->except('documents'),
+            $request->file('documents', []),
+            $request->user(),
+        );
+
+        return to_route('admin.requests.show', $customerRequest)
+            ->with('success', "Offline request {$customerRequest->reference_no} created successfully.");
     }
 
     public function show(CustomerRequest $customerRequest): View

@@ -24,6 +24,8 @@ class DashboardController extends Controller
             ],
             'summary' => [
                 'requests' => CustomerRequest::query()->count(),
+                'online_requests' => CustomerRequest::query()->where('request_origin', 'online')->count(),
+                'offline_requests' => CustomerRequest::query()->where('request_origin', 'offline')->count(),
                 'settings' => Setting::query()->count(),
                 'office_timings' => OfficeTiming::query()->count(),
                 'holidays' => Holiday::query()->count(),

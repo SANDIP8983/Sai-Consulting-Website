@@ -55,6 +55,8 @@ Route::middleware('auth')
     ->controller(AdminCustomerRequestController::class)
     ->group(function () {
         Route::get('/', 'index')->name('index');
+        Route::get('/create', 'create')->name('create');
+        Route::post('/', 'store')->name('store');
         Route::get('/{customerRequest}', 'show')->name('show');
         Route::patch('/{customerRequest}/status', 'transition')->name('transition');
         Route::patch('/{customerRequest}/estimate', 'estimate')->name('estimate');

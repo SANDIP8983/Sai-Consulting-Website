@@ -31,23 +31,35 @@ class RequestWorkflowService
     /** @param array<string,mixed> $attributes @param array<int,UploadedFile> $files */
     public function submit(array $attributes, array $files): CustomerRequest
     {
-        return Cache::lock('requests:reference-number', 10)->block(5, function () use ($attributes, $files): CustomerRequest {
+        return $this->createRequest($attributes, $files, 'online', 'customer', null);
+    }
+
+    /** @param array<string,mixed> $attributes @param array<int,UploadedFile> $files */
+    public function submitOffline(array $attributes, array $files, User $user): CustomerRequest
+    {
+        return $this->createRequest($attributes, $files, 'offline', 'admin', $user);
+    }
+
+    /** @param array<string,mixed> $attributes @param array<int,UploadedFile> $files */
+    private function createRequest(array $attributes, array $files, string $origin, string $documentSource, ?User $user): CustomerRequest
+    {
+        return Cache::lock('requests:reference-number', 10)->block(5, function () use ($attributes, $files, $origin, $documentSource, $user): CustomerRequest {
             $storedPaths = [];
 
             try {
-                return DB::transaction(function () use ($attributes, $files, &$storedPaths): CustomerRequest {
+                return DB::transaction(function () use ($attributes, $files, $origin, $documentSource, $user, &$storedPaths): CustomerRequest {
                     $service = Service::query()->findOrFail($attributes['service_id']);
                     $request = CustomerRequest::query()->create([
                         ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'email', 'address', 'survey_numbers', 'khata_number', 'details']),
                         'reference_no' => $this->referenceNumbers->generate(),
-                        'request_origin' => 'online',
+                        'request_origin' => $origin,
                         'status' => 'received',
                         'amount_due' => $service->service_fee ?? 0,
                         'estimated_completion_date' => $service->estimated_days ? now()->addDays($service->estimated_days)->toDateString() : null,
                         'last_status_changed_at' => now(),
                     ]);
 
-                    $this->history($request, null, 'received', 'Your request has been received.', true, null);
+                    $this->history($request, null, 'received', 'Your request has been received.', true, $user?->id);
 
                     foreach ($files as $file) {
                         $path = $file->store("customer-requests/{$request->id}", 'local');
@@ -62,7 +74,7 @@ class RequestWorkflowService
                             'file_path' => $path,
                             'file_type' => $file->getMimeType(),
                             'file_size' => $file->getSize(),
-                            'source' => 'customer',
+                            'source' => $documentSource,
                         ]);
                     }
 

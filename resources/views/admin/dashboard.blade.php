@@ -15,6 +15,10 @@
         </div>
         <a class="btn btn-primary mt-3 mt-md-0" href="{{ route('admin.settings.website') }}">Manage Settings</a>
     </div>
+    <div class="row g-4 mt-1">
+        <div class="col-sm-6"><a href="{{ route('admin.requests.index', ['source' => 'online']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Online Requests</p><p class="display-6 fw-semibold text-primary mb-0">{{ $summary['online_requests'] }}</p></div></a></div>
+        <div class="col-sm-6"><a href="{{ route('admin.requests.index', ['source' => 'offline']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Offline Requests</p><p class="display-6 fw-semibold text-secondary mb-0">{{ $summary['offline_requests'] }}</p></div></a></div>
+    </div>
 
     <div class="row g-4">
         <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><p class="text-muted mb-2">Customer Requests</p><p class="display-6 fw-semibold mb-0">{{ $summary['requests'] }}</p></div></div></div>
