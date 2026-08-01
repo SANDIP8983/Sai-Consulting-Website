@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequestController;
 use App\Http\Controllers\Admin\RequestDocumentController;
+use App\Http\Controllers\Admin\RequestProcessingController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\CustomerRequestController;
@@ -66,6 +67,13 @@ Route::middleware('auth')
         Route::patch('/{customerRequest}/fee', 'fee')->name('fee.update');
         Route::get('/{customerRequest}/documents/{document}', RequestDocumentController::class)->name('documents.download');
     });
+
+Route::middleware('auth')->prefix('admin/requests/{customerRequest}/processing')->name('admin.requests.processing.')->controller(RequestProcessingController::class)->group(function () {
+    Route::post('/open', 'open')->name('open');
+    Route::patch('/file', 'updateFile')->name('file.update');
+    Route::patch('/drafting', 'updateDrafting')->name('drafting.update');
+    Route::patch('/stage', 'transition')->name('stage.update');
+});
 
 Route::middleware('auth')
     ->prefix('admin/services')

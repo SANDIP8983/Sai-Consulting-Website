@@ -62,6 +62,29 @@ class FileDocumentProcessingTest extends TestCase
         $this->assertSame('registered', $request->processing->fresh()->processing_stage);
     }
 
+    public function test_admin_file_and_drafting_actions_are_authenticated_and_validated(): void
+    {
+        $request = $this->request(['status' => 'approved', 'file_number' => 'SC/2026/F000001']);
+        $this->post(route('admin.requests.processing.open', $request), [])->assertRedirect(route('login'));
+        $admin = User::factory()->create();
+        $this->actingAs($admin)->post(route('admin.requests.processing.open', $request), ['file_opened_at' => '2026-08-01', 'priority' => 'high'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.processing.drafting.update', $request), ['drafting_internal_note' => 'Private drafting note.', 'drafting_customer_remark' => 'Draft preparation is underway.'])->assertSessionHasNoErrors();
+        $this->assertSame('high', $request->processing->fresh()->priority);
+        $this->assertDatabaseHas('request_processing_histories', ['request_id' => $request->id, 'remarks' => 'Draft preparation is underway.', 'is_visible_to_customer' => true]);
+    }
+
+    public function test_drafting_stage_uses_the_existing_request_workflow(): void
+    {
+        $request = $this->request(['status' => 'payment_received', 'file_number' => 'SC/2026/F000001', 'payment_status' => 'received']);
+        $admin = User::factory()->create();
+        $service = app(FileDocumentProcessingService::class);
+        $service->open($request, [], $admin);
+        $service->transition($request, 'documents_under_review', [], $admin);
+        $service->transition($request, 'drafting_started', [], $admin);
+        $this->assertSame('draft_in_progress', $request->fresh()->status);
+        $this->assertDatabaseHas('request_status_histories', ['request_id' => $request->id, 'from_status' => 'payment_received', 'to_status' => 'draft_in_progress']);
+    }
+
     private function request(array $attributes = []): CustomerRequest
     {
         $service = Service::query()->create(['name_en' => 'Processing Service', 'name_gu' => 'Processing Service', 'slug' => 'processing-service', 'is_active' => true, 'sort_order' => 1, 'uses_drafting_workflow' => true, 'requires_registration' => true]);

@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\UpdateRequestEstimateRequest;
 use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
 use App\Models\CustomerRequest;
 use App\Models\Service;
+use App\Models\User;
 use App\Services\AdminRequestManagementService;
 use App\Services\DispatchManagementService;
 use App\Services\RequestWorkflowService;
@@ -58,7 +59,14 @@ class CustomerRequestController extends Controller
             fn (string $status): bool => $status !== 'dispatched',
         ));
 
-        return view('admin.requests.show', ['customerRequest' => $this->management->load($customerRequest), 'transitions' => $transitions]);
+        $customerRequest = $this->management->load($customerRequest);
+
+        return view('admin.requests.show', [
+            'customerRequest' => $customerRequest,
+            'transitions' => $transitions,
+            'processingTransitions' => $customerRequest->processing ? app(\App\Services\FileDocumentProcessingService::class)->transitions($customerRequest->processing) : [],
+            'fileInChargeUsers' => User::query()->orderBy('name')->get(['id', 'name']),
+        ]);
     }
 
     public function transition(TransitionCustomerRequestRequest $request, CustomerRequest $customerRequest): RedirectResponse

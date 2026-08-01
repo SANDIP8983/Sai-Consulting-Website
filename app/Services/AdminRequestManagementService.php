@@ -26,6 +26,8 @@ class AdminRequestManagementService
             'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at'),
             'dispatches' => fn ($q) => $q->with('performedBy:id,name')->latest('dispatch_date'),
+            'processing.fileInCharge:id,name',
+            'processingHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
         ]);
     }
 

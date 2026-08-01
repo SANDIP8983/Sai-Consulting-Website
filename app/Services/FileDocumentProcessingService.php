@@ -10,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 class FileDocumentProcessingService
 {
+    public function __construct(private readonly RequestWorkflowService $workflow) {}
+
     public const STAGES = ['file_opened', 'documents_under_review', 'documents_incomplete', 'drafting_started', 'draft_ready', 'customer_verification_pending', 'correction_required', 'final_draft_ready', 'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch', 'dispatched', 'completed'];
 
     private const TRANSITIONS = [
@@ -66,8 +68,44 @@ class FileDocumentProcessingService
             $this->enforceStageRules($request->fresh(), $processing, $to, $attributes);
             $processing->update(['processing_stage' => $to, ...$this->automaticDates($to, $attributes)]);
             $request->processingHistory()->create(['from_stage' => $from, 'to_stage' => $to, 'remarks' => $attributes['remarks'] ?? null, 'is_visible_to_customer' => (bool) ($attributes['is_visible_to_customer'] ?? false), 'changed_by' => $user->id]);
+            $this->syncRequestStatus($request->fresh(), $to, $user);
             return $processing->refresh();
         });
+    }
+
+    public function updateFileInformation(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
+    {
+        return $this->updateInformation($request, $attributes, $user, 'File information updated.');
+    }
+
+    public function updateDrafting(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
+    {
+        return $this->updateInformation($request, $attributes, $user, 'Drafting information updated.', 'drafting_customer_remark');
+    }
+
+    private function updateInformation(CustomerRequest $request, array $attributes, User $user, string $auditRemark, ?string $customerRemarkKey = null): RequestProcessingDetail
+    {
+        return DB::transaction(function () use ($request, $attributes, $user, $auditRemark, $customerRemarkKey): RequestProcessingDetail {
+            $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
+            $processing->update($attributes);
+            $customerRemark = $customerRemarkKey ? ($attributes[$customerRemarkKey] ?? null) : null;
+            $request->processingHistory()->create(['from_stage' => $processing->processing_stage, 'to_stage' => $processing->processing_stage, 'remarks' => $customerRemark ?: $auditRemark, 'is_visible_to_customer' => filled($customerRemark), 'changed_by' => $user->id]);
+            return $processing->refresh();
+        });
+    }
+
+    private function syncRequestStatus(CustomerRequest $request, string $stage, User $user): void
+    {
+        $target = match ($stage) {
+            'drafting_started' => 'draft_in_progress',
+            'draft_ready', 'customer_verification_pending', 'correction_required' => 'ready_for_verification',
+            'final_draft_ready' => 'customer_approved',
+            'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch' => 'ready_for_registration',
+            default => null,
+        };
+        if ($target && $request->status !== $target && in_array($target, $this->workflow->transitions($request), true)) {
+            $this->workflow->transition($request, ['status' => $target, 'remarks' => null, 'is_visible_to_customer' => false], $user);
+        }
     }
 
     private function enforceStageRules(CustomerRequest $request, RequestProcessingDetail $processing, string $to, array $attributes): void
