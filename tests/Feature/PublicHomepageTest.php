@@ -67,6 +67,10 @@ class PublicHomepageTest extends TestCase
             ->assertSee('Which documents may be uploaded?')
             ->assertSee('stat-counter')
             ->assertSee('20+ Years Experience')
+            ->assertSee('12000')
+            ->assertSee('Documents Prepared')
+            ->assertSee('11200')
+            ->assertSee('Happy Clients')
             ->assertDontSee('hello@example.com')
             ->assertSee('does not practice as an advocate');
     }
