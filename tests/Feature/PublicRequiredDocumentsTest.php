@@ -18,7 +18,7 @@ class PublicRequiredDocumentsTest extends TestCase
         $service->requiredDocuments()->create(['name_en' => 'Hidden Copy', 'name_gu' => 'છુપાયેલી નકલ', 'is_active' => false, 'sort_order' => 0]);
 
         $this->get(route('services.show', $service->slug))->assertOk()
-            ->assertSeeInOrder(['Optional Copy', 'Required Copy'])->assertSee('Mandatory')->assertSee('Optional')->assertDontSee('Hidden Copy');
+            ->assertSeeInOrder(['Required Copy', 'Optional Copy'])->assertSee('text-bg-danger')->assertSee('Required')->assertSee('Optional')->assertDontSee('Hidden Copy');
 
         $this->get(route('request.create', ['service' => $service->id]))->assertOk()
             ->assertSee('Required Copy')->assertSee('Optional Copy')->assertDontSee('Hidden Copy')

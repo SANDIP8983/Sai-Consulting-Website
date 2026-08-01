@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Service;
+use App\Models\CommonRequiredDocument;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -115,16 +116,22 @@ class ServiceManagementService
     {
         $retainedIds = [];
         foreach ($documents as $document) {
+            $normalized = Str::of($document['name_en'])->trim()->lower()->squish()->value();
+            $master = CommonRequiredDocument::query()->firstOrCreate(['normalized_name' => $normalized], [
+                'name_en' => $document['name_en'], 'name_gu' => $document['name_gu'], 'allowed_file_types' => $document['allowed_file_types'] ?? ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => $document['max_upload_size_kb'] ?? 10240, 'is_active' => true,
+            ]);
             $attributes = [
                 ...Arr::only($document, ['name_en', 'name_gu', 'allowed_file_types', 'max_upload_size_kb', 'sort_order']),
                 'is_mandatory' => (bool) ($document['is_mandatory'] ?? true),
+                'common_required_document_id' => $master->id,
                 'allowed_file_types' => $document['allowed_file_types'] ?? ['pdf', 'jpg', 'jpeg', 'png'],
                 'max_upload_size_kb' => $document['max_upload_size_kb'] ?? 10240,
             ];
             $existing = isset($document['id'])
                 ? $service->requiredDocuments()->whereKey($document['id'])->first()
-                : null;
+                : $service->requiredDocuments()->where('common_required_document_id', $master->id)->first();
             if ($existing) {
+                $service->requiredDocuments()->where('common_required_document_id', $master->id)->whereKeyNot($existing->id)->get()->each(fn ($duplicate) => $duplicate->requestDocuments()->exists() ? $duplicate->delete() : $duplicate->forceDelete());
                 $existing->update($attributes);
                 $retainedIds[] = $existing->id;
             } else {

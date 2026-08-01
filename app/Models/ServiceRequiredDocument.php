@@ -13,6 +13,7 @@ class ServiceRequiredDocument extends Model
 
     protected $fillable = [
         'service_id',
+        'common_required_document_id',
         'name_en',
         'name_gu',
         'is_mandatory',
@@ -36,6 +37,11 @@ class ServiceRequiredDocument extends Model
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
+    }
+
+    public function commonDocument(): BelongsTo
+    {
+        return $this->belongsTo(CommonRequiredDocument::class, 'common_required_document_id')->withTrashed();
     }
 
     public function requestDocuments(): HasMany

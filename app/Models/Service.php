@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Service extends Model
 {
+    protected static function booted(): void
+    {
+        static::created(function (Service $service): void {
+            CommonRequiredDocument::query()->where('is_active', true)->get()->each(fn (CommonRequiredDocument $document) => $service->requiredDocuments()->firstOrCreate(
+                ['common_required_document_id' => $document->id],
+                ['name_en' => $document->name_en, 'name_gu' => $document->name_gu, 'is_mandatory' => false, 'is_active' => false, 'sort_order' => 999, 'allowed_file_types' => $document->allowed_file_types, 'max_upload_size_kb' => $document->max_upload_size_kb],
+            ));
+        });
+    }
     protected $fillable = [
         'name_en',
         'name_gu',
@@ -81,6 +90,7 @@ class Service extends Model
     {
         return $this->hasMany(ServiceRequiredDocument::class)
             ->where('is_active', true)
+            ->orderByDesc('is_mandatory')
             ->orderBy('sort_order')
             ->orderBy('id');
     }

@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\CommonRequiredDocument;
+use App\Models\Service;
 use App\Models\ServiceRequiredDocument;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ServiceRequiredDocumentManagementService
@@ -27,12 +30,28 @@ class ServiceRequiredDocumentManagementService
 
     public function create(array $attributes): ServiceRequiredDocument
     {
-        return ServiceRequiredDocument::query()->create($this->attributes($attributes));
+        return DB::transaction(function () use ($attributes): ServiceRequiredDocument {
+            $master = $this->master($attributes);
+            Service::query()->pluck('id')->each(function (int $serviceId) use ($master, $attributes): void {
+                ServiceRequiredDocument::query()->firstOrCreate(
+                    ['service_id' => $serviceId, 'common_required_document_id' => $master->id],
+                    ['name_en' => $master->name_en, 'name_gu' => $master->name_gu, 'is_mandatory' => false, 'is_active' => false, 'sort_order' => 999, 'allowed_file_types' => $master->allowed_file_types, 'max_upload_size_kb' => $master->max_upload_size_kb],
+                );
+            });
+            $configuration = ServiceRequiredDocument::query()->where('service_id', $attributes['service_id'])->where('common_required_document_id', $master->id)->firstOrFail();
+            $configuration->update($this->attributes($attributes) + ['common_required_document_id' => $master->id]);
+            return $configuration;
+        });
     }
 
     public function update(ServiceRequiredDocument $document, array $attributes): void
     {
-        $document->update($this->attributes($attributes));
+        DB::transaction(function () use ($document, $attributes): void {
+            $master = $document->commonDocument ?? $this->master($attributes);
+            $master->update(['name_en' => $attributes['name_en'], 'name_gu' => $attributes['name_gu'], 'normalized_name' => $this->normalize($attributes['name_en'])]);
+            $master->serviceConfigurations()->update(['name_en' => $attributes['name_en'], 'name_gu' => $attributes['name_gu']]);
+            $document->update($this->attributes($attributes) + ['common_required_document_id' => $master->id]);
+        });
     }
 
     public function delete(ServiceRequiredDocument $document): bool
@@ -64,5 +83,19 @@ class ServiceRequiredDocumentManagementService
             'is_mandatory' => (bool) $attributes['is_mandatory'],
             'is_active' => (bool) $attributes['is_active'],
         ];
+    }
+
+    private function master(array $attributes): CommonRequiredDocument
+    {
+        $normalized = $this->normalize($attributes['name_en']);
+        return CommonRequiredDocument::withTrashed()->firstOrCreate(
+            ['normalized_name' => $normalized],
+            ['name_en' => $attributes['name_en'], 'name_gu' => $attributes['name_gu'], 'allowed_file_types' => ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => 10240, 'is_active' => true],
+        );
+    }
+
+    private function normalize(string $name): string
+    {
+        return Str::of($name)->trim()->lower()->squish()->value();
     }
 }
