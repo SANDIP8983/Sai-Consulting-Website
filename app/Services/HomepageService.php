@@ -18,7 +18,7 @@ class HomepageService
         $services = Service::query()
             ->where('is_active', true)
             ->where('available_online', true)
-            ->withCount('requiredDocuments')
+            ->withCount(['activeRequiredDocuments as required_documents_count'])
             ->orderBy('sort_order')
             ->orderBy('name_en')
             ->get();

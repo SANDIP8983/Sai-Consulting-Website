@@ -21,6 +21,6 @@ class RequestDocument extends Model
 
     public function requiredDocument(): BelongsTo
     {
-        return $this->belongsTo(ServiceRequiredDocument::class, 'service_required_document_id');
+        return $this->belongsTo(ServiceRequiredDocument::class, 'service_required_document_id')->withTrashed();
     }
 }

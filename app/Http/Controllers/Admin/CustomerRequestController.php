@@ -36,7 +36,7 @@ class CustomerRequestController extends Controller
     public function create(): View
     {
         return view('admin.requests.create', [
-            'services' => Service::query()->where('is_active', true)->where('available_offline', true)->with('requiredDocuments')->orderBy('sort_order')->orderBy('name_en')->get(),
+            'services' => Service::query()->where('is_active', true)->where('available_offline', true)->with('activeRequiredDocuments')->orderBy('sort_order')->orderBy('name_en')->get(),
         ]);
     }
 

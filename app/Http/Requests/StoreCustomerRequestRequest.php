@@ -15,10 +15,10 @@ class StoreCustomerRequestRequest extends FormRequest
 
     public function rules(): array
     {
-        $service = Service::query()->with('requiredDocuments')->find($this->input('service_id'));
+        $service = Service::query()->with('activeRequiredDocuments')->find($this->input('service_id'));
         $requiresDocuments = $service?->requires_property_documents ?? true;
-        $types = $service?->requiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
-        $maximumSize = $service?->requiredDocuments->max('max_upload_size_kb') ?: 10240;
+        $types = $service?->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
+        $maximumSize = $service?->activeRequiredDocuments->max('max_upload_size_kb') ?: 10240;
 
         return [
             'service_id' => ['required', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true))],

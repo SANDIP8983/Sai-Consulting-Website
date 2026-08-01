@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequest
 use App\Http\Controllers\Admin\RequestDocumentController;
 use App\Http\Controllers\Admin\RequestProcessingController;
 use App\Http\Controllers\Admin\ServiceController;
+use App\Http\Controllers\Admin\ServiceRequiredDocumentController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\CustomerRequestController;
 use App\Http\Controllers\HomeController;
@@ -90,6 +91,16 @@ Route::middleware('auth')
         Route::put('/{service}', 'update')->name('update');
         Route::delete('/{service}', 'destroy')->name('destroy');
     });
+
+Route::middleware('auth')->prefix('admin/required-documents')->name('admin.required-documents.')->controller(ServiceRequiredDocumentController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/create', 'create')->name('create');
+    Route::post('/', 'store')->name('store');
+    Route::patch('/service/{service}/reorder', 'reorder')->name('reorder');
+    Route::get('/{requiredDocument}/edit', 'edit')->name('edit');
+    Route::put('/{requiredDocument}', 'update')->name('update');
+    Route::delete('/{requiredDocument}', 'destroy')->name('destroy');
+});
 
 Route::middleware('auth')
     ->prefix('admin/settings')

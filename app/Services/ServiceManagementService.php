@@ -120,7 +120,9 @@ class ServiceManagementService
             }
         }
 
-        $service->requiredDocuments()->whereNotIn('id', $retainedIds)->delete();
+        $service->requiredDocuments()->whereNotIn('id', $retainedIds)->get()->each(function ($document): void {
+            $document->requestDocuments()->exists() ? $document->delete() : $document->forceDelete();
+        });
     }
 
     private function uniqueSlug(string $name): string

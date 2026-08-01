@@ -10,3 +10,5 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+.document-required { border-left: 4px solid #dc3545 !important; }
+.document-optional { border-left: 4px solid #0dcaf0 !important; opacity: .9; }

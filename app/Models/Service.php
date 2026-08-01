@@ -61,4 +61,12 @@ class Service extends Model
         return $this->hasMany(ServiceRequiredDocument::class)
             ->orderBy('sort_order');
     }
+
+    public function activeRequiredDocuments(): HasMany
+    {
+        return $this->hasMany(ServiceRequiredDocument::class)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
 }
