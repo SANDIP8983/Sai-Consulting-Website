@@ -71,7 +71,7 @@ class OfflineCustomerRequestEntryTest extends TestCase
         $this->actingAs($admin)->get(route('admin.requests.show', $offline))
             ->assertOk()->assertSee('Request Source')->assertSee('Offline');
         $this->actingAs($admin)->get(route('admin.dashboard'))
-            ->assertOk()->assertSee('Total Online Requests')->assertSee('Total Offline Requests');
+            ->assertOk()->assertSee('Total Online Requests')->assertSee('Total Offline Requests')->assertSee('Total Active Services')->assertSee('Total Online Services')->assertSee('Total Offline Services');
     }
 
     public function test_offline_request_tracking_remains_reference_and_mobile_based(): void

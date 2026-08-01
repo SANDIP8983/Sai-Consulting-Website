@@ -21,6 +21,9 @@
     </div>
 
     <div class="row g-4">
+        <div class="col-sm-6 col-xl-4"><a href="{{ route('admin.services.index', ['active'=>'1']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Active Services</p><p class="display-6 fw-semibold text-success mb-0">{{ $summary['active_services'] }}</p></div></a></div>
+        <div class="col-sm-6 col-xl-4"><a href="{{ route('admin.services.index', ['availability'=>'online']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Online Services</p><p class="display-6 fw-semibold text-primary mb-0">{{ $summary['online_services'] }}</p></div></a></div>
+        <div class="col-sm-6 col-xl-4"><a href="{{ route('admin.services.index', ['availability'=>'offline']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Offline Services</p><p class="display-6 fw-semibold text-info mb-0">{{ $summary['offline_services'] }}</p></div></a></div>
         <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><p class="text-muted mb-2">Customer Requests</p><p class="display-6 fw-semibold mb-0">{{ $summary['requests'] }}</p></div></div></div>
         <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><p class="text-muted mb-2">Saved Settings</p><p class="display-6 fw-semibold mb-0">{{ $summary['settings'] }}</p></div></div></div>
         <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><p class="text-muted mb-2">Office Timings</p><p class="display-6 fw-semibold mb-0">{{ $summary['office_timings'] }}</p></div></div></div>
