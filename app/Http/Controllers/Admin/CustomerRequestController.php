@@ -12,6 +12,7 @@ use App\Http\Requests\Admin\StoreRequestRemarkRequest;
 use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
 use App\Http\Requests\Admin\UpdateRequestEstimateRequest;
 use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
+use App\Http\Requests\Admin\UnlockRequestServicePricingRequest;
 use App\Models\CustomerRequest;
 use App\Models\RequestService;
 use App\Models\Service;
@@ -83,6 +84,12 @@ class CustomerRequestController extends Controller
     {
         $this->workflow->decideService($customerRequest, $requestService, $request->validated(), $request->user());
         return back()->with('success', 'Selected service decision updated successfully.');
+    }
+
+    public function unlockServicePricing(UnlockRequestServicePricingRequest $request, CustomerRequest $customerRequest, RequestService $requestService): RedirectResponse
+    {
+        $this->workflow->unlockServicePricing($customerRequest, $requestService, $request->validated('unlock_note'), $request->user());
+        return back()->with('success', 'Service pricing unlocked. The reason was recorded in approval history.');
     }
 
     public function estimate(UpdateRequestEstimateRequest $request, CustomerRequest $customerRequest): RedirectResponse

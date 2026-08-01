@@ -23,6 +23,7 @@ class AdminRequestManagementService
             'service',
             'requestServices.service',
             'requestServices.decidedBy:id,name',
+            'requestServices.approvalHistory' => fn ($q) => $q->with('approvedBy:id,name')->latest(),
             'feeUpdatedBy:id,name',
             'documents',
             'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
@@ -40,6 +41,9 @@ class AdminRequestManagementService
             $eligibleStatuses = ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
             if (! $lockedRequest->file_number || ! in_array($lockedRequest->status, $eligibleStatuses, true)) {
                 throw ValidationException::withMessages(['final_fee' => 'Final fee can only be set after approval and file-number assignment.']);
+            }
+            if ($lockedRequest->requestServices()->whereNotNull('pricing_locked_at')->exists()) {
+                throw ValidationException::withMessages(['final_fee' => 'Finalized pricing must be changed per service using the explicit Unlock action.']);
             }
             $lockedRequest->update(['amount_due' => $fee, 'fee_updated_by' => $user->id, 'fee_updated_at' => now()]);
         });

@@ -174,16 +174,71 @@ class RequestWorkflowService
         if ($requestService->request_id !== $request->id) {
             abort(404);
         }
-        DB::transaction(function () use ($requestService, $attributes, $user): void {
+        DB::transaction(function () use ($request, $requestService, $attributes, $user): void {
             $decision = $attributes['decision'];
-            $requestService->update([
+            $lockedService = RequestService::query()->lockForUpdate()->findOrFail($requestService->id);
+            if ($decision === 'approved') {
+                $this->finalizeServicePricing($lockedService, $attributes, $user);
+            }
+            $lockedService->update([
                 'status' => $decision,
                 'approved_at' => $decision === 'approved' ? now() : null,
                 'rejected_at' => $decision === 'rejected' ? now() : null,
                 'decision_notes' => $attributes['decision_notes'] ?? null,
                 'decided_by' => $user->id,
             ]);
+
+            if ($decision === 'approved') {
+                $lockedRequest = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
+                $lockedRequest->update(['amount_due' => (float) $lockedRequest->requestServices()->sum('final_total')]);
+                $undecided = $lockedRequest->requestServices()->whereNotIn('status', ['approved', 'rejected'])->exists();
+                if (! $undecided && $lockedRequest->status === 'under_review' && $lockedRequest->requestServices()->where('status', 'approved')->exists()) {
+                    if (! $lockedRequest->file_number) {
+                        $this->fileNumbers->assign($lockedRequest);
+                    }
+                    $lockedRequest->update(['status' => 'approved', 'last_status_changed_at' => now()]);
+                    $this->history($lockedRequest, 'under_review', 'approved', 'Request pricing approved.', true, $user->id);
+                    $lockedRequest->update(['status' => 'payment_pending', 'payment_status' => 'pending', 'last_status_changed_at' => now()]);
+                    $this->history($lockedRequest, 'approved', 'payment_pending', 'Payment summary generated.', true, $user->id);
+                }
+            }
         });
+    }
+
+    public function unlockServicePricing(CustomerRequest $request, RequestService $requestService, string $note, User $user): void
+    {
+        if ($requestService->request_id !== $request->id) abort(404);
+        DB::transaction(function () use ($requestService, $request, $note, $user): void {
+            $service = RequestService::query()->lockForUpdate()->findOrFail($requestService->id);
+            if (! $service->pricing_locked_at) throw ValidationException::withMessages(['pricing' => 'Pricing has not been finalized.']);
+            $service->update(['pricing_unlocked_at' => now(), 'pricing_unlocked_by' => $user->id]);
+            $service->approvalHistory()->create(['request_id' => $request->id, 'approved_by' => $user->id, 'pricing_snapshot' => $this->pricingSnapshot($service), 'action' => 'unlocked', 'note' => $note]);
+        });
+    }
+
+    private function finalizeServicePricing(RequestService $service, array $attributes, User $user): void
+    {
+        if ($service->pricing_locked_at && ! $service->pricing_unlocked_at) {
+            throw ValidationException::withMessages(['pricing' => 'Pricing is locked. Use the explicit Unlock action before changing it.']);
+        }
+        $original = (float) ($service->original_professional_fee ?? $service->professional_fee);
+        $type = $attributes['discount_type'] ?? 'none';
+        $value = (float) ($attributes['discount_value'] ?? 0);
+        if ($type === 'percentage' && $value > 100) throw ValidationException::withMessages(['discount_value' => 'Percentage discount cannot exceed 100%.']);
+        $discount = match ($type) { 'fixed' => $value, 'percentage' => $original * $value / 100, default => 0 };
+        if ($discount > $original) throw ValidationException::withMessages(['discount_value' => 'Discount cannot exceed the original professional fee.']);
+        if ($type !== 'none' && empty($attributes['discount_reason'])) throw ValidationException::withMessages(['discount_reason' => 'A discount reason is required.']);
+        $net = $original - $discount;
+        $gst = round($net * (float) $service->gst_rate / 100, 2);
+        $charges = collect($attributes['government_charges'] ?? $service->government_charges_snapshot ?? [])->map(fn ($charge) => ['name' => $charge['name'], 'amount' => round((float) $charge['amount'], 2), 'note' => $charge['note'] ?? $charge['description'] ?? null])->values();
+        $government = round((float) $charges->sum('amount'), 2);
+        $service->update(['original_professional_fee' => $original, 'discount_type' => $type, 'discount_value' => $value, 'discount_amount' => round($discount, 2), 'discount_reason' => $type === 'none' ? null : $attributes['discount_reason'], 'net_professional_fee' => round($net, 2), 'gst_amount' => $gst, 'government_charges' => $government, 'government_charges_snapshot' => $charges->all(), 'final_total' => round($net + $gst + $government, 2), 'pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null]);
+        $service->approvalHistory()->create(['request_id' => $service->request_id, 'approved_by' => $user->id, 'pricing_snapshot' => $this->pricingSnapshot($service->fresh()), 'action' => 'approved', 'note' => $attributes['decision_notes'] ?? null]);
+    }
+
+    private function pricingSnapshot(RequestService $service): array
+    {
+        return $service->only(['original_professional_fee','discount_type','discount_value','discount_amount','discount_reason','net_professional_fee','gst_rate','gst_amount','government_charges','government_charges_snapshot','final_total']);
     }
 
     public function addRemark(CustomerRequest $request, string $remarks, bool $visible, User $user): void
@@ -221,6 +276,7 @@ class RequestWorkflowService
                 $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
             }
             if ($paymentStatus === 'received' && in_array($lockedRequest->status, ['approved', 'payment_pending'], true)) {
+                $lockedRequest->requestServices()->whereNotNull('pricing_locked_at')->update(['pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null]);
                 if ($lockedRequest->status === 'approved') {
                     $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
                 }
