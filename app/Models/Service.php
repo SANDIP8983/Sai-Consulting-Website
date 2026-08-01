@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Support\PublicDocumentPolicy;
 
 class Service extends Model
 {
@@ -12,7 +13,7 @@ class Service extends Model
         static::created(function (Service $service): void {
             CommonRequiredDocument::query()->where('is_active', true)->get()->each(fn (CommonRequiredDocument $document) => $service->requiredDocuments()->firstOrCreate(
                 ['common_required_document_id' => $document->id],
-                ['name_en' => $document->name_en, 'name_gu' => $document->name_gu, 'is_mandatory' => false, 'is_active' => false, 'sort_order' => 999, 'allowed_file_types' => $document->allowed_file_types, 'max_upload_size_kb' => $document->max_upload_size_kb],
+                ['name_en' => $document->name_en, 'name_gu' => $document->name_gu, 'is_mandatory' => false, 'is_active' => (bool) ($service->requires_property_documents ?? true), 'sort_order' => 999, 'allowed_file_types' => $document->allowed_file_types, 'max_upload_size_kb' => $document->max_upload_size_kb],
             ));
         });
     }
@@ -88,10 +89,14 @@ class Service extends Model
 
     public function activeRequiredDocuments(): HasMany
     {
-        return $this->hasMany(ServiceRequiredDocument::class)
+        $query = $this->hasMany(ServiceRequiredDocument::class)
             ->where('is_active', true)
             ->orderByDesc('is_mandatory')
             ->orderBy('sort_order')
             ->orderBy('id');
+        foreach (PublicDocumentPolicy::PROHIBITED_TERMS as $term) {
+            $query->whereRaw('LOWER(name_en) NOT LIKE ?', ['%'.$term.'%']);
+        }
+        return $query;
     }
 }

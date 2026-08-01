@@ -40,7 +40,8 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $response = $this->from(route('request.create'))->post(route('request.store'), []);
 
         $response->assertRedirect(route('request.create'));
-        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'address', 'survey_numbers', 'khata_number', 'details', 'documents', 'declaration']);
+        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'address', 'survey_numbers', 'khata_number', 'details', 'declaration']);
+        $response->assertSessionDoesntHaveErrors('documents');
         $this->assertDatabaseCount('requests', 0);
     }
 
@@ -54,7 +55,8 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             ->assertSee('value="'.$service->id.'" selected', false)
             ->assertSee('Property Card')
             ->assertSee('પ્રોપર્ટી કાર્ડ')
-            ->assertSee('Do not upload Aadhaar, PAN, passport, voter ID, bank documents, or other identity proofs.')
+            ->assertSee('તમામ દસ્તાવેજો અપલોડ કરવાનું ફરજિયાત નથી.')
+            ->assertSee('Never upload Aadhaar Card, PAN Card, Passport')
             ->assertDontSee('tel:', false);
     }
 
@@ -96,6 +98,27 @@ class PublicCustomerRequestWorkflowTest extends TestCase
 
         $this->post(route('request.store'), $payload)
             ->assertSessionHasErrors('documents.0');
+        $this->assertDatabaseCount('requests', 0);
+    }
+
+    public function test_customer_can_submit_without_uploading_documents(): void
+    {
+        Storage::fake('local');
+        $payload = $this->validPayload($this->createService());
+        unset($payload['documents']);
+
+        $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
+        $this->assertDatabaseCount('requests', 1);
+        $this->assertDatabaseCount('request_documents', 0);
+    }
+
+    public function test_public_submission_rejects_personal_kyc_documents(): void
+    {
+        Storage::fake('local');
+        $payload = $this->validPayload($this->createService());
+        $payload['documents'] = [UploadedFile::fake()->create('aadhaar-card.pdf', 20, 'application/pdf')];
+
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
         $this->assertDatabaseCount('requests', 0);
     }
 

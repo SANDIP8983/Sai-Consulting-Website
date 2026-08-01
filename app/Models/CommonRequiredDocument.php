@@ -25,9 +25,9 @@ class CommonRequiredDocument extends Model
     protected static function booted(): void
     {
         static::created(function (CommonRequiredDocument $document): void {
-            Service::query()->pluck('id')->each(fn (int $serviceId) => $document->serviceConfigurations()->firstOrCreate(
-                ['service_id' => $serviceId],
-                ['name_en' => $document->name_en, 'name_gu' => $document->name_gu, 'is_mandatory' => false, 'is_active' => false, 'sort_order' => 999, 'allowed_file_types' => $document->allowed_file_types, 'max_upload_size_kb' => $document->max_upload_size_kb],
+            Service::query()->get(['id', 'requires_property_documents'])->each(fn (Service $service) => $document->serviceConfigurations()->firstOrCreate(
+                ['service_id' => $service->id],
+                ['name_en' => $document->name_en, 'name_gu' => $document->name_gu, 'is_mandatory' => false, 'is_active' => $service->requires_property_documents, 'sort_order' => 999, 'allowed_file_types' => $document->allowed_file_types, 'max_upload_size_kb' => $document->max_upload_size_kb],
             ));
         });
     }

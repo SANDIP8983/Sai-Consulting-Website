@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin;
 use App\Models\Service;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Support\PublicDocumentPolicy;
 
 class StoreServiceRequest extends FormRequest
 {
@@ -44,7 +45,7 @@ class StoreServiceRequest extends FormRequest
             'requires_certified_copy' => ['nullable', 'boolean'],
             'documents' => ['nullable', 'array', 'max:30'],
             'documents.*.id' => ['nullable', 'integer'],
-            'documents.*.name_en' => ['required_with:documents', 'string', 'max:150'],
+            'documents.*.name_en' => ['required_with:documents', 'string', 'max:150', function (string $attribute, mixed $value, \Closure $fail): void { if (! PublicDocumentPolicy::isSafe((string) $value)) { $fail('Personal KYC documents cannot be added to the public document library.'); } }],
             'documents.*.name_gu' => ['required_with:documents', 'string', 'max:150'],
             'documents.*.is_mandatory' => ['nullable', 'boolean'],
             'documents.*.allowed_file_types' => ['nullable', 'array', 'max:10'],

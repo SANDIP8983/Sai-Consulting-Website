@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use App\Models\Service;
+use App\Support\PublicDocumentPolicy;
 
 class StoreCustomerRequestRequest extends FormRequest
 {
@@ -16,7 +17,6 @@ class StoreCustomerRequestRequest extends FormRequest
     public function rules(): array
     {
         $services = Service::query()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
-        $requiresDocuments = $services->isEmpty() || $services->contains(fn (Service $service) => $service->requires_property_documents);
         $types = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
         $maximumSize = $services->flatMap->activeRequiredDocuments->max('max_upload_size_kb') ?: 10240;
 
@@ -31,8 +31,15 @@ class StoreCustomerRequestRequest extends FormRequest
             'survey_numbers' => ['required', 'string', 'max:1000'],
             'khata_number' => ['required', 'string', 'max:100'],
             'details' => ['required', 'string', 'max:2000'],
-            'documents' => [$requiresDocuments ? 'required' : 'nullable', 'array', 'max:10', ...($requiresDocuments ? ['min:1'] : [])],
-            'documents.*' => ['required', 'file', 'mimes:'.implode(',', $types), 'max:'.$maximumSize],
+            'documents' => ['nullable', 'array', 'max:10'],
+            'documents.*' => ['required', 'file', 'mimes:'.implode(',', $types), 'max:'.$maximumSize, function (string $attribute, mixed $value, \Closure $fail): void {
+                if ($this->availabilityColumn() !== 'available_online' || ! $value instanceof \Illuminate\Http\UploadedFile) {
+                    return;
+                }
+                if (! PublicDocumentPolicy::isSafe($value->getClientOriginalName())) {
+                    $fail('Personal identity, address, financial, and KYC documents must not be uploaded on the public website.');
+                }
+            }],
             'declaration' => ['required', 'accepted'],
         ];
     }
