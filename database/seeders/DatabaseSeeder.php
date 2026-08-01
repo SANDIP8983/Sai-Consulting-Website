@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -12,14 +11,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Test User
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
-
-        // Seed Services
         $this->call([
+            AdminUserSeeder::class,
             ServiceSeeder::class,
             SubRegistrarTokenBookingServiceSeeder::class,
         ]);
