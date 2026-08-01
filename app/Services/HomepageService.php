@@ -17,6 +17,7 @@ class HomepageService
     {
         $services = Service::query()
             ->where('is_active', true)
+            ->where('available_online', true)
             ->withCount('requiredDocuments')
             ->orderBy('sort_order')
             ->orderBy('name_en')

@@ -18,4 +18,9 @@ class StoreOfflineCustomerRequestRequest extends StoreCustomerRequestRequest
 
         return $rules;
     }
+
+    protected function availabilityColumn(): string
+    {
+        return 'available_offline';
+    }
 }

@@ -49,6 +49,10 @@ class RequestWorkflowService
             try {
                 return DB::transaction(function () use ($attributes, $files, $origin, $documentSource, $user, &$storedPaths): CustomerRequest {
                     $service = Service::query()->findOrFail($attributes['service_id']);
+                    $availabilityColumn = $origin === 'offline' ? 'available_offline' : 'available_online';
+                    if (! $service->is_active || ! $service->{$availabilityColumn}) {
+                        throw ValidationException::withMessages(['service_id' => 'The selected service is not available for this request channel.']);
+                    }
                     $request = CustomerRequest::query()->create([
                         ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'email', 'address', 'survey_numbers', 'khata_number', 'details']),
                         'reference_no' => $this->referenceNumbers->generate(),

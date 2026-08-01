@@ -264,4 +264,23 @@ class PublicCustomerRequestWorkflowTest extends TestCase
 
         return $request;
     }
+    public function test_online_disabled_service_is_hidden_and_rejected(): void
+    {
+        $service = $this->createService();
+        $service->update(['available_online'=>false]);
+        $this->get(route('request.create'))->assertOk()->assertDontSee('<option value="'.$service->id.'"',false);
+        $this->post(route('request.store'),$this->validPayload($service))->assertSessionHasErrors('service_id');
+    }
+
+    public function test_service_without_property_documents_accepts_request_without_uploads(): void
+    {
+        Storage::fake('local');
+        $service = $this->createService();
+        $service->update(['requires_property_documents'=>false]);
+        $payload = $this->validPayload($service);
+        unset($payload['documents']);
+        $this->post(route('request.store'),$payload)->assertRedirect(route('request.success'));
+        $this->assertDatabaseCount('requests',1);
+        $this->assertDatabaseCount('request_documents',0);
+    }
 }

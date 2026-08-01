@@ -12,6 +12,7 @@ class PublicServiceCatalogService
     {
         return Service::query()
             ->where('is_active', true)
+            ->where('available_online', true)
             ->withCount('requiredDocuments')
             ->when($search, fn ($query, string $term) => $query->where(function ($query) use ($term): void {
                 $query->where('name_gu', 'like', "%{$term}%")
@@ -28,6 +29,7 @@ class PublicServiceCatalogService
     {
         return Service::query()
             ->where('is_active', true)
+            ->where('available_online', true)
             ->where('slug', $slug)
             ->with('requiredDocuments')
             ->withCount('requiredDocuments')
@@ -39,6 +41,7 @@ class PublicServiceCatalogService
     {
         return Service::query()
             ->where('is_active', true)
+            ->where('available_online', true)
             ->whereKeyNot($service->id)
             ->withCount('requiredDocuments')
             ->orderBy('sort_order')

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Models\Service;
 
 class StoreCustomerRequestRequest extends FormRequest
 {
@@ -14,8 +15,13 @@ class StoreCustomerRequestRequest extends FormRequest
 
     public function rules(): array
     {
+        $service = Service::query()->with('requiredDocuments')->find($this->input('service_id'));
+        $requiresDocuments = $service?->requires_property_documents ?? true;
+        $types = $service?->requiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
+        $maximumSize = $service?->requiredDocuments->max('max_upload_size_kb') ?: 10240;
+
         return [
-            'service_id' => ['required', Rule::exists('services', 'id')->where('is_active', true)],
+            'service_id' => ['required', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true))],
             'name' => ['required', 'string', 'max:100'],
             'mobile' => ['required', 'digits:10'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -23,10 +29,15 @@ class StoreCustomerRequestRequest extends FormRequest
             'survey_numbers' => ['required', 'string', 'max:1000'],
             'khata_number' => ['required', 'string', 'max:100'],
             'details' => ['required', 'string', 'max:2000'],
-            'documents' => ['required', 'array', 'min:1', 'max:10'],
-            'documents.*' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'documents' => [$requiresDocuments ? 'required' : 'nullable', 'array', 'max:10', ...($requiresDocuments ? ['min:1'] : [])],
+            'documents.*' => ['required', 'file', 'mimes:'.implode(',', $types), 'max:'.$maximumSize],
             'declaration' => ['required', 'accepted'],
         ];
+    }
+
+    protected function availabilityColumn(): string
+    {
+        return 'available_online';
     }
 
     public function messages(): array

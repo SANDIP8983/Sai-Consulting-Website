@@ -4,7 +4,7 @@
     <div class="service-card-top"><span class="icon-box"><i class="bi {{ $icon }}" aria-hidden="true"></i></span>@if($number)<span class="service-number">{{ str_pad($number, 2, '0', STR_PAD_LEFT) }}</span>@endif</div>
     <h3 id="service-{{ $service->id }}">{{ $service->name_gu }}</h3>
     <h4>{{ $service->name_en }}</h4>
-    @if($service->description)<p>{{ \Illuminate\Support\Str::limit($service->description, $compact ? 120 : 180) }}</p>@endif
+    @if($service->short_description || $service->description)<p>{{ \Illuminate\Support\Str::limit($service->short_description ?: $service->description, $compact ? 120 : 180) }}</p>@endif
     <div class="service-meta">
         @if($service->estimated_days)<span><i class="bi bi-clock" aria-hidden="true"></i> {{ $service->estimated_days }} days</span>@endif
         @if(!is_null($service->service_fee))<span><i class="bi bi-currency-rupee" aria-hidden="true"></i> {{ number_format((float) $service->service_fee, 2) }}</span>@endif
