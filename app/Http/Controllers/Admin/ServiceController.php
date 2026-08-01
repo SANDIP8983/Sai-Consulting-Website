@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreServiceRequest;
 use App\Http\Requests\Admin\UpdateServiceRequest;
+use App\Http\Requests\Admin\FilterServicesRequest;
 use App\Models\Service;
 use App\Services\ServiceManagementService;
 use Illuminate\Contracts\View\View;
@@ -16,10 +17,10 @@ class ServiceController extends Controller
     {
     }
 
-    public function index(): View
+    public function index(FilterServicesRequest $request): View
     {
         return view('admin.services.index', [
-            'services' => $this->serviceManagementService->paginate(),
+            'services' => $this->serviceManagementService->paginate($request->validated()),
         ]);
     }
 

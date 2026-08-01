@@ -10,13 +10,21 @@ use Illuminate\Support\Str;
 
 class ServiceManagementService
 {
-    public function paginate(): LengthAwarePaginator
+    public function paginate(array $filters = []): LengthAwarePaginator
     {
         return Service::query()
             ->withCount('requiredDocuments')
+            ->when($filters['q'] ?? null, fn ($query, string $term) => $query->where(function ($query) use ($term): void {
+                $query->where('name_en', 'like', "%{$term}%")
+                    ->orWhere('name_gu', 'like', "%{$term}%");
+            }))
+            ->when(array_key_exists('active', $filters) && $filters['active'] !== null, fn ($query) => $query->where('is_active', (bool) $filters['active']))
+            ->when(($filters['availability'] ?? null) === 'online', fn ($query) => $query->where('available_online', true))
+            ->when(($filters['availability'] ?? null) === 'offline', fn ($query) => $query->where('available_offline', true))
             ->orderBy('sort_order')
             ->orderBy('name_en')
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
     }
 
     /**
@@ -68,10 +76,19 @@ class ServiceManagementService
             ...Arr::only($attributes, [
             'name_en',
             'name_gu',
+            'short_description',
             'description',
+            'notes',
+            'service_fee',
+            'estimated_days',
             'sort_order',
             'is_active',
             ]),
+            'available_online' => (bool) ($attributes['available_online'] ?? false),
+            'available_offline' => (bool) ($attributes['available_offline'] ?? false),
+            'requires_property_documents' => (bool) ($attributes['requires_property_documents'] ?? false),
+            'requires_dispatch' => (bool) ($attributes['requires_dispatch'] ?? false),
+            'requires_payment_before_processing' => (bool) ($attributes['requires_payment_before_processing'] ?? false),
             'uses_drafting_workflow' => (bool) ($attributes['uses_drafting_workflow'] ?? false),
             'requires_token_booking' => (bool) ($attributes['requires_token_booking'] ?? false),
             'requires_registration' => (bool) ($attributes['requires_registration'] ?? false),
@@ -84,11 +101,26 @@ class ServiceManagementService
      */
     private function syncRequiredDocuments(Service $service, array $documents): void
     {
-        $service->requiredDocuments()->delete();
-
+        $retainedIds = [];
         foreach ($documents as $document) {
-            $service->requiredDocuments()->create($document);
+            $attributes = [
+                ...Arr::only($document, ['name_en', 'name_gu', 'allowed_file_types', 'max_upload_size_kb', 'sort_order']),
+                'is_mandatory' => (bool) ($document['is_mandatory'] ?? true),
+                'allowed_file_types' => $document['allowed_file_types'] ?? ['pdf', 'jpg', 'jpeg', 'png'],
+                'max_upload_size_kb' => $document['max_upload_size_kb'] ?? 10240,
+            ];
+            $existing = isset($document['id'])
+                ? $service->requiredDocuments()->whereKey($document['id'])->first()
+                : null;
+            if ($existing) {
+                $existing->update($attributes);
+                $retainedIds[] = $existing->id;
+            } else {
+                $retainedIds[] = $service->requiredDocuments()->create($attributes)->id;
+            }
         }
+
+        $service->requiredDocuments()->whereNotIn('id', $retainedIds)->delete();
     }
 
     private function uniqueSlug(string $name): string
