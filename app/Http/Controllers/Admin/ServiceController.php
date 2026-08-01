@@ -38,7 +38,7 @@ class ServiceController extends Controller
 
     public function edit(Service $service): View
     {
-        $service->load('requiredDocuments');
+        $service->load(['requiredDocuments', 'governmentChargeItems']);
 
         return view('admin.services.edit', compact('service'));
     }

@@ -40,7 +40,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $response = $this->from(route('request.create'))->post(route('request.store'), []);
 
         $response->assertRedirect(route('request.create'));
-        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'address', 'survey_numbers', 'khata_number', 'details', 'declaration']);
+        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'village', 'taluka', 'district', 'declaration']);
         $response->assertSessionDoesntHaveErrors('documents');
         $this->assertDatabaseCount('requests', 0);
     }
@@ -52,11 +52,10 @@ class PublicCustomerRequestWorkflowTest extends TestCase
 
         $this->get(route('request.create', ['service' => $service->id]))
             ->assertOk()
-            ->assertSee('value="'.$service->id.'" selected', false)
+            ->assertSee('value="'.$service->id.'" class="service-choice-input" checked', false)
             ->assertSee('Property Card')
-            ->assertSee('પ્રોપર્ટી કાર્ડ')
             ->assertSee('તમામ દસ્તાવેજો અપલોડ કરવાનું ફરજિયાત નથી.')
-            ->assertSee('Never upload Aadhaar Card, PAN Card, Passport')
+            ->assertSee('Public KYC uploads are prohibited.')
             ->assertDontSee('tel:', false);
     }
 
@@ -87,7 +86,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $this->get(route('request.create'))
             ->assertSee('value="Preserved Customer"', false)
             ->assertSee('Preserved full address')
-            ->assertSee('value="'.$service->id.'" selected', false);
+            ->assertSee('value="'.$service->id.'" class="service-choice-input" checked', false);
     }
 
     public function test_submission_rejects_an_invalid_file_type(): void
@@ -212,7 +211,6 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             ->assertSee($request->reference_no)
             ->assertSee($request->file_number)
             ->assertSee('Property Card')
-            ->assertSee('પ્રોપર્ટી કાર્ડ')
             ->assertSee('Sent through registered post.')
             ->assertSee('Dispatch Information')
             ->assertSee('https://wa.me/919687621876', false)

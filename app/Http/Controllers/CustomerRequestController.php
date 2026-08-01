@@ -15,7 +15,7 @@ class CustomerRequestController extends Controller
 {
     public function create(): View
     {
-        $services = Service::query()->where('is_active', true)->where('available_online', true)->with('activeRequiredDocuments')
+        $services = Service::query()->where('is_active', true)->where('available_online', true)->with(['activeRequiredDocuments', 'activeGovernmentChargeItems'])
             ->orderBy('sort_order')->orderBy('name_en')->get();
 
         return view('frontend.request.create', compact('services'));
@@ -30,6 +30,8 @@ class CustomerRequestController extends Controller
 
         return redirect()->route('request.success')->with('submitted_request', [
             'reference_no' => $customerRequest->reference_no,
+            'services' => $customerRequest->requestServices->map(fn ($item) => ['name_en' => $item->service->name_en, 'name_gu' => $item->service->name_gu, 'status' => $item->status])->all(),
+            'status' => $customerRequest->status,
             'estimated_days' => $customerRequest->requestServices->max('estimated_days') ?? $customerRequest->service->estimated_days,
             'estimated_completion_date' => $customerRequest->estimated_completion_date?->toDateString(),
         ]);

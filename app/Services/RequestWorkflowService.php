@@ -58,19 +58,29 @@ class RequestWorkflowService
             try {
                 return DB::transaction(function () use ($attributes, $files, $origin, $documentSource, $user, &$storedPaths): CustomerRequest {
                     $serviceIds = array_values(array_unique(array_map('intval', $attributes['service_ids'] ?? [$attributes['service_id']])));
-                    $services = Service::query()->with('activeRequiredDocuments')->whereIn('id', $serviceIds)->get()->keyBy('id');
+                    $services = Service::query()->with(['activeRequiredDocuments', 'activeGovernmentChargeItems'])->whereIn('id', $serviceIds)->get()->keyBy('id');
                     $availabilityColumn = $origin === 'offline' ? 'available_offline' : 'available_online';
                     if ($services->count() !== count($serviceIds) || collect($serviceIds)->contains(fn ($id) => ! $services[$id]->is_active || ! $services[$id]->{$availabilityColumn})) {
                         throw ValidationException::withMessages(['service_ids' => 'One or more selected services are not available for this request channel.']);
                     }
                     $orderedServices = collect($serviceIds)->map(fn ($id) => $services[$id]);
                     $service = $orderedServices->first();
-                    $amountDue = $orderedServices->sum(fn (Service $item) => (float) $item->service_fee + ((float) $item->service_fee * (float) $item->gst_rate / 100) + (float) $item->government_charges);
+                    $chargeItems = fn (Service $item) => $item->activeGovernmentChargeItems->isNotEmpty()
+                        ? $item->activeGovernmentChargeItems
+                        : collect((float) $item->government_charges > 0 ? [['name' => 'Government Charges', 'amount' => (float) $item->government_charges, 'description' => null]] : []);
+                    $governmentTotal = fn (Service $item): float => (float) $chargeItems($item)->sum(fn ($charge) => (float) data_get($charge, 'amount'));
+                    $amountDue = $orderedServices->sum(fn (Service $item) => (float) $item->service_fee + ((float) $item->service_fee * (float) $item->gst_rate / 100) + $governmentTotal($item));
                     $estimatedDays = $orderedServices->max('estimated_days');
+                    $fingerprint = $origin === 'online' ? hash('sha256', implode('|', [strtolower(trim((string) ($attributes['name'] ?? ''))), $attributes['mobile'] ?? '', implode(',', $serviceIds), now()->format('Y-m-d-H-i')])) : null;
+                    if ($fingerprint && CustomerRequest::query()->where('submission_fingerprint', $fingerprint)->exists()) {
+                        throw ValidationException::withMessages(['request' => 'This request was already submitted. Please use the reference number from the success page.']);
+                    }
                     $request = CustomerRequest::query()->create([
-                        ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'email', 'address', 'survey_numbers', 'khata_number', 'details']),
+                        ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'whatsapp', 'email', 'address', 'village', 'taluka', 'district', 'survey_numbers', 'khata_number', 'details']),
                         'service_id' => $service->id,
                         'reference_no' => $this->referenceNumbers->generate(),
+                        'submission_fingerprint' => $fingerprint,
+                        'address' => $attributes['address'] ?? collect([$attributes['village'] ?? null, $attributes['taluka'] ?? null, $attributes['district'] ?? null])->filter()->implode(', '),
                         'request_origin' => $origin,
                         'status' => 'received',
                         'amount_due' => $amountDue,
@@ -79,11 +89,13 @@ class RequestWorkflowService
                     ]);
 
                     foreach ($orderedServices as $selectedService) {
+                        $selectedCharges = $chargeItems($selectedService)->map(fn ($charge) => ['name' => data_get($charge, 'name'), 'amount' => (float) data_get($charge, 'amount'), 'description' => data_get($charge, 'description')])->values()->all();
                         $request->requestServices()->create([
                             'service_id' => $selectedService->id,
                             'professional_fee' => $selectedService->service_fee ?? 0,
                             'gst_rate' => $selectedService->gst_rate ?? 0,
-                            'government_charges' => $selectedService->government_charges ?? 0,
+                            'government_charges' => $governmentTotal($selectedService),
+                            'government_charges_snapshot' => $selectedCharges,
                             'estimated_days' => $selectedService->estimated_days,
                             'required_documents_snapshot' => $selectedService->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'is_mandatory', 'sort_order'])->values()->all(),
                             'status' => 'received',
@@ -92,7 +104,13 @@ class RequestWorkflowService
 
                     $this->history($request, null, 'received', 'Your request has been received.', true, $user?->id);
 
+                    $uploadedHashes = [];
                     foreach ($files as $file) {
+                        $hash = hash_file('sha256', $file->getRealPath());
+                        if (in_array($hash, $uploadedHashes, true)) {
+                            throw ValidationException::withMessages(['documents' => 'The same document cannot be uploaded more than once.']);
+                        }
+                        $uploadedHashes[] = $hash;
                         $path = $file->store("customer-requests/{$request->id}", 'local');
 
                         if ($path === false) {

@@ -81,6 +81,16 @@ class Service extends Model
         return $this->hasMany(RequestService::class);
     }
 
+    public function governmentChargeItems(): HasMany
+    {
+        return $this->hasMany(ServiceGovernmentCharge::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function activeGovernmentChargeItems(): HasMany
+    {
+        return $this->hasMany(ServiceGovernmentCharge::class)->where('is_active', true)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function requiredDocuments(): HasMany
     {
         return $this->hasMany(ServiceRequiredDocument::class)

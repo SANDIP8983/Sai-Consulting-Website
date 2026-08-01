@@ -40,6 +40,7 @@ class ServiceManagementService
             ]);
 
             $this->syncRequiredDocuments($service, $attributes['documents'] ?? []);
+            $this->syncGovernmentCharges($service, $attributes['government_charge_items'] ?? []);
 
             return $service;
         });
@@ -53,6 +54,7 @@ class ServiceManagementService
         DB::transaction(function () use ($service, $attributes): void {
             $service->update($this->serviceAttributes($attributes));
             $this->syncRequiredDocuments($service, $attributes['documents'] ?? []);
+            $this->syncGovernmentCharges($service, $attributes['government_charge_items'] ?? []);
         });
     }
 
@@ -145,6 +147,29 @@ class ServiceManagementService
         })->get()->each(function ($document): void {
             $document->requestDocuments()->exists() ? $document->delete() : $document->forceDelete();
         });
+    }
+
+    private function syncGovernmentCharges(Service $service, array $items): void
+    {
+        if ($items === []) {
+            return;
+        }
+        $retained = [];
+        foreach ($items as $item) {
+            $attributes = [
+                ...Arr::only($item, ['name', 'amount', 'description', 'sort_order']),
+                'is_active' => (bool) ($item['is_active'] ?? false),
+            ];
+            $charge = isset($item['id']) ? $service->governmentChargeItems()->whereKey($item['id'])->first() : null;
+            if ($charge) {
+                $charge->update($attributes);
+            } else {
+                $charge = $service->governmentChargeItems()->create($attributes);
+            }
+            $retained[] = $charge->id;
+        }
+        $service->governmentChargeItems()->whereNotIn('id', $retained)->delete();
+        $service->updateQuietly(['government_charges' => $service->governmentChargeItems()->where('is_active', true)->sum('amount')]);
     }
 
     private function uniqueSlug(string $name): string

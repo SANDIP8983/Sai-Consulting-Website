@@ -19,11 +19,13 @@ class CustomerRequest extends Model
      */
     protected $fillable = [
         'reference_no',
+        'submission_fingerprint',
         'file_number',
         'request_origin',
         'service_id',
         'name',
         'mobile',
+        'whatsapp',
         'email',
         'address',
         'village',
