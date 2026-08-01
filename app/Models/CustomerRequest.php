@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CustomerRequest extends Model
 {
@@ -72,6 +73,16 @@ class CustomerRequest extends Model
     public function dispatches(): HasMany
     {
         return $this->hasMany(RequestDispatch::class, 'request_id')->latest('dispatch_date');
+    }
+
+    public function processing(): HasOne
+    {
+        return $this->hasOne(RequestProcessingDetail::class, 'request_id');
+    }
+
+    public function processingHistory(): HasMany
+    {
+        return $this->hasMany(RequestProcessingHistory::class, 'request_id');
     }
 
     public function feeUpdatedBy(): BelongsTo
