@@ -85,6 +85,26 @@ class FileDocumentProcessingTest extends TestCase
         $this->assertDatabaseHas('request_status_histories', ['request_id' => $request->id, 'from_status' => 'payment_received', 'to_status' => 'draft_in_progress']);
     }
 
+    public function test_service_capabilities_remove_non_applicable_stage_paths(): void
+    {
+        $request=$this->request(['status'=>'payment_received','file_number'=>'SC/2026/F000001','payment_status'=>'received']);
+        $request->service->update(['uses_drafting_workflow'=>false,'requires_token_booking'=>false,'requires_registration'=>false,'requires_certified_copy'=>false]);
+        $processing=app(FileDocumentProcessingService::class)->open($request,[],User::factory()->create());
+        app(FileDocumentProcessingService::class)->transition($request,'documents_under_review',[],User::factory()->create());
+        $this->assertSame(['documents_incomplete','ready_for_dispatch'],app(FileDocumentProcessingService::class)->transitions($processing->fresh()));
+    }
+
+    public function test_processing_completion_preserves_existing_completed_status_and_history(): void
+    {
+        $request=$this->request(['status'=>'dispatched','file_number'=>'SC/2026/F000001','payment_status'=>'received']);
+        $request->processing()->create(['processing_stage'=>'dispatched']); $admin=User::factory()->create();
+        app(FileDocumentProcessingService::class)->transition($request,'completed',[], $admin);
+        $this->assertSame('completed',$request->fresh()->status);
+        $this->assertNotNull($request->processing->fresh()->actual_completion_date);
+        $this->assertDatabaseHas('request_status_histories',['request_id'=>$request->id,'from_status'=>'dispatched','to_status'=>'completed']);
+        $this->assertDatabaseHas('request_processing_histories',['request_id'=>$request->id,'from_stage'=>'dispatched','to_stage'=>'completed']);
+    }
+
     private function request(array $attributes = []): CustomerRequest
     {
         $service = Service::query()->create(['name_en' => 'Processing Service', 'name_gu' => 'Processing Service', 'slug' => 'processing-service', 'is_active' => true, 'sort_order' => 1, 'uses_drafting_workflow' => true, 'requires_registration' => true]);

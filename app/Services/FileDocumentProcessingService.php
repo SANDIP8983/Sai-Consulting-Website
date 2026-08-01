@@ -32,7 +32,13 @@ class FileDocumentProcessingService
 
     public function transitions(RequestProcessingDetail $processing): array
     {
-        return self::TRANSITIONS[$processing->processing_stage] ?? [];
+        return array_values(array_filter(self::TRANSITIONS[$processing->processing_stage] ?? [], function (string $stage) use ($processing): bool {
+            if (in_array($stage, ['drafting_started','draft_ready','customer_verification_pending','correction_required','final_draft_ready'], true) && ! $processing->uses_drafting_workflow) return false;
+            if (in_array($stage, ['token_booking_pending','token_booked'], true) && ! $processing->requires_token_booking) return false;
+            if (in_array($stage, ['registration_pending','registered'], true) && ! $processing->requires_registration) return false;
+            if (in_array($stage, ['certified_copy_pending','certified_copy_received'], true) && ! $processing->requires_certified_copy) return false;
+            return true;
+        }));
     }
 
     public function open(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
@@ -64,7 +70,7 @@ class FileDocumentProcessingService
         return DB::transaction(function () use ($request, $to, $attributes, $user): RequestProcessingDetail {
             $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
             $from = $processing->processing_stage;
-            if (! in_array($to, self::TRANSITIONS[$from] ?? [], true)) {
+            if (! in_array($to, $this->transitions($processing), true)) {
                 throw ValidationException::withMessages(['processing_stage' => 'This processing-stage transition is not allowed.']);
             }
             $this->enforceStageRules($request->fresh(), $processing, $to, $attributes);
@@ -155,6 +161,9 @@ class FileDocumentProcessingService
         if (in_array($to, $registrationStages, true) && $request->payment_status !== 'received') {
             throw ValidationException::withMessages(['processing_stage' => 'Payment must be received before registration processing.']);
         }
+        if ($to === 'final_draft_ready' && blank($attributes['customer_verification_at'] ?? $processing->customer_verification_at)) {
+            throw ValidationException::withMessages(['customer_verification_at' => 'Customer verification date is required before the final draft is ready.']);
+        }
         if ($to === 'token_booked' && (blank($attributes['token_number'] ?? $processing->token_number) || blank($attributes['token_scheduled_at'] ?? $processing->token_scheduled_at))) {
             throw ValidationException::withMessages(['token_number' => 'Token number and scheduled date/time are required.']);
         }
@@ -179,6 +188,6 @@ class FileDocumentProcessingService
 
     private function eligibleRequestStatuses(): array
     {
-        return ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
+        return ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration'];
     }
 }

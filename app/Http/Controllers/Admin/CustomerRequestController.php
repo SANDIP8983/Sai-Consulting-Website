@@ -56,7 +56,8 @@ class CustomerRequestController extends Controller
     {
         $transitions = array_values(array_filter(
             $this->workflow->transitions($customerRequest),
-            fn (string $status): bool => $status !== 'dispatched',
+            fn (string $status): bool => $status !== 'dispatched'
+                && (! $customerRequest->processing || ! in_array($status, ['draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'completed'], true)),
         ));
 
         $customerRequest = $this->management->load($customerRequest);
