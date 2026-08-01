@@ -118,7 +118,7 @@ class ServiceManagementService
         foreach ($documents as $document) {
             $normalized = Str::of($document['name_en'])->trim()->lower()->squish()->value();
             $master = CommonRequiredDocument::query()->firstOrCreate(['normalized_name' => $normalized], [
-                'name_en' => $document['name_en'], 'name_gu' => $document['name_gu'], 'allowed_file_types' => $document['allowed_file_types'] ?? ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => $document['max_upload_size_kb'] ?? 10240, 'is_active' => true,
+                'name_en' => $document['name_en'], 'name_gu' => $document['name_gu'], 'allowed_file_types' => $document['allowed_file_types'] ?? ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => $document['max_upload_size_kb'] ?? 10240, 'is_active' => true, 'is_common' => false,
             ]);
             $attributes = [
                 ...Arr::only($document, ['name_en', 'name_gu', 'allowed_file_types', 'max_upload_size_kb', 'sort_order']),
@@ -139,7 +139,10 @@ class ServiceManagementService
             }
         }
 
-        $service->requiredDocuments()->whereNotIn('id', $retainedIds)->get()->each(function ($document): void {
+        $service->requiredDocuments()->whereNotIn('id', $retainedIds)->where(function ($query): void {
+            $query->whereNull('common_required_document_id')
+                ->orWhereHas('commonDocument', fn ($master) => $master->where('is_common', false));
+        })->get()->each(function ($document): void {
             $document->requestDocuments()->exists() ? $document->delete() : $document->forceDelete();
         });
     }

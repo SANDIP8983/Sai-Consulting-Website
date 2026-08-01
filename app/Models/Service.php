@@ -11,9 +11,9 @@ class Service extends Model
     protected static function booted(): void
     {
         static::created(function (Service $service): void {
-            CommonRequiredDocument::query()->where('is_active', true)->get()->each(fn (CommonRequiredDocument $document) => $service->requiredDocuments()->firstOrCreate(
+            CommonRequiredDocument::query()->where('is_active', true)->where('is_common', true)->get()->filter(fn (CommonRequiredDocument $document) => PublicDocumentPolicy::isSafe($document->name_en))->each(fn (CommonRequiredDocument $document) => $service->requiredDocuments()->firstOrCreate(
                 ['common_required_document_id' => $document->id],
-                ['name_en' => $document->name_en, 'name_gu' => $document->name_gu, 'is_mandatory' => false, 'is_active' => (bool) ($service->requires_property_documents ?? true), 'sort_order' => 999, 'allowed_file_types' => $document->allowed_file_types, 'max_upload_size_kb' => $document->max_upload_size_kb],
+                ['name_en' => $document->name_en, 'name_gu' => $document->name_gu, 'is_mandatory' => false, 'is_active' => true, 'sort_order' => 999, 'allowed_file_types' => $document->allowed_file_types ?? ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => $document->max_upload_size_kb ?? 10240],
             ));
         });
     }

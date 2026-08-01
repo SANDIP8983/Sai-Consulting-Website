@@ -35,7 +35,7 @@ class ServiceRequiredDocumentManagementService
             Service::query()->pluck('id')->each(function (int $serviceId) use ($master, $attributes): void {
                 ServiceRequiredDocument::query()->firstOrCreate(
                     ['service_id' => $serviceId, 'common_required_document_id' => $master->id],
-                    ['name_en' => $master->name_en, 'name_gu' => $master->name_gu, 'is_mandatory' => false, 'is_active' => false, 'sort_order' => 999, 'allowed_file_types' => $master->allowed_file_types, 'max_upload_size_kb' => $master->max_upload_size_kb],
+                    ['name_en' => $master->name_en, 'name_gu' => $master->name_gu, 'is_mandatory' => false, 'is_active' => false, 'sort_order' => 999, 'allowed_file_types' => $master->allowed_file_types ?? ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => $master->max_upload_size_kb ?? 10240],
                 );
             });
             $configuration = ServiceRequiredDocument::query()->where('service_id', $attributes['service_id'])->where('common_required_document_id', $master->id)->firstOrFail();
@@ -88,10 +88,14 @@ class ServiceRequiredDocumentManagementService
     private function master(array $attributes): CommonRequiredDocument
     {
         $normalized = $this->normalize($attributes['name_en']);
-        return CommonRequiredDocument::withTrashed()->firstOrCreate(
+        $master = CommonRequiredDocument::withTrashed()->firstOrCreate(
             ['normalized_name' => $normalized],
-            ['name_en' => $attributes['name_en'], 'name_gu' => $attributes['name_gu'], 'allowed_file_types' => ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => 10240, 'is_active' => true],
+            ['name_en' => $attributes['name_en'], 'name_gu' => $attributes['name_gu'], 'allowed_file_types' => ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => 10240, 'is_active' => true, 'is_common' => true],
         );
+        if (! $master->is_common) {
+            $master->update(['is_common' => true, 'is_active' => true]);
+        }
+        return $master;
     }
 
     private function normalize(string $name): string

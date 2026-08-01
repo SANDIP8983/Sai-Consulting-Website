@@ -60,6 +60,51 @@ class CommonRequiredDocumentsLibraryTest extends TestCase
         $this->assertDatabaseCount('common_required_documents', 0);
     }
 
+    public function test_new_service_receives_each_safe_active_common_document_once_as_optional(): void
+    {
+        CommonRequiredDocument::query()->create(['name_en' => 'Property Card', 'name_gu' => 'Property Card', 'normalized_name' => 'property card', 'is_active' => true, 'is_common' => true]);
+        CommonRequiredDocument::query()->create(['name_en' => 'Previous Deed', 'name_gu' => 'Previous Deed', 'normalized_name' => 'previous deed', 'is_active' => true, 'is_common' => true]);
+        CommonRequiredDocument::query()->create(['name_en' => 'Inactive Record', 'name_gu' => 'Inactive', 'normalized_name' => 'inactive record', 'is_active' => false, 'is_common' => true]);
+        CommonRequiredDocument::query()->create(['name_en' => 'Passport', 'name_gu' => 'Passport', 'normalized_name' => 'passport', 'is_active' => true, 'is_common' => true]);
+
+        $service = $this->service('auto-attachment');
+        $service->save();
+
+        $this->assertSame(2, $service->requiredDocuments()->count());
+        $this->assertSame(2, $service->requiredDocuments()->distinct('common_required_document_id')->count('common_required_document_id'));
+        $this->assertFalse($service->requiredDocuments()->where('is_mandatory', true)->exists());
+        $this->assertFalse($service->requiredDocuments()->where('name_en', 'Inactive Record')->exists());
+        $this->assertFalse($service->requiredDocuments()->where('name_en', 'Passport')->exists());
+    }
+
+    public function test_service_specific_master_does_not_propagate_to_unrelated_services(): void
+    {
+        $this->actingAs(User::factory()->create())->post(route('admin.services.store'), [
+            'name_en' => 'Specific First', 'name_gu' => 'Specific First Gujarati', 'sort_order' => 1, 'is_active' => true,
+            'documents' => [['name_en' => 'Internal Local Record', 'name_gu' => 'Local', 'sort_order' => 1, 'is_mandatory' => false]],
+        ])->assertRedirect(route('admin.services.index'));
+        $first = Service::query()->where('name_en', 'Specific First')->firstOrFail();
+        $specific = CommonRequiredDocument::query()->where('normalized_name', 'internal local record')->firstOrFail();
+        $this->assertFalse($specific->is_common);
+
+        $second = $this->service('specific-second');
+
+        $this->assertDatabaseHas('service_required_documents', ['service_id' => $first->id, 'common_required_document_id' => $specific->id]);
+        $this->assertDatabaseMissing('service_required_documents', ['service_id' => $second->id, 'common_required_document_id' => $specific->id]);
+    }
+
+    public function test_new_active_common_document_synchronizes_only_to_active_services(): void
+    {
+        $active = $this->service('active-target');
+        $inactive = $this->service('inactive-target');
+        $inactive->update(['is_active' => false]);
+
+        $document = CommonRequiredDocument::query()->create(['name_en' => 'New Common Record', 'name_gu' => 'New', 'normalized_name' => 'new common record', 'is_active' => true, 'is_common' => true]);
+
+        $this->assertDatabaseHas('service_required_documents', ['service_id' => $active->id, 'common_required_document_id' => $document->id, 'is_mandatory' => false]);
+        $this->assertDatabaseMissing('service_required_documents', ['service_id' => $inactive->id, 'common_required_document_id' => $document->id]);
+    }
+
     private function service(string $slug): Service
     {
         return Service::query()->create(['name_en' => $slug, 'name_gu' => $slug, 'slug' => $slug, 'is_active' => true, 'available_online' => true]);
