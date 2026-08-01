@@ -57,7 +57,7 @@ class ServiceManagementService
 
     public function delete(Service $service): bool
     {
-        if ($service->requests()->exists()) {
+        if ($service->requests()->exists() || $service->requestServices()->exists()) {
             return false;
         }
 
@@ -86,6 +86,8 @@ class ServiceManagementService
                 'disclaimer',
                 'processing_time_label',
                 'service_fee',
+                'gst_rate',
+                'government_charges',
                 'estimated_days',
                 'sort_order',
                 'is_active',

@@ -20,6 +20,8 @@ class Service extends Model
         'disclaimer',
         'processing_time_label',
         'service_fee',
+        'gst_rate',
+        'government_charges',
         'advance_percentage',
         'estimated_days',
         'required_documents',
@@ -41,6 +43,8 @@ class Service extends Model
     {
         return [
             'service_fee' => 'decimal:2',
+            'gst_rate' => 'decimal:2',
+            'government_charges' => 'decimal:2',
             'advance_percentage' => 'integer',
             'estimated_days' => 'integer',
             'is_active' => 'boolean',
@@ -60,6 +64,11 @@ class Service extends Model
     public function requests(): HasMany
     {
         return $this->hasMany(CustomerRequest::class);
+    }
+
+    public function requestServices(): HasMany
+    {
+        return $this->hasMany(RequestService::class);
     }
 
     public function requiredDocuments(): HasMany

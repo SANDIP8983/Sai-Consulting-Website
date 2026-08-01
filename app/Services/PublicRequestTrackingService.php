@@ -16,6 +16,8 @@ class PublicRequestTrackingService
             ->with([
                 'service:id,name_en,name_gu',
                 'service.activeRequiredDocuments:id,service_id,name_en,name_gu,sort_order,is_mandatory',
+                'requestServices:id,request_id,service_id,professional_fee,gst_rate,government_charges,estimated_days,required_documents_snapshot,status',
+                'requestServices.service:id,name_en,name_gu',
                 'payments' => fn ($query) => $query
                     ->select(['id', 'request_id', 'amount', 'payment_status', 'payment_method', 'received_at', 'customer_remark'])
                     ->latest('received_at'),

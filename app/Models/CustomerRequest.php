@@ -49,6 +49,11 @@ class CustomerRequest extends Model
         return $this->belongsTo(Service::class);
     }
 
+    public function requestServices(): HasMany
+    {
+        return $this->hasMany(RequestService::class, 'request_id');
+    }
+
     /**
      * Uploaded Documents
      */

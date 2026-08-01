@@ -30,7 +30,7 @@ class CustomerRequestController extends Controller
 
         return redirect()->route('request.success')->with('submitted_request', [
             'reference_no' => $customerRequest->reference_no,
-            'estimated_days' => $customerRequest->service->estimated_days,
+            'estimated_days' => $customerRequest->requestServices->max('estimated_days') ?? $customerRequest->service->estimated_days,
             'estimated_completion_date' => $customerRequest->estimated_completion_date?->toDateString(),
         ]);
     }

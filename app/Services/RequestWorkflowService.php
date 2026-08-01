@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CustomerRequest;
 use App\Models\Service;
+use App\Models\RequestService;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -56,20 +57,38 @@ class RequestWorkflowService
 
             try {
                 return DB::transaction(function () use ($attributes, $files, $origin, $documentSource, $user, &$storedPaths): CustomerRequest {
-                    $service = Service::query()->findOrFail($attributes['service_id']);
+                    $serviceIds = array_values(array_unique(array_map('intval', $attributes['service_ids'] ?? [$attributes['service_id']])));
+                    $services = Service::query()->with('activeRequiredDocuments')->whereIn('id', $serviceIds)->get()->keyBy('id');
                     $availabilityColumn = $origin === 'offline' ? 'available_offline' : 'available_online';
-                    if (! $service->is_active || ! $service->{$availabilityColumn}) {
-                        throw ValidationException::withMessages(['service_id' => 'The selected service is not available for this request channel.']);
+                    if ($services->count() !== count($serviceIds) || collect($serviceIds)->contains(fn ($id) => ! $services[$id]->is_active || ! $services[$id]->{$availabilityColumn})) {
+                        throw ValidationException::withMessages(['service_ids' => 'One or more selected services are not available for this request channel.']);
                     }
+                    $orderedServices = collect($serviceIds)->map(fn ($id) => $services[$id]);
+                    $service = $orderedServices->first();
+                    $amountDue = $orderedServices->sum(fn (Service $item) => (float) $item->service_fee + ((float) $item->service_fee * (float) $item->gst_rate / 100) + (float) $item->government_charges);
+                    $estimatedDays = $orderedServices->max('estimated_days');
                     $request = CustomerRequest::query()->create([
                         ...Arr::only($attributes, ['service_id', 'name', 'mobile', 'email', 'address', 'survey_numbers', 'khata_number', 'details']),
+                        'service_id' => $service->id,
                         'reference_no' => $this->referenceNumbers->generate(),
                         'request_origin' => $origin,
                         'status' => 'received',
-                        'amount_due' => $service->service_fee ?? 0,
-                        'estimated_completion_date' => $service->estimated_days ? now()->addDays($service->estimated_days)->toDateString() : null,
+                        'amount_due' => $amountDue,
+                        'estimated_completion_date' => $estimatedDays ? now()->addDays($estimatedDays)->toDateString() : null,
                         'last_status_changed_at' => now(),
                     ]);
+
+                    foreach ($orderedServices as $selectedService) {
+                        $request->requestServices()->create([
+                            'service_id' => $selectedService->id,
+                            'professional_fee' => $selectedService->service_fee ?? 0,
+                            'gst_rate' => $selectedService->gst_rate ?? 0,
+                            'government_charges' => $selectedService->government_charges ?? 0,
+                            'estimated_days' => $selectedService->estimated_days,
+                            'required_documents_snapshot' => $selectedService->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'is_mandatory', 'sort_order'])->values()->all(),
+                            'status' => 'received',
+                        ]);
+                    }
 
                     $this->history($request, null, 'received', 'Your request has been received.', true, $user?->id);
 
@@ -90,7 +109,7 @@ class RequestWorkflowService
                         ]);
                     }
 
-                    return $request->load('service');
+                    return $request->load(['service', 'requestServices.service']);
                 });
             } catch (\Throwable $exception) {
                 Storage::disk('local')->delete($storedPaths);
@@ -130,6 +149,23 @@ class RequestWorkflowService
     public function updateEstimate(CustomerRequest $request, ?string $date): void
     {
         $request->update(['estimated_completion_date' => $date]);
+    }
+
+    public function decideService(CustomerRequest $request, RequestService $requestService, array $attributes, User $user): void
+    {
+        if ($requestService->request_id !== $request->id) {
+            abort(404);
+        }
+        DB::transaction(function () use ($requestService, $attributes, $user): void {
+            $decision = $attributes['decision'];
+            $requestService->update([
+                'status' => $decision,
+                'approved_at' => $decision === 'approved' ? now() : null,
+                'rejected_at' => $decision === 'rejected' ? now() : null,
+                'decision_notes' => $attributes['decision_notes'] ?? null,
+                'decided_by' => $user->id,
+            ]);
+        });
     }
 
     public function addRemark(CustomerRequest $request, string $remarks, bool $visible, User $user): void

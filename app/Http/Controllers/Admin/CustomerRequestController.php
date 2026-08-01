@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\FilterCustomerRequestsRequest;
+use App\Http\Requests\Admin\DecideRequestServiceRequest;
 use App\Http\Requests\Admin\RecordRequestPaymentRequest;
 use App\Http\Requests\Admin\StoreOfflineCustomerRequestRequest;
 use App\Http\Requests\Admin\StoreRequestDispatchRequest;
@@ -12,6 +13,7 @@ use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
 use App\Http\Requests\Admin\UpdateRequestEstimateRequest;
 use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
 use App\Models\CustomerRequest;
+use App\Models\RequestService;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\AdminRequestManagementService;
@@ -75,6 +77,12 @@ class CustomerRequestController extends Controller
         $this->workflow->transition($customerRequest, $request->validated(), $request->user());
 
         return back()->with('success', 'Request status updated successfully.');
+    }
+
+    public function decideService(DecideRequestServiceRequest $request, CustomerRequest $customerRequest, RequestService $requestService): RedirectResponse
+    {
+        $this->workflow->decideService($customerRequest, $requestService, $request->validated(), $request->user());
+        return back()->with('success', 'Selected service decision updated successfully.');
     }
 
     public function estimate(UpdateRequestEstimateRequest $request, CustomerRequest $customerRequest): RedirectResponse

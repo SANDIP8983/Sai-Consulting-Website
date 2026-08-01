@@ -28,6 +28,8 @@ class StoreServiceRequest extends FormRequest
             'disclaimer' => ['nullable', 'string', 'max:5000'],
             'processing_time_label' => ['nullable', 'string', 'max:100'],
             'service_fee' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
+            'gst_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'government_charges' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'estimated_days' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'sort_order' => ['required', 'integer', 'min:0'],
             'is_active' => ['required', 'boolean'],

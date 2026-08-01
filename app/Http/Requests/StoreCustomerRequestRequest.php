@@ -15,13 +15,15 @@ class StoreCustomerRequestRequest extends FormRequest
 
     public function rules(): array
     {
-        $service = Service::query()->with('activeRequiredDocuments')->find($this->input('service_id'));
-        $requiresDocuments = $service?->requires_property_documents ?? true;
-        $types = $service?->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
-        $maximumSize = $service?->activeRequiredDocuments->max('max_upload_size_kb') ?: 10240;
+        $services = Service::query()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
+        $requiresDocuments = $services->isEmpty() || $services->contains(fn (Service $service) => $service->requires_property_documents);
+        $types = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
+        $maximumSize = $services->flatMap->activeRequiredDocuments->max('max_upload_size_kb') ?: 10240;
 
         return [
             'service_id' => ['required', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true))],
+            'service_ids' => ['required', 'array', 'min:1', 'max:20'],
+            'service_ids.*' => ['required', 'integer', 'distinct', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true))],
             'name' => ['required', 'string', 'max:100'],
             'mobile' => ['required', 'digits:10'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -33,6 +35,15 @@ class StoreCustomerRequestRequest extends FormRequest
             'documents.*' => ['required', 'file', 'mimes:'.implode(',', $types), 'max:'.$maximumSize],
             'declaration' => ['required', 'accepted'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $serviceIds = array_values(array_filter((array) $this->input('service_ids', [])));
+        if ($serviceIds === [] && $this->filled('service_id')) {
+            $serviceIds = [$this->input('service_id')];
+        }
+        $this->merge(['service_ids' => $serviceIds, 'service_id' => $serviceIds[0] ?? $this->input('service_id')]);
     }
 
     protected function availabilityColumn(): string

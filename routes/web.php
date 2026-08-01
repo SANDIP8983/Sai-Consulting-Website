@@ -61,6 +61,7 @@ Route::middleware('auth')
         Route::post('/', 'store')->name('store');
         Route::get('/{customerRequest}', 'show')->name('show');
         Route::patch('/{customerRequest}/status', 'transition')->name('transition');
+        Route::patch('/{customerRequest}/services/{requestService}', 'decideService')->name('services.decision');
         Route::patch('/{customerRequest}/estimate', 'estimate')->name('estimate');
         Route::post('/{customerRequest}/remarks', 'remark')->name('remarks.store');
         Route::post('/{customerRequest}/payments', 'payment')->name('payments.store');
