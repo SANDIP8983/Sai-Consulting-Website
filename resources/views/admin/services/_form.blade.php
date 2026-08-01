@@ -10,40 +10,8 @@
     ])->all() ?? []);
 @endphp
 
-<div class="row g-3">
-    <div class="col-md-6">
-        <label for="name_en" class="form-label">English Name</label>
-        <input id="name_en" name="name_en" value="{{ old('name_en', $service?->name_en) }}" class="form-control @error('name_en') is-invalid @enderror" required>
-        @error('name_en')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-6">
-        <label for="name_gu" class="form-label">Gujarati Name</label>
-        <input id="name_gu" name="name_gu" value="{{ old('name_gu', $service?->name_gu) }}" class="form-control @error('name_gu') is-invalid @enderror" required>
-        @error('name_gu')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-12"><label for="short_description" class="form-label">Short Description</label><textarea id="short_description" name="short_description" rows="2" class="form-control">{{ old('short_description', $service?->short_description) }}</textarea></div>
-    <div class="col-12">
-        <label for="description" class="form-label">Detailed Description</label>
-        <textarea id="description" name="description" rows="5" class="form-control @error('description') is-invalid @enderror">{{ old('description', $service?->description) }}</textarea>
-        @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-12"><label for="notes" class="form-label">Customer Instructions</label><textarea id="notes" name="notes" class="form-control">{{ old('notes', $service?->notes) }}</textarea></div>
-    <div class="col-md-4"><label for="service_fee" class="form-label">Fixed Fee (₹)</label><input id="service_fee" name="service_fee" type="number" min="0" step="0.01" value="{{ old('service_fee', $service?->service_fee) }}" class="form-control"></div>
-    <div class="col-md-4"><label for="estimated_days" class="form-label">Estimated Processing Days</label><input id="estimated_days" name="estimated_days" type="number" min="0" value="{{ old('estimated_days', $service?->estimated_days) }}" class="form-control"></div>
-    <div class="col-md-4">
-        <label for="sort_order" class="form-label">Display Order</label>
-        <input id="sort_order" name="sort_order" type="number" min="0" value="{{ old('sort_order', $service?->sort_order ?? 0) }}" class="form-control @error('sort_order') is-invalid @enderror" required>
-        @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-8 d-flex align-items-end">
-        <input type="hidden" name="is_active" value="0">
-        <div class="form-check mb-2"><input id="is_active" name="is_active" value="1" type="checkbox" class="form-check-input" @checked(old('is_active', $service?->is_active ?? true))><label class="form-check-label" for="is_active">Service is active and available for selection</label></div>
-    </div>
-</div>
 
-<hr class="my-4">
-<div><h2 class='h5 mb-1'>Availability and Business Rules</h2></div>
-<div class='row g-3'>@foreach(['available_online'=>'Available Online','available_offline'=>'Available Offline','requires_property_documents'=>'Requires Property Documents','requires_dispatch'=>'Requires Dispatch','requires_payment_before_processing'=>'Requires Payment Before Processing'] as $field=>$label)<div class='col-sm-6 col-lg-4'><input type='hidden' name='{{ $field }}' value='0'><div class='form-check'><input id='{{ $field }}' name='{{ $field }}' value='1' type='checkbox' class='form-check-input' @checked(old($field,$service?->{$field} ?? true))><label class='form-check-label'>{{ $label }}</label></div></div>@endforeach</div><hr class='my-4'>
+@include('admin.services._configuration')
 <div><h2 class="h5 mb-1">Internal Processing Capabilities</h2><p class="text-muted small">Controls which drafting and registration sections apply to this service.</p></div>
 <div class="row g-3">@foreach(['uses_drafting_workflow'=>'Drafting workflow','requires_token_booking'=>'Token booking','requires_registration'=>'Registration','requires_certified_copy'=>'Certified copy'] as $field=>$label)<div class="col-sm-6 col-lg-3"><input type="hidden" name="{{ $field }}" value="0"><div class="form-check"><input id="{{ $field }}" name="{{ $field }}" value="1" type="checkbox" class="form-check-input" @checked(old($field,$service?->{$field} ?? false))><label for="{{ $field }}" class="form-check-label">{{ $label }}</label></div></div>@endforeach</div>
 

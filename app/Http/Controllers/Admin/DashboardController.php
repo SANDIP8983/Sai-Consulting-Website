@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerRequest;
 use App\Models\Holiday;
 use App\Models\OfficeTiming;
-use App\Models\Setting;
 use App\Models\Service;
+use App\Models\Setting;
 use Illuminate\Contracts\View\View;
 
 class DashboardController extends Controller
@@ -31,6 +31,7 @@ class DashboardController extends Controller
                 'office_timings' => OfficeTiming::query()->count(),
                 'holidays' => Holiday::query()->count(),
                 'active_services' => Service::query()->where('is_active', true)->count(),
+                'disabled_services' => Service::query()->where('is_active', false)->count(),
                 'online_services' => Service::query()->where('is_active', true)->where('available_online', true)->count(),
                 'offline_services' => Service::query()->where('is_active', true)->where('available_offline', true)->count(),
             ],

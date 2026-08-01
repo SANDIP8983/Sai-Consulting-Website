@@ -28,7 +28,7 @@ class ServiceManagementService
     }
 
     /**
-     * @param array<string, mixed> $attributes
+     * @param  array<string, mixed>  $attributes
      */
     public function create(array $attributes): Service
     {
@@ -45,7 +45,7 @@ class ServiceManagementService
     }
 
     /**
-     * @param array<string, mixed> $attributes
+     * @param  array<string, mixed>  $attributes
      */
     public function update(Service $service, array $attributes): void
     {
@@ -67,23 +67,33 @@ class ServiceManagementService
     }
 
     /**
-     * @param array<string, mixed> $attributes
+     * @param  array<string, mixed>  $attributes
      * @return array<string, mixed>
      */
     private function serviceAttributes(array $attributes): array
     {
         return [
             ...Arr::only($attributes, [
-            'name_en',
-            'name_gu',
-            'short_description',
-            'description',
-            'notes',
-            'service_fee',
-            'estimated_days',
-            'sort_order',
-            'is_active',
+                'name_en',
+                'name_gu',
+                'short_description',
+                'description',
+                'notes',
+                'description_gu',
+                'description_en',
+                'customer_instructions',
+                'important_notes',
+                'disclaimer',
+                'processing_time_label',
+                'service_fee',
+                'estimated_days',
+                'sort_order',
+                'is_active',
             ]),
+            'description' => $attributes['description_en'] ?? $attributes['description'] ?? null,
+            'description_en' => $attributes['description_en'] ?? $attributes['description'] ?? null,
+            'notes' => $attributes['customer_instructions'] ?? $attributes['notes'] ?? null,
+            'customer_instructions' => $attributes['customer_instructions'] ?? $attributes['notes'] ?? null,
             'available_online' => (bool) ($attributes['available_online'] ?? false),
             'available_offline' => (bool) ($attributes['available_offline'] ?? false),
             'requires_property_documents' => (bool) ($attributes['requires_property_documents'] ?? false),
@@ -97,7 +107,7 @@ class ServiceManagementService
     }
 
     /**
-     * @param array<int, array{name_en: string, name_gu: string, sort_order: int}> $documents
+     * @param  array<int, array{name_en: string, name_gu: string, sort_order: int}>  $documents
      */
     private function syncRequiredDocuments(Service $service, array $documents): void
     {

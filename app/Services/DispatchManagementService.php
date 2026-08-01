@@ -20,8 +20,9 @@ class DispatchManagementService
             if (! $requiresDispatch) {
                 throw ValidationException::withMessages(['dispatch' => 'Dispatch is not required for this service.']);
             }
-            if ($lockedRequest->payment_status !== 'received' || ! $lockedRequest->file_number) {
-                throw ValidationException::withMessages(['dispatch' => 'Dispatch is allowed only after payment is received and a file number exists.']);
+            $requiresPayment = $lockedRequest->processing?->requires_payment_before_processing ?? $lockedRequest->service->requires_payment_before_processing;
+            if (($requiresPayment && $lockedRequest->payment_status !== 'received') || ! $lockedRequest->file_number) {
+                throw ValidationException::withMessages(['dispatch' => 'Dispatch requires a file number and, when configured, received payment.']);
             }
 
             $allowedWorkflowStatuses = ['ready_for_registration', 'dispatched', 'completed', 'archived'];

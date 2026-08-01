@@ -32,6 +32,7 @@ class RequestWorkflowService
         if (! ($request->processing?->requires_dispatch ?? $request->service?->requires_dispatch ?? true)) {
             $transitions = array_values(array_diff($transitions, ['dispatched']));
         }
+
         return $transitions;
     }
 
@@ -107,7 +108,8 @@ class RequestWorkflowService
         if (! in_array($to, $this->transitions($request), true)) {
             throw ValidationException::withMessages(['status' => 'This status transition is not allowed.']);
         }
-        if ($to === 'dispatched' && ($request->payment_status !== 'received' || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {
+        $requiresPayment = $request->processing?->requires_payment_before_processing ?? $request->service?->requires_payment_before_processing ?? true;
+        if ($to === 'dispatched' && (($requiresPayment && $request->payment_status !== 'received') || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {
             throw ValidationException::withMessages([
                 'status' => 'Use Dispatch Management to record dispatch details before changing this status.',
             ]);

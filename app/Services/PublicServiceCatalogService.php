@@ -12,11 +12,12 @@ class PublicServiceCatalogService
     {
         return Service::query()
             ->where('is_active', true)
-            ->where('available_online', true)
             ->withCount(['activeRequiredDocuments as required_documents_count'])
             ->when($search, fn ($query, string $term) => $query->where(function ($query) use ($term): void {
                 $query->where('name_gu', 'like', "%{$term}%")
                     ->orWhere('name_en', 'like', "%{$term}%")
+                    ->orWhere('description_en', 'like', "%{$term}%")
+                    ->orWhere('description_gu', 'like', "%{$term}%")
                     ->orWhere('description', 'like', "%{$term}%");
             }))
             ->orderBy('sort_order')
@@ -29,7 +30,6 @@ class PublicServiceCatalogService
     {
         return Service::query()
             ->where('is_active', true)
-            ->where('available_online', true)
             ->where('slug', $slug)
             ->with('activeRequiredDocuments')
             ->withCount(['activeRequiredDocuments as required_documents_count'])
@@ -41,7 +41,6 @@ class PublicServiceCatalogService
     {
         return Service::query()
             ->where('is_active', true)
-            ->where('available_online', true)
             ->whereKeyNot($service->id)
             ->withCount(['activeRequiredDocuments as required_documents_count'])
             ->orderBy('sort_order')

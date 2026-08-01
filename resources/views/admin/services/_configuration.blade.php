@@ -1,0 +1,24 @@
+<div class="row g-3">
+    <div class="col-md-6"><label for="name_en" class="form-label">English Name</label><input id="name_en" name="name_en" value="{{ old('name_en', $service?->name_en) }}" class="form-control @error('name_en') is-invalid @enderror" required>@error('name_en')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-md-6"><label for="name_gu" class="form-label">Gujarati Name</label><input id="name_gu" name="name_gu" value="{{ old('name_gu', $service?->name_gu) }}" class="form-control @error('name_gu') is-invalid @enderror" required>@error('name_gu')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12"><label for="short_description" class="form-label">Short Description</label><textarea id="short_description" name="short_description" rows="2" maxlength="1000" class="form-control">{{ old('short_description', $service?->short_description) }}</textarea></div>
+    <div class="col-md-6"><label for="description_gu" class="form-label">Gujarati Description</label><textarea id="description_gu" name="description_gu" rows="5" maxlength="5000" class="form-control @error('description_gu') is-invalid @enderror">{{ old('description_gu', $service?->description_gu) }}</textarea>@error('description_gu')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-md-6"><label for="description_en" class="form-label">English Description</label><textarea id="description_en" name="description_en" rows="5" maxlength="5000" class="form-control @error('description_en') is-invalid @enderror">{{ old('description_en', $service?->description_en ?? $service?->description) }}</textarea>@error('description_en')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-md-4"><label for="customer_instructions" class="form-label">Customer Instructions</label><textarea id="customer_instructions" name="customer_instructions" rows="4" maxlength="5000" class="form-control">{{ old('customer_instructions', $service?->customer_instructions ?? $service?->notes) }}</textarea></div>
+    <div class="col-md-4"><label for="important_notes" class="form-label">Important Notes</label><textarea id="important_notes" name="important_notes" rows="4" maxlength="5000" class="form-control">{{ old('important_notes', $service?->important_notes) }}</textarea></div>
+    <div class="col-md-4"><label for="disclaimer" class="form-label">Disclaimer (Optional)</label><textarea id="disclaimer" name="disclaimer" rows="4" maxlength="5000" class="form-control">{{ old('disclaimer', $service?->disclaimer) }}</textarea></div>
+</div>
+
+<hr class="my-4">
+<h2 class="h5 mb-3">Fees, Timing and Availability</h2>
+<div class="row g-3">
+    <div class="col-md-3"><label for="service_fee" class="form-label">Professional Fee (₹)</label><input id="service_fee" name="service_fee" type="number" min="0" step="0.01" value="{{ old('service_fee', $service?->service_fee) }}" class="form-control @error('service_fee') is-invalid @enderror">@error('service_fee')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-md-3"><label for="estimated_days" class="form-label">Estimated Completion Days</label><input id="estimated_days" name="estimated_days" type="number" min="0" value="{{ old('estimated_days', $service?->estimated_days) }}" class="form-control @error('estimated_days') is-invalid @enderror">@error('estimated_days')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-md-3"><label for="processing_time_label" class="form-label">Processing Time Label</label><input id="processing_time_label" name="processing_time_label" maxlength="100" placeholder="Same Day / 1-3 Days" value="{{ old('processing_time_label', $service?->processing_time_label) }}" class="form-control @error('processing_time_label') is-invalid @enderror">@error('processing_time_label')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-md-3"><label for="sort_order" class="form-label">Display Order</label><input id="sort_order" name="sort_order" type="number" min="0" value="{{ old('sort_order', $service?->sort_order ?? 0) }}" class="form-control" required></div>
+    @foreach(['is_active' => 'Active', 'available_online' => 'Online Available', 'available_offline' => 'Offline Available', 'requires_payment_before_processing' => 'Advance Payment Required', 'requires_dispatch' => 'Dispatch Required', 'requires_property_documents' => 'Property Documents Required'] as $field => $label)
+        <div class="col-sm-6 col-lg-4"><input type="hidden" name="{{ $field }}" value="0"><div class="form-check"><input id="{{ $field }}" name="{{ $field }}" value="1" type="checkbox" class="form-check-input" @checked(old($field, $service?->{$field} ?? true))><label for="{{ $field }}" class="form-check-label">{{ $label }}</label></div></div>
+    @endforeach
+</div>
+
+<hr class="my-4">
