@@ -16,7 +16,7 @@ class RequestWorkflowService
 {
     public const STATUSES = ['received', 'under_review', 'need_documents', 'approved', 'rejected', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
 
-    private const TRANSITIONS = ['received' => ['under_review'], 'under_review' => ['need_documents', 'approved', 'rejected'], 'need_documents' => ['under_review'], 'approved' => ['payment_pending'], 'rejected' => ['archived'], 'payment_pending' => ['payment_received'], 'payment_received' => ['draft_in_progress', 'ready_for_registration'], 'draft_in_progress' => ['ready_for_verification'], 'ready_for_verification' => ['customer_approved', 'ready_for_registration'], 'customer_approved' => ['ready_for_registration'], 'ready_for_registration' => ['dispatched', 'completed'], 'dispatched' => ['completed'], 'completed' => ['archived'], 'archived' => []];
+    private const TRANSITIONS = ['received' => ['under_review'], 'under_review' => ['need_documents', 'approved', 'rejected'], 'need_documents' => ['under_review'], 'approved' => ['payment_pending', 'draft_in_progress', 'ready_for_registration', 'completed'], 'rejected' => ['archived'], 'payment_pending' => ['payment_received'], 'payment_received' => ['draft_in_progress', 'ready_for_registration'], 'draft_in_progress' => ['ready_for_verification'], 'ready_for_verification' => ['customer_approved', 'ready_for_registration'], 'customer_approved' => ['ready_for_registration'], 'ready_for_registration' => ['dispatched', 'completed'], 'dispatched' => ['completed'], 'completed' => ['archived'], 'archived' => []];
 
     public function __construct(
         private readonly ReferenceNumberService $referenceNumbers,
@@ -25,7 +25,14 @@ class RequestWorkflowService
 
     public function transitions(CustomerRequest $request): array
     {
-        return self::TRANSITIONS[$request->status] ?? [];
+        $transitions = self::TRANSITIONS[$request->status] ?? [];
+        if ($request->status === 'approved' && $request->service?->requires_payment_before_processing) {
+            return array_values(array_intersect($transitions, ['payment_pending']));
+        }
+        if (! ($request->processing?->requires_dispatch ?? $request->service?->requires_dispatch ?? true)) {
+            $transitions = array_values(array_diff($transitions, ['dispatched']));
+        }
+        return $transitions;
     }
 
     /** @param array<string,mixed> $attributes @param array<int,UploadedFile> $files */
@@ -97,7 +104,7 @@ class RequestWorkflowService
     {
         $to = $attributes['status'];
         $from = $request->status;
-        if (! in_array($to, self::TRANSITIONS[$from] ?? [], true)) {
+        if (! in_array($to, $this->transitions($request), true)) {
             throw ValidationException::withMessages(['status' => 'This status transition is not allowed.']);
         }
         if ($to === 'dispatched' && ($request->payment_status !== 'received' || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {

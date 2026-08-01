@@ -105,6 +105,27 @@ class FileDocumentProcessingTest extends TestCase
         $this->assertDatabaseHas('request_processing_histories',['request_id'=>$request->id,'from_stage'=>'dispatched','to_stage'=>'completed']);
     }
 
+    public function test_service_can_process_without_advance_payment(): void
+    {
+        $request=$this->request(['status'=>'approved','file_number'=>'SC/2026/F000001']);
+        $request->service->update(['requires_payment_before_processing'=>false]);
+        $admin=User::factory()->create(); $workflow=app(FileDocumentProcessingService::class);
+        $workflow->open($request,[],$admin); $workflow->transition($request,'documents_under_review',[],$admin); $workflow->transition($request,'drafting_started',[],$admin);
+        $this->assertSame('draft_in_progress',$request->fresh()->status);
+        $this->assertSame('not_required',$request->payment_status);
+    }
+
+    public function test_service_without_dispatch_can_complete_without_dispatch_record(): void
+    {
+        $request=$this->request(['status'=>'approved','file_number'=>'SC/2026/F000001']);
+        $request->service->update(['uses_drafting_workflow'=>false,'requires_token_booking'=>false,'requires_registration'=>false,'requires_certified_copy'=>false,'requires_dispatch'=>false,'requires_payment_before_processing'=>false]);
+        $admin=User::factory()->create(); $workflow=app(FileDocumentProcessingService::class);
+        $processing=$workflow->open($request,[],$admin); $workflow->transition($request,'documents_under_review',[],$admin);
+        $this->assertContains('completed',$workflow->transitions($processing->fresh()));
+        $workflow->transition($request,'completed',[],$admin);
+        $this->assertSame('completed',$request->fresh()->status);
+        $this->assertDatabaseCount('request_dispatches',0);
+    }
     private function request(array $attributes = []): CustomerRequest
     {
         $service = Service::query()->create(['name_en' => 'Processing Service', 'name_gu' => 'Processing Service', 'slug' => 'processing-service', 'is_active' => true, 'sort_order' => 1, 'uses_drafting_workflow' => true, 'requires_registration' => true]);

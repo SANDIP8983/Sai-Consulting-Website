@@ -16,6 +16,10 @@ class DispatchManagementService
     {
         return DB::transaction(function () use ($request, $attributes, $user): RequestDispatch {
             $lockedRequest = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
+            $requiresDispatch = $lockedRequest->processing?->requires_dispatch ?? $lockedRequest->service->requires_dispatch;
+            if (! $requiresDispatch) {
+                throw ValidationException::withMessages(['dispatch' => 'Dispatch is not required for this service.']);
+            }
             if ($lockedRequest->payment_status !== 'received' || ! $lockedRequest->file_number) {
                 throw ValidationException::withMessages(['dispatch' => 'Dispatch is allowed only after payment is received and a file number exists.']);
             }

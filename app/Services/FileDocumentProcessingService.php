@@ -32,13 +32,23 @@ class FileDocumentProcessingService
 
     public function transitions(RequestProcessingDetail $processing): array
     {
-        return array_values(array_filter(self::TRANSITIONS[$processing->processing_stage] ?? [], function (string $stage) use ($processing): bool {
+        $transitions = array_values(array_filter(self::TRANSITIONS[$processing->processing_stage] ?? [], function (string $stage) use ($processing): bool {
             if (in_array($stage, ['drafting_started','draft_ready','customer_verification_pending','correction_required','final_draft_ready'], true) && ! $processing->uses_drafting_workflow) return false;
             if (in_array($stage, ['token_booking_pending','token_booked'], true) && ! $processing->requires_token_booking) return false;
             if (in_array($stage, ['registration_pending','registered'], true) && ! $processing->requires_registration) return false;
             if (in_array($stage, ['certified_copy_pending','certified_copy_received'], true) && ! $processing->requires_certified_copy) return false;
             return true;
         }));
+
+        if (! $processing->requires_dispatch && in_array('ready_for_dispatch', $transitions, true)) {
+            $transitions = array_values(array_diff($transitions, ['ready_for_dispatch']));
+            $transitions[] = 'completed';
+        }
+        if (! $processing->requires_dispatch && $processing->processing_stage === 'ready_for_dispatch') {
+            $transitions[] = 'completed';
+        }
+
+        return array_values(array_unique($transitions));
     }
 
     public function open(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
@@ -59,6 +69,8 @@ class FileDocumentProcessingService
                 'requires_token_booking' => $locked->service->requires_token_booking,
                 'requires_registration' => $locked->service->requires_registration,
                 'requires_certified_copy' => $locked->service->requires_certified_copy,
+                'requires_dispatch' => $locked->service->requires_dispatch,
+                'requires_payment_before_processing' => $locked->service->requires_payment_before_processing,
             ]);
             $locked->processingHistory()->create(['from_stage' => null, 'to_stage' => 'file_opened', 'remarks' => $attributes['customer_remark'] ?? null, 'is_visible_to_customer' => filled($attributes['customer_remark'] ?? null), 'changed_by' => $user->id]);
             return $processing;
@@ -157,9 +169,9 @@ class FileDocumentProcessingService
 
     private function enforceStageRules(CustomerRequest $request, RequestProcessingDetail $processing, string $to, array $attributes): void
     {
-        $registrationStages = ['token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch'];
-        if (in_array($to, $registrationStages, true) && $request->payment_status !== 'received') {
-            throw ValidationException::withMessages(['processing_stage' => 'Payment must be received before registration processing.']);
+        $processingStages = ['drafting_started', 'draft_ready', 'customer_verification_pending', 'correction_required', 'final_draft_ready', 'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch', 'completed'];
+        if ($processing->requires_payment_before_processing && in_array($to, $processingStages, true) && $request->payment_status !== 'received') {
+            throw ValidationException::withMessages(['processing_stage' => 'Payment must be received before processing this service.']);
         }
         if ($to === 'final_draft_ready' && blank($attributes['customer_verification_at'] ?? $processing->customer_verification_at)) {
             throw ValidationException::withMessages(['customer_verification_at' => 'Customer verification date is required before the final draft is ready.']);
