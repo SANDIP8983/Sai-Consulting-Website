@@ -25,7 +25,7 @@ class MultipleServicesPerRequestTest extends TestCase
         $snapshot = $request->requestServices->firstWhere('service_id', $first->id);
         $this->assertSame('1000.00', $snapshot->professional_fee);
         $this->assertSame('18.00', $snapshot->gst_rate);
-        $this->assertSame('200.00', $snapshot->government_charges);
+        $this->assertSame('0.00', $snapshot->government_charges);
         $this->assertSame('Record', $snapshot->required_documents_snapshot[0]['name_en']);
     }
 

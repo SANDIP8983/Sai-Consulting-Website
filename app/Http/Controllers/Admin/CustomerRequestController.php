@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\FilterCustomerRequestsRequest;
+use App\Http\Requests\Admin\FinalizeRequestBillingRequest;
 use App\Http\Requests\Admin\DecideRequestServiceRequest;
 use App\Http\Requests\Admin\RecordRequestPaymentRequest;
 use App\Http\Requests\Admin\StoreOfflineCustomerRequestRequest;
@@ -12,7 +13,7 @@ use App\Http\Requests\Admin\StoreRequestRemarkRequest;
 use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
 use App\Http\Requests\Admin\UpdateRequestEstimateRequest;
 use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
-use App\Http\Requests\Admin\UnlockRequestServicePricingRequest;
+use App\Http\Requests\Admin\UnlockRequestBillingRequest;
 use App\Models\CustomerRequest;
 use App\Models\RequestService;
 use App\Models\Service;
@@ -86,10 +87,16 @@ class CustomerRequestController extends Controller
         return back()->with('success', 'Selected service decision updated successfully.');
     }
 
-    public function unlockServicePricing(UnlockRequestServicePricingRequest $request, CustomerRequest $customerRequest, RequestService $requestService): RedirectResponse
+    public function finalizeBilling(FinalizeRequestBillingRequest $request, CustomerRequest $customerRequest): RedirectResponse
     {
-        $this->workflow->unlockServicePricing($customerRequest, $requestService, $request->validated('unlock_note'), $request->user());
-        return back()->with('success', 'Service pricing unlocked. The reason was recorded in approval history.');
+        $this->workflow->finalizeRequestBilling($customerRequest, $request->validated(), $request->user());
+        return back()->with('success', 'Request billing approved and frozen successfully.');
+    }
+
+    public function unlockBilling(UnlockRequestBillingRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    {
+        $this->workflow->unlockRequestBilling($customerRequest, $request->validated('unlock_reason'), $request->user());
+        return back()->with('success', 'Request billing unlocked. The reason was recorded in audit history.');
     }
 
     public function estimate(UpdateRequestEstimateRequest $request, CustomerRequest $customerRequest): RedirectResponse

@@ -28,9 +28,9 @@ class FinalCustomerRequestFormTest extends TestCase
         $this->assertCount(2, $request->requestServices);
         $gstTotal = $request->requestServices->sum(fn ($item) => (float) $item->professional_fee * (float) $item->gst_rate / 100);
         $this->assertSame(205.0, $gstTotal);
-        $this->assertSame(350.0, (float) $request->requestServices->sum('government_charges'));
+        $this->assertSame(0.0, (float) $request->requestServices->sum('government_charges'));
         $this->assertSame(2055.0, (float) $request->amount_due);
-        $this->assertSame('Stamp Duty', $request->requestServices->firstWhere('service_id', $first->id)->government_charges_snapshot[0]['name']);
+        $this->assertSame([], $request->requestServices->firstWhere('service_id', $first->id)->government_charges_snapshot);
         $this->assertSame('Property Card', $request->requestServices->firstWhere('service_id', $first->id)->required_documents_snapshot[0]['name_en']);
         $this->get(route('request.success'))->assertOk()->assertSee($request->reference_no)->assertSee('Sale Deed')->assertSee('Mutation');
     }
@@ -61,6 +61,6 @@ class FinalCustomerRequestFormTest extends TestCase
 
     private function payload(array $serviceIds): array
     {
-        return ['service_ids' => $serviceIds, 'name' => 'Production Customer', 'mobile' => '9999999999', 'whatsapp' => '9888888888', 'village' => 'Chanasma', 'taluka' => 'Chanasma', 'district' => 'Patan', 'declaration' => '1'];
+        return ['service_ids' => $serviceIds, 'name' => 'Production Customer', 'mobile' => '9999999999', 'whatsapp' => '9888888888', 'property_village' => 'Chanasma', 'property_taluka' => 'Chanasma', 'property_district' => 'Patan', 'declaration' => '1'];
     }
 }

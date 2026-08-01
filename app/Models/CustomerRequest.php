@@ -28,11 +28,11 @@ class CustomerRequest extends Model
         'whatsapp',
         'email',
         'address',
-        'village',
-        'taluka',
-        'district',
+        'village', 'taluka', 'district',
+        'property_village', 'property_taluka', 'property_district', 'property_address_remarks',
         'survey_numbers',
         'khata_number',
+        'tp_number', 'final_plot_number', 'revenue_village',
         'details',
         'status',
         'payment_status', 'amount_due', 'fee_updated_by', 'fee_updated_at', 'amount_paid', 'estimated_completion_date', 'last_status_changed_at',
@@ -54,6 +54,11 @@ class CustomerRequest extends Model
     public function requestServices(): HasMany
     {
         return $this->hasMany(RequestService::class, 'request_id');
+    }
+
+    public function billing(): HasOne
+    {
+        return $this->hasOne(RequestBilling::class, 'request_id');
     }
 
     /**

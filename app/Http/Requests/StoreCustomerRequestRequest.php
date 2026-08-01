@@ -17,6 +17,7 @@ class StoreCustomerRequestRequest extends FormRequest
     public function rules(): array
     {
         $services = Service::query()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
+        $requiresProperty = $services->contains('requires_property_documents', true);
         $types = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
         $maximumSize = $services->flatMap->activeRequiredDocuments->max('max_upload_size_kb') ?: 10240;
 
@@ -29,11 +30,15 @@ class StoreCustomerRequestRequest extends FormRequest
             'whatsapp' => ['nullable', 'digits:10'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:1000'],
-            'village' => ['required_without:address', 'string', 'max:150'],
-            'taluka' => ['required_without:address', 'string', 'max:150'],
-            'district' => ['required_without:address', 'string', 'max:150'],
+            'property_village' => [Rule::requiredIf($requiresProperty), 'nullable', 'string', 'max:150'],
+            'property_taluka' => [Rule::requiredIf($requiresProperty), 'nullable', 'string', 'max:150'],
+            'property_district' => [Rule::requiredIf($requiresProperty), 'nullable', 'string', 'max:150'],
+            'property_address_remarks' => ['nullable', 'string', 'max:2000'],
             'survey_numbers' => ['nullable', 'string', 'max:1000'],
             'khata_number' => ['nullable', 'string', 'max:100'],
+            'tp_number' => ['nullable', 'string', 'max:100'],
+            'final_plot_number' => ['nullable', 'string', 'max:100'],
+            'revenue_village' => ['nullable', 'string', 'max:150'],
             'details' => ['nullable', 'string', 'max:2000'],
             'documents' => ['nullable', 'array', 'max:10'],
             'documents.*' => ['required', 'file', 'mimes:'.implode(',', $types), 'max:'.$maximumSize, function (string $attribute, mixed $value, \Closure $fail): void {

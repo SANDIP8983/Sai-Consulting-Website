@@ -40,7 +40,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $response = $this->from(route('request.create'))->post(route('request.store'), []);
 
         $response->assertRedirect(route('request.create'));
-        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'village', 'taluka', 'district', 'declaration']);
+        $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'declaration']);
         $response->assertSessionDoesntHaveErrors('documents');
         $this->assertDatabaseCount('requests', 0);
     }
@@ -260,6 +260,9 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             'mobile' => '9999999999',
             'email' => 'customer@example.com',
             'address' => 'Chanasma, Chanasma, Patan, Gujarat 384220',
+            'property_village' => 'Chanasma',
+            'property_taluka' => 'Chanasma',
+            'property_district' => 'Patan',
             'survey_numbers' => '12/1, Block 15',
             'khata_number' => 'KH-100',
             'details' => 'Please review the land record.',

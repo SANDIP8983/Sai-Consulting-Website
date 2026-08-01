@@ -12,69 +12,92 @@ class ApprovalPaymentFinalizationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_only_admin_can_finalize_request_scoped_pricing_with_correct_gst_formula(): void
+    public function test_fixed_request_discount_gst_and_government_charges_are_calculated_at_bill_level(): void
     {
-        [$request, $item, $service] = $this->requestWithService();
-        $payload = $this->approvalPayload();
-
-        $this->patch(route('admin.requests.services.decision', [$request, $item]), $payload)->assertRedirect(route('login'));
-
+        [$request, $items] = $this->requestWithServices();
         $admin = User::factory()->create();
-        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$request, $item]), $payload)->assertSessionHasNoErrors();
+        $this->approveAll($admin, $request, $items);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload(['discount_type' => 'fixed', 'discount_value' => 300]))->assertSessionHasNoErrors();
 
-        $item->refresh();
-        $this->assertSame(1000.0, (float) $item->original_professional_fee);
-        $this->assertSame(100.0, (float) $item->discount_amount);
-        $this->assertSame(900.0, (float) $item->net_professional_fee);
-        $this->assertSame(162.0, (float) $item->gst_amount);
-        $this->assertSame(300.0, (float) $item->government_charges);
-        $this->assertSame(1362.0, (float) $item->final_total);
-        $this->assertNotNull($item->pricing_locked_at);
-        $this->assertSame(1000.0, (float) $service->fresh()->service_fee);
-        $this->assertSame(50.0, (float) $service->fresh()->government_charges);
-        $this->assertDatabaseHas('request_service_approval_histories', ['request_service_id' => $item->id, 'request_id' => $request->id, 'approved_by' => $admin->id, 'action' => 'approved']);
+        $billing = $request->fresh()->billing;
+        $this->assertSame(3000.0, (float) $billing->total_original_professional_fee);
+        $this->assertSame(300.0, (float) $billing->discount_amount);
+        $this->assertSame(2700.0, (float) $billing->net_professional_fee);
+        $this->assertSame(486.0, (float) $billing->gst_amount);
+        $this->assertSame(300.0, (float) $billing->government_charges_total);
+        $this->assertSame(3486.0, (float) $billing->grand_total);
+        $this->assertSame(3486.0, (float) $request->fresh()->amount_due);
+        $this->assertSame(1000.0, (float) $items[0]->fresh()->professional_fee);
         $this->assertSame('payment_pending', $request->fresh()->status);
-        $this->assertSame('pending', $request->fresh()->payment_status);
         $this->assertNotNull($request->fresh()->file_number);
     }
 
-    public function test_locked_pricing_requires_explicit_audited_unlock_before_change(): void
+    public function test_percentage_and_zero_discounts_are_supported(): void
     {
-        [$request, $item] = $this->requestWithService();
-        $admin = User::factory()->create();
-        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$request, $item]), $this->approvalPayload())->assertSessionHasNoErrors();
-
-        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$request, $item]), $this->approvalPayload(['discount_value' => 20]))->assertSessionHasErrors('pricing');
-        $this->get(route('admin.requests.show', $request))->assertOk();
-        $this->actingAs($admin)->patch(route('admin.requests.services.pricing.unlock', [$request, $item]), ['unlock_note' => 'Management correction approved.'])->assertSessionHasNoErrors();
-        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$request, $item]), $this->approvalPayload(['discount_value' => 20]))->assertSessionHasNoErrors();
-
-        $this->assertSame(200.0, (float) $item->fresh()->discount_amount);
-        $this->assertDatabaseHas('request_service_approval_histories', ['request_service_id' => $item->id, 'action' => 'unlocked', 'note' => 'Management correction approved.']);
-        $this->assertSame(3, $item->approvalHistory()->count());
+        [$request, $items] = $this->requestWithServices(); $admin = User::factory()->create(); $this->approveAll($admin, $request, $items);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload())->assertSessionHasNoErrors();
+        $this->assertSame(300.0, (float) $request->fresh()->billing->discount_amount);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.unlock', $request), ['unlock_reason' => 'Approved correction'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload(['discount_type' => 'none', 'discount_value' => 0, 'discount_reason' => null]))->assertSessionHasNoErrors();
+        $this->assertSame(0.0, (float) $request->fresh()->billing->discount_amount);
     }
 
-    public function test_customer_tracking_shows_finalized_summary_without_internal_discount_data(): void
+    public function test_excessive_discounts_are_rejected_server_side(): void
     {
-        [$request, $item] = $this->requestWithService();
-        $admin = User::factory()->create();
-        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$request, $item]), $this->approvalPayload(['decision_notes' => 'Private negotiation note']))->assertSessionHasNoErrors();
-
-        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
-            ->assertOk()->assertSee('Payment Summary')->assertSee('Professional Fee')->assertSee('GST')->assertSee('Stamp Duty')->assertSee('Grand Total')
-            ->assertSee('તમારી અરજી મંજૂર થઈ છે.')->assertDontSee('Regular Customer')->assertDontSee('Private negotiation note');
+        [$request, $items] = $this->requestWithServices(); $admin = User::factory()->create(); $this->approveAll($admin, $request, $items);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload(['discount_type' => 'fixed', 'discount_value' => 3001]))->assertSessionHasErrors('discount_value');
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload(['discount_value' => 101]))->assertSessionHasErrors('discount_value');
+        $this->assertDatabaseCount('request_billings', 0);
     }
 
-    private function requestWithService(): array
+    public function test_pricing_freeze_requires_explicit_audited_unlock_and_payment_relocks_it(): void
     {
-        $service = Service::query()->create(['name_en' => 'Approval Service', 'name_gu' => 'મંજૂરી સેવા', 'slug' => 'approval-service', 'service_fee' => 1000, 'gst_rate' => 18, 'government_charges' => 50, 'estimated_days' => 5, 'is_active' => true]);
-        $request = CustomerRequest::query()->create(['reference_no' => 'SC/2026/900001', 'service_id' => $service->id, 'name' => 'Approval Customer', 'mobile' => '9999999999', 'status' => 'under_review', 'payment_status' => 'not_required', 'amount_due' => 1230, 'last_status_changed_at' => now()]);
-        $item = $request->requestServices()->create(['service_id' => $service->id, 'professional_fee' => 1000, 'gst_rate' => 18, 'government_charges' => 50, 'government_charges_snapshot' => [['name' => 'Legacy Charge', 'amount' => 50]], 'status' => 'under_review']);
-        return [$request, $item, $service];
+        [$request, $items] = $this->requestWithServices(); $admin = User::factory()->create(); $this->approveAll($admin, $request, $items);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload())->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload(['discount_value' => 20]))->assertSessionHasErrors('pricing');
+        $this->actingAs($admin)->patch(route('admin.requests.billing.unlock', $request), ['unlock_reason' => 'Management correction approved'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), ['amount' => 3000, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => now()->format('Y-m-d H:i:s')])->assertSessionHasNoErrors();
+        $this->assertTrue($request->fresh()->billing->isLocked());
+        $this->assertDatabaseHas('request_billing_histories', ['request_id' => $request->id, 'action' => 'unlocked', 'reason' => 'Management correction approved']);
     }
 
-    private function approvalPayload(array $overrides = []): array
+    public function test_customer_tracking_uses_request_summary_without_private_metadata(): void
     {
-        return array_merge(['decision' => 'approved', 'discount_type' => 'percentage', 'discount_value' => 10, 'discount_reason' => 'regular_customer', 'government_charges' => [['name' => 'Stamp Duty', 'amount' => 200, 'note' => 'As applicable'], ['name' => 'Registration Fee', 'amount' => 100]], 'decision_notes' => 'Approved after review.'], $overrides);
+        [$request, $items] = $this->requestWithServices(); $admin = User::factory()->create(); $this->approveAll($admin, $request, $items);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload(['internal_note' => 'Private negotiation note']))->assertSessionHasNoErrors();
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('Payment Summary')->assertSee('Total Professional Fee')->assertSee('GST')->assertSee('Stamp Duty')->assertSee('Grand Total')->assertDontSee('Regular Customer')->assertDontSee('Private negotiation note')->assertDontSee($admin->name);
+    }
+
+    public function test_legacy_frozen_totals_remain_unchanged_and_render_without_new_billing(): void
+    {
+        $service = $this->service('Legacy', 1000);
+        $request = CustomerRequest::query()->create(['reference_no'=>'SC/2026/999901','service_id'=>$service->id,'name'=>'Legacy Customer','mobile'=>'9999999999','status'=>'payment_received','payment_status'=>'received','amount_due'=>1234,'amount_paid'=>1234]);
+        $request->requestServices()->create(['service_id'=>$service->id,'professional_fee'=>1000,'net_professional_fee'=>900,'gst_rate'=>18,'gst_amount'=>162,'government_charges'=>172,'government_charges_snapshot'=>[['name'=>'Legacy Charge','amount'=>172]],'final_total'=>1234,'pricing_locked_at'=>now(),'status'=>'approved']);
+        $this->assertNull($request->fresh()->billing);
+        $this->assertSame(1234.0, (float) $request->fresh()->amount_due);
+        $this->post(route('request.track.lookup'), ['reference_no'=>$request->reference_no,'mobile'=>$request->mobile])->assertOk()->assertSee('Payment Summary')->assertSee('1,234.00');
+    }
+
+    private function requestWithServices(): array
+    {
+        $first=$this->service('First Service',1000); $second=$this->service('Second Service',2000);
+        $request=CustomerRequest::query()->create(['reference_no'=>'SC/2026/900001','service_id'=>$first->id,'name'=>'Approval Customer','mobile'=>'9999999999','status'=>'under_review','payment_status'=>'not_required','amount_due'=>0,'last_status_changed_at'=>now()]);
+        $items=collect([$first,$second])->map(fn($service)=>$request->requestServices()->create(['service_id'=>$service->id,'service_name_en_snapshot'=>$service->name_en,'professional_fee'=>$service->service_fee,'gst_rate'=>$service->gst_rate,'government_charges'=>0,'status'=>'under_review']))->all();
+        return [$request,$items];
+    }
+
+    private function approveAll(User $admin, CustomerRequest $request, array $items): void
+    {
+        foreach($items as $item) $this->actingAs($admin)->patch(route('admin.requests.services.decision',[$request,$item]),['decision'=>'approved'])->assertSessionHasNoErrors();
+    }
+
+    private function billingPayload(array $overrides=[]): array
+    {
+        return array_replace_recursive(['discount_type'=>'percentage','discount_value'=>10,'discount_reason'=>'regular_customer','internal_note'=>null,'gst_rate'=>18,'government_charges'=>[['name'=>'Stamp Duty','amount'=>200,'note'=>'As applicable','display_order'=>0],['name'=>'Registration Fee','amount'=>100,'display_order'=>1]]],$overrides);
+    }
+
+    private function service(string $name,float $fee): Service
+    {
+        return Service::query()->create(['name_en'=>$name,'name_gu'=>$name,'slug'=>str($name)->slug().'-'.fake()->unique()->numberBetween(1,99999),'service_fee'=>$fee,'gst_rate'=>18,'estimated_days'=>5,'is_active'=>true]);
     }
 }
