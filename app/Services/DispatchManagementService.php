@@ -33,7 +33,7 @@ class DispatchManagementService
             if ($attributes['dispatch_status'] === 'dispatched' && ! in_array($lockedRequest->status, ['ready_for_registration', 'completed', 'dispatched'], true)) {
                 throw ValidationException::withMessages(['dispatch_status' => 'This request cannot be marked dispatched from its current workflow status.']);
             }
-            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing && ! in_array($lockedRequest->processing->processing_stage, ['ready_for_dispatch', 'completed'], true)) {
+            if ($attributes['dispatch_status'] === 'dispatched' && ! $lockedRequest->usesChecklistWorkflow() && $lockedRequest->processing && ! in_array($lockedRequest->processing->processing_stage, ['ready_for_dispatch', 'completed'], true)) {
                 throw ValidationException::withMessages(['dispatch' => 'The processing stage must be Ready for Dispatch.']);
             }
             if ($attributes['dispatch_status'] === 'delivered' && ! $lockedRequest->dispatches()->where('dispatch_status', 'dispatched')->exists()) {

@@ -34,6 +34,8 @@ class ProcessingWorkChecklistTest extends TestCase
     {
         [$admin,$request,$service,$scope] = $this->planned(false, true);
         $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'cancelled'])->assertSessionHasErrors('reason');
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'completed'])->assertSessionHasErrors('status');
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'in_progress'])->assertSessionHasNoErrors();
         $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'completed'])->assertSessionHasNoErrors();
         $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'in_progress'])->assertSessionHasErrors('status');
         $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.reopen',[$request,$scope]),['reason'=>'Correction required'])->assertSessionHasNoErrors();
@@ -44,6 +46,7 @@ class ProcessingWorkChecklistTest extends TestCase
     {
         [$admin,$request,$service,$scope] = $this->planned(false, true);
         $this->actingAs($admin)->patch(route('admin.requests.processing.complete',$request),['completion_date'=>now()->toDateString()])->assertSessionHasErrors('work_scopes');
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'in_progress'])->assertSessionHasNoErrors();
         $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'completed'])->assertSessionHasNoErrors();
         $this->actingAs($admin)->patch(route('admin.requests.processing.complete',$request),['completion_date'=>now()->toDateString(),'customer_remark'=>'Work complete','internal_note'=>'Private completion'])->assertSessionHasNoErrors();
         $this->assertSame('completed',$request->fresh()->status);
@@ -60,6 +63,32 @@ class ProcessingWorkChecklistTest extends TestCase
         $this->actingAs($admin)->get(route('admin.requests.show',$request))->assertOk()->assertSee('Legacy Workflow');
     }
 
+    public function test_not_required_and_cancelled_are_distinct_and_each_requires_reason(): void
+    {
+        [$admin,$request,$service,$scope]=$this->planned(false,true);
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'not_required'])->assertSessionHasErrors('reason');
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update',[$request,$scope]),['status'=>'not_required','reason'=>'Customer no longer needs it'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('request_service_work_scopes',['id'=>$scope->id,'status'=>'not_required','resolution_reason'=>'Customer no longer needs it']);
+    }
+
+    public function test_bulk_actions_validate_state_and_cannot_touch_another_request(): void
+    {
+        [$admin,$request,$service,$scope]=$this->planned(false,true);
+        [, $otherRequest,, $otherScope]=$this->planned(false,true);
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.bulk',$request),['action'=>'start_selected','work_scope_ids'=>[$scope->id,$otherScope->id]])->assertSessionHasNoErrors();
+        $this->assertSame('in_progress',$scope->fresh()->status);
+        $this->assertSame('pending',$otherScope->fresh()->status);
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.bulk',$request),['action'=>'complete_selected','work_scope_ids'=>[$scope->id]])->assertSessionHasNoErrors();
+        $this->assertSame('completed',$scope->fresh()->status);
+    }
+
+    public function test_legacy_stage_actions_are_retired_for_checklist_requests(): void
+    {
+        [$admin,$request]=$this->planned(false,true);
+        $this->actingAs($admin)->post(route('admin.requests.processing.open',$request),['file_opened_at'=>now()->toDateString(),'priority'=>'normal'])->assertSessionHasErrors('processing');
+        $this->actingAs($admin)->get(route('admin.requests.show',$request))->assertOk()->assertDontSee('Advance Processing Stage')->assertSee('Start Selected')->assertSee('Save Processing Progress');
+    }
+
     private function planned(bool $requiresPayment, bool $paid): array
     {
         $admin=User::factory()->create(); $service=$this->service($requiresPayment);
@@ -72,6 +101,6 @@ class ProcessingWorkChecklistTest extends TestCase
     }
     private function service(bool $requiresPayment): Service
     {
-        return Service::create(['name_en'=>'Service '.fake()->unique()->numerify('######'),'name_gu'=>'સેવા','slug'=>'service-'.fake()->unique()->numerify('######'),'service_fee'=>1000,'estimated_days'=>3,'is_active'=>true,'available_online'=>true,'available_offline'=>true,'requires_payment_before_processing'=>$requiresPayment]);
+        return Service::create(['name_en'=>'Service '.fake()->unique()->numerify('######'),'name_gu'=>'સેવા '.fake()->unique()->numerify('######'),'slug'=>'service-'.fake()->unique()->numerify('######'),'service_fee'=>1000,'estimated_days'=>3,'is_active'=>true,'available_online'=>true,'available_offline'=>true,'requires_payment_before_processing'=>$requiresPayment]);
     }
 }

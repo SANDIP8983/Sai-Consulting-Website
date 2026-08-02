@@ -22,7 +22,7 @@ class DashboardController extends Controller
                 'payment_pending' => CustomerRequest::query()->where('status', 'payment_pending')->count(),
                 'in_progress' => CustomerRequest::query()->whereIn('status', ['approved', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched'])->count(),
                 'completed' => CustomerRequest::query()->where('status', 'completed')->count(),
-                'processing_not_started' => CustomerRequest::query()->whereHas('requestServices.workScopes', fn($q)=>$q->where('status','pending'))->whereDoesntHave('requestServices.workScopes',fn($q)=>$q->whereIn('status',['in_progress','completed','cancelled']))->count(),
+                'processing_not_started' => CustomerRequest::query()->whereHas('requestServices.workScopes', fn($q)=>$q->where('status','pending'))->whereDoesntHave('requestServices.workScopes',fn($q)=>$q->whereIn('status',['in_progress','completed','not_required','cancelled']))->count(),
                 'ready_to_complete' => CustomerRequest::query()->whereHas('requestServices.workScopes')->whereDoesntHave('requestServices.workScopes',fn($q)=>$q->whereIn('status',['pending','in_progress']))->whereNotIn('status',['completed','dispatched','delivered','closed'])->count(),
             ],
             'summary' => [

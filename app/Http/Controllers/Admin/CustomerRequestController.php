@@ -69,7 +69,7 @@ class CustomerRequestController extends Controller
 
     public function show(CustomerRequest $customerRequest): View
     {
-        $transitions = array_values(array_filter(
+        $transitions = $customerRequest->usesChecklistWorkflow() ? [] : array_values(array_filter(
             $this->workflow->transitions($customerRequest),
             fn (string $status): bool => $status !== 'dispatched'
                 && (! $customerRequest->processing || ! in_array($status, ['draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'completed'], true)),

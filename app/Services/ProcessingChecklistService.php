@@ -12,7 +12,7 @@ use Illuminate\Support\Carbon;
 
 class ProcessingChecklistService
 {
-    public const RESOLVED = ['completed', 'cancelled'];
+    public const RESOLVED = ['completed', 'not_required', 'cancelled'];
 
     public function eligibility(CustomerRequest $request): array
     {
@@ -36,7 +36,9 @@ class ProcessingChecklistService
             $to = $attributes['status'];
             $from = $item->status;
             if ($from === 'completed' && $to !== 'completed') throw ValidationException::withMessages(['status' => 'Use the audited Reopen Work Item action for completed items.']);
-            if ($to === 'cancelled' && blank($attributes['reason'] ?? null)) throw ValidationException::withMessages(['reason' => 'A reason is required when work is Not Required.']);
+            if ($to === 'in_progress' && $from !== 'pending') throw ValidationException::withMessages(['status' => 'Only Pending work can be started.']);
+            if ($to === 'completed' && $from !== 'in_progress') throw ValidationException::withMessages(['status' => 'Only In Progress work can be completed.']);
+            if (in_array($to, ['not_required','cancelled'], true) && blank($attributes['reason'] ?? null)) throw ValidationException::withMessages(['reason' => 'A reason is required for Not Required or Cancelled work.']);
             $this->apply($locked, $item, $to, $attributes, $user, 'status_changed');
         });
     }
@@ -57,18 +59,15 @@ class ProcessingChecklistService
         DB::transaction(function () use ($request, $attributes, $user): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
             $this->assertProcessable($locked);
-            $query = RequestServiceWorkScope::query()->whereHas('requestService', fn ($q) => $q->where('request_id', $locked->id)->where('status', 'approved'));
-            if ($attributes['action'] === 'start_service') {
-                $query->whereHas('requestService', fn ($q) => $q->whereKey($attributes['request_service_id']))->where('status', 'pending');
-            } else {
-                $query->whereIn('id', $attributes['work_scope_ids'] ?? []);
-            }
+            $query = RequestServiceWorkScope::query()->whereHas('requestService', fn ($q) => $q->where('request_id', $locked->id)->where('status', 'approved'))->whereIn('id', $attributes['work_scope_ids']);
             $items = $query->lockForUpdate()->get();
             if ($items->isEmpty()) throw ValidationException::withMessages(['work_scope_ids' => 'No eligible work items were selected for this request.']);
-            $to = match ($attributes['action']) { 'start_service' => 'in_progress', 'complete' => 'completed', 'cancel' => 'cancelled', default => null };
-            if ($attributes['action'] === 'cancel' && blank($attributes['reason'] ?? null)) throw ValidationException::withMessages(['reason' => 'A common reason is required when work is Not Required.']);
+            $to = match ($attributes['action']) { 'start_selected'=>'in_progress','complete_selected'=>'completed','not_required'=>'not_required','cancel_selected'=>'cancelled',default=>null };
+            if (in_array($attributes['action'], ['not_required','cancel_selected'], true) && blank($attributes['reason'] ?? null)) throw ValidationException::withMessages(['reason' => 'A common reason is required for Not Required or Cancelled work.']);
             foreach ($items as $item) {
                 if ($item->status === 'completed' && $to !== 'completed' && $to !== null) throw ValidationException::withMessages(['status' => 'Completed items require an audited individual reopen.']);
+                if ($to === 'in_progress' && $item->status !== 'pending') throw ValidationException::withMessages(['status' => 'Start Selected accepts only Pending items.']);
+                if ($to === 'completed' && $item->status !== 'in_progress') throw ValidationException::withMessages(['status' => 'Complete Selected accepts only In Progress items.']);
                 if ($to) $this->apply($locked, $item, $to, $attributes, $user, 'bulk_'.$attributes['action']);
                 else {
                     $note = trim(implode("\n", array_filter([$item->internal_note, $attributes['internal_note'] ?? null])));
@@ -118,7 +117,7 @@ class ProcessingChecklistService
     private function apply(CustomerRequest $request, RequestServiceWorkScope $item, string $to, array $attributes, User $user, string $action): void
     {
         $from = $item->status;
-        $item->update(['status'=>$to,'started_at'=>in_array($to,['in_progress','completed'],true) ? ($item->started_at ?? now()) : $item->started_at,'completed_at'=>$to === 'completed' ? now() : null,'updated_by'=>$user->id,'internal_note'=>$attributes['internal_note'] ?? $item->internal_note,'customer_remark'=>$attributes['customer_remark'] ?? $item->customer_remark,'resolution_reason'=>$to === 'cancelled' ? $attributes['reason'] : null]);
+        $item->update(['status'=>$to,'started_at'=>in_array($to,['in_progress','completed'],true) ? ($item->started_at ?? now()) : $item->started_at,'completed_at'=>$to === 'completed' ? now() : null,'updated_by'=>$user->id,'internal_note'=>$attributes['internal_note'] ?? $item->internal_note,'customer_remark'=>$attributes['customer_remark'] ?? $item->customer_remark,'resolution_reason'=>in_array($to,['not_required','cancelled'],true) ? $attributes['reason'] : null]);
         $this->audit($request, $item, $action, $from, $to, $attributes, $user);
         if (in_array($to,['in_progress','completed'],true) && ! in_array($request->status,['in_progress'],true)) {
             $old = $request->status; $request->update(['status'=>'in_progress','last_status_changed_at'=>now()]);

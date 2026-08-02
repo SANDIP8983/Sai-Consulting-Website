@@ -88,7 +88,7 @@ class CasePlanningService
             if (in_array($locked->status, ['completed', 'archived', 'dispatched'], true)) {
                 throw ValidationException::withMessages(['status' => 'This request is already completed or closed.']);
             }$accepted = $locked->requestServices()->where('status', 'approved')->with('workScopes')->get();
-            if ($accepted->isEmpty() || $accepted->contains(fn ($s) => $s->workScopes->isEmpty()) || $accepted->flatMap->workScopes->contains(fn ($s) => ! in_array($s->status, ['completed', 'cancelled'], true))) {
+            if ($accepted->isEmpty() || $accepted->contains(fn ($s) => $s->workScopes->isEmpty()) || $accepted->flatMap->workScopes->contains(fn ($s) => ! in_array($s->status, ['completed', 'not_required', 'cancelled'], true))) {
                 throw ValidationException::withMessages(['work_scopes' => 'All selected work-scope items must be Completed or Cancelled / Not Required.']);
             }$from = $locked->status;
             $locked->update(['status' => 'completed', 'last_status_changed_at' => now()]);
@@ -124,7 +124,8 @@ class CasePlanningService
         }$retained = [];
         foreach ($scopeIds as $order => $scopeId) {
             $item = $items[$scopeId];
-            $scope = $row->workScopes()->updateOrCreate(['work_scope_item_id' => $scopeId], ['name_en_snapshot' => $item->name_en, 'name_gu_snapshot' => $item->name_gu, 'is_custom' => false, 'status' => $input['scope_statuses'][$scopeId] ?? 'pending', 'internal_note' => $input['internal_note'] ?? null, 'display_order' => $order + 1, 'selected_by' => $user->id]);
+            $existing = $row->workScopes()->where('work_scope_item_id', $scopeId)->first();
+            $scope = $row->workScopes()->updateOrCreate(['work_scope_item_id' => $scopeId], ['name_en_snapshot' => $item->name_en, 'name_gu_snapshot' => $item->name_gu, 'is_custom' => false, 'status' => $existing?->status ?? 'pending', 'internal_note' => $input['internal_note'] ?? $existing?->internal_note, 'display_order' => $order + 1, 'selected_by' => $user->id]);
             $retained[] = $scope->id;
         }if ($custom !== '') {
             $scope = $row->workScopes()->whereNull('work_scope_item_id')->where('is_custom', true)->firstOrNew();

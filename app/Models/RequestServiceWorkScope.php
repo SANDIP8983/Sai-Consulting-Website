@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RequestServiceWorkScope extends Model
 {
-    public const STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'];
+    public const STATUSES = ['pending', 'in_progress', 'completed', 'not_required', 'cancelled'];
 
     protected $fillable = ['request_service_id','work_scope_item_id','name_en_snapshot','name_gu_snapshot','is_custom','status','internal_note','customer_remark','resolution_reason','display_order','selected_by','started_at','completed_at','updated_by'];
 

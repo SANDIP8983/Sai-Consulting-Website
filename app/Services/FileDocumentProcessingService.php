@@ -53,6 +53,7 @@ class FileDocumentProcessingService
 
     public function open(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
     {
+        $this->assertLegacyWorkflow($request);
         return DB::transaction(function () use ($request, $attributes, $user): RequestProcessingDetail {
             $locked = CustomerRequest::query()->with('service')->lockForUpdate()->findOrFail($request->id);
             if (! $locked->file_number || ! in_array($locked->status, $this->eligibleRequestStatuses(), true)) {
@@ -79,6 +80,7 @@ class FileDocumentProcessingService
 
     public function transition(CustomerRequest $request, string $to, array $attributes, User $user): RequestProcessingDetail
     {
+        $this->assertLegacyWorkflow($request);
         return DB::transaction(function () use ($request, $to, $attributes, $user): RequestProcessingDetail {
             $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
             $from = $processing->processing_stage;
@@ -115,6 +117,7 @@ class FileDocumentProcessingService
 
     public function storeRegisteredScan(CustomerRequest $request, UploadedFile $file, User $user): RequestProcessingDetail
     {
+        $this->assertLegacyWorkflow($request);
         $path = $file->store("customer-requests/{$request->id}", 'local');
         if ($path === false) { throw new \RuntimeException('The registered document scan could not be stored.'); }
         try {
@@ -143,6 +146,7 @@ class FileDocumentProcessingService
 
     private function updateInformation(CustomerRequest $request, array $attributes, User $user, string $auditRemark, ?string $customerRemarkKey = null): RequestProcessingDetail
     {
+        $this->assertLegacyWorkflow($request);
         return DB::transaction(function () use ($request, $attributes, $user, $auditRemark, $customerRemarkKey): RequestProcessingDetail {
             $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
             $processing->update($attributes);
@@ -201,5 +205,12 @@ class FileDocumentProcessingService
     private function eligibleRequestStatuses(): array
     {
         return ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration'];
+    }
+
+    private function assertLegacyWorkflow(CustomerRequest $request): void
+    {
+        if ($request->usesChecklistWorkflow()) {
+            throw ValidationException::withMessages(['processing' => 'This request uses the Case Planning work-scope checklist. Legacy processing stages are read-only.']);
+        }
     }
 }

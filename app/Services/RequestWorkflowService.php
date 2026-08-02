@@ -324,8 +324,9 @@ class RequestWorkflowService
                 if ($lockedRequest->status === 'approved') {
                     $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
                 }
-                $changes += ['status' => 'payment_received', 'last_status_changed_at' => now()];
-                $this->history($lockedRequest, 'payment_pending', 'payment_received', 'Payment received.', true, $user->id);
+                $targetStatus = $lockedRequest->usesChecklistWorkflow() ? 'payment_pending' : 'payment_received';
+                $changes += ['status' => $targetStatus, 'last_status_changed_at' => now()];
+                $this->history($lockedRequest, 'payment_pending', $targetStatus, 'Payment received.', true, $user->id);
             }
 
             $lockedRequest->update($changes);

@@ -18,8 +18,8 @@ class AdminRequestManagementService
             ->when($filters['source'] ?? null, fn($q,$v) => $q->where('request_origin',$v))
             ->when($filters['status'] ?? null, fn($q,$v) => $q->where('status',$v))
             ->when($filters['processing_state'] ?? null, function($q,$v): void {
-                if($v==='not_started') $q->whereHas('requestServices.workScopes',fn($s)=>$s->where('status','pending'))->whereDoesntHave('requestServices.workScopes',fn($s)=>$s->whereIn('status',['in_progress','completed','cancelled']));
-                if($v==='in_progress') $q->whereHas('requestServices.workScopes',fn($s)=>$s->whereIn('status',['pending','in_progress']))->whereHas('requestServices.workScopes',fn($s)=>$s->whereIn('status',['in_progress','completed','cancelled']));
+                if($v==='not_started') $q->whereHas('requestServices.workScopes',fn($s)=>$s->where('status','pending'))->whereDoesntHave('requestServices.workScopes',fn($s)=>$s->whereIn('status',['in_progress','completed','not_required','cancelled']));
+                if($v==='in_progress') $q->whereHas('requestServices.workScopes',fn($s)=>$s->whereIn('status',['pending','in_progress']))->whereHas('requestServices.workScopes',fn($s)=>$s->whereIn('status',['in_progress','completed','not_required','cancelled']));
                 if($v==='ready') $q->whereHas('requestServices.workScopes')->whereDoesntHave('requestServices.workScopes',fn($s)=>$s->whereIn('status',['pending','in_progress']))->whereNotIn('status',['completed','dispatched','delivered','closed']);
                 if($v==='completed') $q->whereIn('status',['completed','dispatched','delivered','closed']);
             })
@@ -37,7 +37,7 @@ class AdminRequestManagementService
             'requestServices.service',
             'requestServices.decidedBy:id,name',
             'requestServices.approvalHistory' => fn ($q) => $q->with('approvedBy:id,name')->latest(),
-            'requestServices.workScopes',
+            'requestServices.workScopes.updatedBy:id,name',
             'requestServices.service.defaultWorkScopes',
             'billing.charges',
             'billing.appliedBy:id,name',
