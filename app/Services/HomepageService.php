@@ -29,7 +29,7 @@ class HomepageService
                 ['value' => 20, 'suffix' => '+', 'label_gu' => 'વર્ષનો અનુભવ', 'label_en' => 'Years Experience'],
                 ['value' => config('homepage.statistics.documents_prepared'), 'suffix' => '+', 'label_gu' => 'તૈયાર દસ્તાવેજો', 'label_en' => 'Documents Prepared'],
                 ['value' => config('homepage.statistics.happy_clients'), 'suffix' => '+', 'label_gu' => 'સંતુષ્ટ ગ્રાહકો', 'label_en' => 'Happy Clients'],
-                ['value' => $services->count(), 'suffix' => '', 'label_gu' => 'ઉપલબ્ધ સેવાઓ', 'label_en' => 'Services Available'],
+                ['value' => $services->count(), 'suffix' => '+', 'label_gu' => 'વ્યાવસાયિક સેવાઓ', 'label_en' => 'Professional Services'],
             ],
         ];
     }

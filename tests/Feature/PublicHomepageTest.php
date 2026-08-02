@@ -75,6 +75,33 @@ class PublicHomepageTest extends TestCase
             ->assertSee('does not practice as an advocate');
     }
 
+    public function test_homepage_renders_redesigned_customer_journey_and_accessible_branding(): void
+    {
+        foreach (range(1, 13) as $index) {
+            Service::query()->create([
+                'name_en' => "Professional Service {$index}",
+                'name_gu' => "Service {$index}",
+                'slug' => "professional-service-{$index}",
+                'is_active' => true,
+                'available_online' => true,
+            ]);
+        }
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('Trusted Documentation Partner')
+            ->assertSee('Documentation and')
+            ->assertSee('Property Consulting')
+            ->assertSee('Request Service')
+            ->assertSee('Track Request')
+            ->assertSee('Professional Services')
+            ->assertSee('data-count="13"', false)
+            ->assertSee('aria-labelledby="hero-title"', false)
+            ->assertSee('aria-label="Service assurances"', false)
+            ->assertSee(route('request.create'), false)
+            ->assertSee(route('request.track'), false);
+    }
+
     private function setting(string $key, string $value): void
     {
         Setting::query()->create([

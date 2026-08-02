@@ -17,7 +17,7 @@
                     <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#faq">FAQ</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#contact">Contact</a></li>
                 </ul>
-                <a href="{{ route('request.create') }}" class="btn btn-primary rounded-pill px-4 ms-xl-3 mt-3 mt-xl-0">Apply Online</a>
+                <a href="{{ route('request.create') }}" class="btn btn-primary rounded-pill px-4 ms-xl-3 mt-3 mt-xl-0">Request Service</a>
             </div>
         </div>
     </nav>
