@@ -25,7 +25,7 @@ class DispatchManagementService
                 throw ValidationException::withMessages(['dispatch' => 'Dispatch requires a file number and, when configured, received payment.']);
             }
 
-            $allowedWorkflowStatuses = ['ready_for_registration', 'dispatched', 'completed', 'archived'];
+            $allowedWorkflowStatuses = ['ready_for_registration', 'completed', 'dispatched', 'delivered', 'closed', 'archived'];
             if (! in_array($lockedRequest->status, $allowedWorkflowStatuses, true)) {
                 throw ValidationException::withMessages(['dispatch' => 'The request must be ready for registration before dispatch.']);
             }
@@ -41,11 +41,18 @@ class DispatchManagementService
             }
 
             $dispatch = $lockedRequest->dispatches()->create([...$attributes, 'performed_by' => $user->id]);
+            if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->status === 'completed') {
+                $this->workflow->transition($lockedRequest, ['status'=>'dispatched','remarks'=>'Documents dispatched.','is_visible_to_customer'=>true], $user);
+            }
             if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->status === 'ready_for_registration') {
                 $this->workflow->transition($lockedRequest, ['status' => 'dispatched', 'remarks' => 'Request dispatched.', 'is_visible_to_customer' => true], $user);
             }
             if ($attributes['dispatch_status'] === 'dispatched' && $lockedRequest->processing?->processing_stage === 'ready_for_dispatch') {
                 $this->processing->markDispatched($lockedRequest, $user);
+            }
+            if ($attributes['dispatch_status'] === 'delivered' && $lockedRequest->status === 'dispatched') {
+                $this->workflow->transition($lockedRequest, ['status'=>'delivered','remarks'=>'Documents delivered.','is_visible_to_customer'=>true], $user);
+                $this->workflow->transition($lockedRequest->fresh(), ['status'=>'closed','remarks'=>'Case closed after delivery.','is_visible_to_customer'=>true], $user);
             }
 
             return $dispatch;

@@ -4,7 +4,7 @@
 @section('content')
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif @if($errors->any())<div class="alert alert-danger">Please correct the action form errors below.</div>@endif
 <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-4"><div><div class="d-flex flex-wrap gap-2 mb-2">@include('admin.requests.partials.status-badge',['status'=>$customerRequest->status]) @include('admin.requests.partials.payment-badge',['status'=>$customerRequest->payment_status])</div><h1 class="h3 mb-1">{{ $customerRequest->reference_no }}</h1>@if($customerRequest->file_number)<div class="text-primary fw-semibold">File: {{ $customerRequest->file_number }}</div>@endif</div><a href="{{ route('admin.requests.index') }}" class="btn btn-outline-secondary align-self-lg-start">Back to Requests</a></div>
-@unless(in_array($customerRequest->status,['completed','dispatched','archived'],true))
+@unless($customerRequest->usesChecklistWorkflow() || in_array($customerRequest->status,['completed','dispatched','delivered','closed','archived'],true))
 @include('admin.requests.partials.file-summary')
 @include('admin.requests.partials.processing-timeline')
 @include('admin.requests.partials.drafting-management')

@@ -16,9 +16,9 @@ use Illuminate\Validation\ValidationException;
 
 class RequestWorkflowService
 {
-    public const STATUSES = ['received', 'under_review', 'need_documents', 'approved', 'rejected', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
+    public const STATUSES = ['received', 'under_review', 'need_documents', 'approved', 'rejected', 'payment_pending', 'payment_received', 'in_progress', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'completed', 'dispatched', 'delivered', 'closed', 'archived'];
 
-    private const TRANSITIONS = ['received' => ['under_review'], 'under_review' => ['need_documents', 'approved', 'rejected'], 'need_documents' => ['under_review'], 'approved' => ['payment_pending', 'draft_in_progress', 'ready_for_registration', 'completed'], 'rejected' => ['archived'], 'payment_pending' => ['payment_received'], 'payment_received' => ['draft_in_progress', 'ready_for_registration'], 'draft_in_progress' => ['ready_for_verification'], 'ready_for_verification' => ['customer_approved', 'ready_for_registration'], 'customer_approved' => ['ready_for_registration'], 'ready_for_registration' => ['dispatched', 'completed'], 'dispatched' => ['completed'], 'completed' => ['archived'], 'archived' => []];
+    private const TRANSITIONS = ['received'=>['under_review'],'under_review'=>['need_documents','approved','rejected'],'need_documents'=>['under_review'],'approved'=>['payment_pending','in_progress','draft_in_progress','ready_for_registration','completed'],'rejected'=>['archived'],'payment_pending'=>['payment_received','in_progress'],'payment_received'=>['in_progress','draft_in_progress','ready_for_registration'],'in_progress'=>['completed'],'draft_in_progress'=>['ready_for_verification'],'ready_for_verification'=>['customer_approved','ready_for_registration'],'customer_approved'=>['ready_for_registration'],'ready_for_registration'=>['dispatched','completed'],'completed'=>['dispatched'],'dispatched'=>['completed','delivered'],'delivered'=>['closed'],'closed'=>[],'archived'=>[]];
 
     public function __construct(
         private readonly ReferenceNumberService $referenceNumbers,

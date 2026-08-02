@@ -10,7 +10,7 @@ class PublicRequestTrackingService
     public function find(string $trackingNumber, string $mobile): CustomerRequest
     {
         $request = CustomerRequest::query()
-            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'property_village', 'property_taluka', 'property_district', 'survey_numbers', 'khata_number', 'estimated_completion_date', 'last_status_changed_at', 'updated_at'])
+            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'property_village', 'property_taluka', 'property_district', 'survey_numbers', 'khata_number', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'last_status_changed_at', 'updated_at'])
             ->where(fn ($query) => $query->where('reference_no', $trackingNumber)->orWhere('file_number', $trackingNumber))
             ->where('mobile', $mobile)
             ->with([
@@ -18,7 +18,7 @@ class PublicRequestTrackingService
                 'service.activeRequiredDocuments:id,service_id,name_en,name_gu,sort_order,is_mandatory',
                 'requestServices:id,request_id,service_id,service_name_en_snapshot,service_name_gu_snapshot,professional_fee,original_professional_fee,net_professional_fee,gst_rate,gst_amount,government_charges,government_charges_snapshot,final_total,pricing_locked_at,estimated_days,required_documents_snapshot,status,customer_decision_message',
                 'requestServices.service:id,name_en,name_gu',
-                'requestServices.workScopes' => fn ($query) => $query->select(['id', 'request_service_id', 'name_en_snapshot', 'name_gu_snapshot', 'status', 'display_order'])->orderBy('display_order')->orderBy('id'),
+                'requestServices.workScopes' => fn ($query) => $query->select(['id', 'request_service_id', 'name_en_snapshot', 'name_gu_snapshot', 'status', 'customer_remark', 'display_order'])->orderBy('display_order')->orderBy('id'),
                 'billing' => fn ($query) => $query->select(['id', 'request_id', 'total_original_professional_fee', 'discount_amount', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'pricing_locked_at']),
                 'billing.charges' => fn ($query) => $query->select(['id', 'request_billing_id', 'name', 'amount', 'display_order'])->orderBy('display_order')->orderBy('id'),
                 'payments' => fn ($query) => $query

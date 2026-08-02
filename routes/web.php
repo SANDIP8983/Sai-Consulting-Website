@@ -78,6 +78,11 @@ Route::middleware('auth')
     });
 
 Route::middleware('auth')->prefix('admin/requests/{customerRequest}/processing')->name('admin.requests.processing.')->controller(RequestProcessingController::class)->group(function () {
+    Route::patch('/work-items/{workScope}', 'updateWorkItem')->name('work-items.update');
+    Route::patch('/work-items/{workScope}/reopen', 'reopenWorkItem')->name('work-items.reopen');
+    Route::patch('/work-items', 'bulkWorkItems')->name('work-items.bulk');
+    Route::patch('/complete', 'completeCase')->name('complete');
+    Route::patch('/reopen', 'reopenCase')->name('reopen');
     Route::post('/open', 'open')->name('open');
     Route::patch('/file', 'updateFile')->name('file.update');
     Route::patch('/drafting', 'updateDrafting')->name('drafting.update');

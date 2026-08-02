@@ -8,16 +8,33 @@ use App\Http\Requests\Admin\TransitionRequestProcessingStageRequest;
 use App\Http\Requests\Admin\UpdateRequestDraftingRequest;
 use App\Http\Requests\Admin\UpdateRequestFileInformationRequest;
 use App\Http\Requests\Admin\UpdateRequestRegistrationRequest;
+use App\Http\Requests\Admin\UpdateProcessingWorkItemRequest;
+use App\Http\Requests\Admin\BulkProcessingWorkItemRequest;
+use App\Http\Requests\Admin\CompleteProcessingCaseRequest;
+use App\Http\Requests\Admin\ReopenProcessingRequest;
 use App\Http\Requests\Admin\UpdateRequestPostRegistrationRequest;
 use App\Http\Requests\Admin\StoreRegisteredDocumentScanRequest;
 use App\Models\CustomerRequest;
+use App\Models\RequestServiceWorkScope;
 use App\Services\FileDocumentProcessingService;
+use App\Services\ProcessingChecklistService;
 use App\Services\RequestWorkflowService;
 use Illuminate\Http\RedirectResponse;
 
 class RequestProcessingController extends Controller
 {
-    public function __construct(private readonly FileDocumentProcessingService $processing, private readonly RequestWorkflowService $workflow) {}
+    public function __construct(private readonly FileDocumentProcessingService $processing, private readonly RequestWorkflowService $workflow, private readonly ProcessingChecklistService $checklist) {}
+
+    public function updateWorkItem(UpdateProcessingWorkItemRequest $request, CustomerRequest $customerRequest, RequestServiceWorkScope $workScope): RedirectResponse
+    { $this->checklist->update($customerRequest, $workScope, $request->validated(), $request->user()); return back()->with('success', 'Work item updated.'); }
+    public function reopenWorkItem(ReopenProcessingRequest $request, CustomerRequest $customerRequest, RequestServiceWorkScope $workScope): RedirectResponse
+    { $this->checklist->reopenItem($customerRequest, $workScope, $request->validated('reason'), $request->user()); return back()->with('success', 'Work item reopened with an audit record.'); }
+    public function bulkWorkItems(BulkProcessingWorkItemRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    { $this->checklist->bulk($customerRequest, $request->validated(), $request->user()); return back()->with('success', 'Bulk work-item action completed.'); }
+    public function completeCase(CompleteProcessingCaseRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    { $this->checklist->complete($customerRequest, $request->validated(), $request->user()); return back()->with('success', 'Case processing completed. Dispatch / Delivery is now available.'); }
+    public function reopenCase(ReopenProcessingRequest $request, CustomerRequest $customerRequest): RedirectResponse
+    { $this->checklist->reopenCase($customerRequest, $request->validated('reason'), $request->user()); return back()->with('success', 'Case reopened with an audit record.'); }
 
     public function open(OpenRequestFileRequest $request, CustomerRequest $customerRequest): RedirectResponse
     {

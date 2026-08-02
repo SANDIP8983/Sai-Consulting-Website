@@ -11,9 +11,10 @@
         'other' => 'Other',
     ];
     $latestDispatch = $customerRequest->dispatches->first();
+    $paymentSatisfied = !($customerRequest->processing?->requires_payment_before_processing ?? $customerRequest->service->requires_payment_before_processing) || $customerRequest->payment_status === 'received';
     $dispatchEligible = $customerRequest->file_number
-        && $customerRequest->payment_status === 'received'
-        && in_array($customerRequest->status, ['ready_for_registration', 'dispatched', 'completed', 'archived'], true)
+        && $paymentSatisfied
+        && in_array($customerRequest->status, ['ready_for_registration', 'completed', 'dispatched'], true)
         && (!$customerRequest->processing || in_array($customerRequest->processing->processing_stage, ['ready_for_dispatch','dispatched','completed'], true));
 @endphp
 
@@ -82,7 +83,7 @@
             </form>
         @else
             <div class="alert alert-light border mb-0">
-                Dispatch becomes available when payment is received and the approved request is ready for registration.
+                Dispatch becomes available after case processing is Completed and applicable payment requirements are satisfied.
             </div>
         @endif
     </div>

@@ -29,6 +29,7 @@ use App\Services\CasePlanningService;
 use App\Services\DispatchManagementService;
 use App\Services\FileDocumentProcessingService;
 use App\Services\RequestWorkflowService;
+use App\Services\ProcessingChecklistService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -39,6 +40,7 @@ class CustomerRequestController extends Controller
         private readonly RequestWorkflowService $workflow,
         private readonly DispatchManagementService $dispatchManagement,
         private readonly CasePlanningService $casePlanning,
+        private readonly ProcessingChecklistService $checklist,
     ) {}
 
     public function index(FilterCustomerRequestsRequest $request): View
@@ -82,6 +84,7 @@ class CustomerRequestController extends Controller
             'fileInChargeUsers' => User::query()->orderBy('name')->get(['id', 'name']),
             'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->orderBy('name_en')->get(),
             'availableServices' => Service::query()->where('is_active', true)->whereNotIn('id', $customerRequest->requestServices->pluck('service_id'))->orderBy('name_en')->get(['id', 'name_en', 'name_gu']),
+            'processingEligibility' => $this->checklist->eligibility($customerRequest),
         ]);
     }
 
@@ -122,6 +125,9 @@ class CustomerRequestController extends Controller
 
     public function completePlanned(CompletePlannedRequestRequest $request, CustomerRequest $customerRequest): RedirectResponse
     {
+        if ($customerRequest->usesChecklistWorkflow()) {
+            return back()->withErrors(['case' => 'Use Complete Case in Processing & Work Checklist.']);
+        }
         $this->casePlanning->complete($customerRequest, $request->validated('remarks'), $request->user());
 
         return back()->with('success', 'Case marked completed. Only dispatch and delivery controls remain available.');
@@ -129,7 +135,11 @@ class CustomerRequestController extends Controller
 
     public function updateWorkScope(UpdateWorkScopeStatusRequest $request, CustomerRequest $customerRequest, RequestServiceWorkScope $workScope): RedirectResponse
     {
-        $this->casePlanning->updateScope($customerRequest, $workScope, $request->validated());
+        if ($customerRequest->usesChecklistWorkflow()) {
+            $this->checklist->update($customerRequest, $workScope, $request->validated(), $request->user());
+        } else {
+            $this->casePlanning->updateScope($customerRequest, $workScope, $request->validated());
+        }
 
         return back()->with('success', 'Work-scope progress updated.');
     }
