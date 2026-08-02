@@ -70,7 +70,7 @@ class AdminRequestPresentationService
     private function billing(CustomerRequest $request): array
     {
         $billing = $request->billing;
-        $professionalFee = (float) ($billing?->total_original_professional_fee ?? $request->requestServices->where('status', 'approved')->sum('professional_fee'));
+        $professionalFee = (float) ($billing?->total_original_professional_fee ?? $request->requestServices->where('status', 'approved')->sum(fn ($service) => $service->billingProfessionalFee()));
         $discount = (float) ($billing?->discount_amount ?? 0);
         $gst = (float) ($billing?->gst_amount ?? 0);
         $government = (float) ($billing?->government_charges_total ?? 0);

@@ -14,6 +14,11 @@ class RequestService extends Model
         return ['professional_fee' => 'decimal:2', 'original_professional_fee' => 'decimal:2', 'discount_value' => 'decimal:2', 'discount_amount' => 'decimal:2', 'net_professional_fee' => 'decimal:2', 'gst_rate' => 'decimal:2', 'gst_amount' => 'decimal:2', 'government_charges' => 'decimal:2', 'government_charges_snapshot' => 'array', 'final_total' => 'decimal:2', 'pricing_locked_at' => 'datetime', 'pricing_unlocked_at' => 'datetime', 'estimated_days' => 'integer', 'required_documents_snapshot' => 'array', 'approved_at' => 'datetime', 'rejected_at' => 'datetime', 'decided_at' => 'datetime'];
     }
 
+    public function billingProfessionalFee(): float
+    {
+        return (float) ($this->original_professional_fee ?? $this->professional_fee ?? 0);
+    }
+
     public function request(): BelongsTo
     {
         return $this->belongsTo(CustomerRequest::class, 'request_id');

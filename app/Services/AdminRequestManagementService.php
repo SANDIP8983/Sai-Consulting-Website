@@ -100,6 +100,9 @@ class AdminRequestManagementService
             if (! $lockedRequest->file_number || ! in_array($lockedRequest->status, $eligibleStatuses, true)) {
                 throw ValidationException::withMessages(['final_fee' => 'Final fee can only be set after approval and file-number assignment.']);
             }
+            if ($lockedRequest->billing()->exists()) {
+                throw ValidationException::withMessages(['final_fee' => 'This request has a billing snapshot. Update its billing summary instead of changing the payment amount.']);
+            }
             if ($lockedRequest->billing()->whereNotNull('pricing_locked_at')->whereNull('pricing_unlocked_at')->exists() || $lockedRequest->requestServices()->whereNotNull('pricing_locked_at')->exists()) {
                 throw ValidationException::withMessages(['final_fee' => 'Finalized pricing must be changed per service using the explicit Unlock action.']);
             }

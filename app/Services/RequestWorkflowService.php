@@ -18,7 +18,7 @@ class RequestWorkflowService
 {
     public const STATUSES = ['received', 'under_review', 'need_documents', 'approved', 'rejected', 'payment_pending', 'payment_received', 'in_progress', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'completed', 'dispatched', 'delivered', 'closed', 'archived'];
 
-    private const TRANSITIONS = ['received'=>['under_review'],'under_review'=>['need_documents','approved','rejected'],'need_documents'=>['under_review'],'approved'=>['payment_pending','in_progress','draft_in_progress','ready_for_registration','completed'],'rejected'=>['archived'],'payment_pending'=>['payment_received','in_progress'],'payment_received'=>['in_progress','draft_in_progress','ready_for_registration'],'in_progress'=>['completed'],'draft_in_progress'=>['ready_for_verification'],'ready_for_verification'=>['customer_approved','ready_for_registration'],'customer_approved'=>['ready_for_registration'],'ready_for_registration'=>['dispatched','completed'],'completed'=>['dispatched'],'dispatched'=>['completed','delivered'],'delivered'=>['closed'],'closed'=>[],'archived'=>[]];
+    private const TRANSITIONS = ['received' => ['under_review'], 'under_review' => ['need_documents', 'approved', 'rejected'], 'need_documents' => ['under_review'], 'approved' => ['payment_pending', 'in_progress', 'draft_in_progress', 'ready_for_registration', 'completed'], 'rejected' => ['archived'], 'payment_pending' => ['payment_received', 'in_progress'], 'payment_received' => ['in_progress', 'draft_in_progress', 'ready_for_registration'], 'in_progress' => ['completed'], 'draft_in_progress' => ['ready_for_verification'], 'ready_for_verification' => ['customer_approved', 'ready_for_registration'], 'customer_approved' => ['ready_for_registration'], 'ready_for_registration' => ['dispatched', 'completed'], 'completed' => ['dispatched'], 'dispatched' => ['completed', 'delivered'], 'delivered' => ['closed'], 'closed' => [], 'archived' => []];
 
     public function __construct(
         private readonly ReferenceNumberService $referenceNumbers,
@@ -180,7 +180,9 @@ class RequestWorkflowService
         DB::transaction(function () use ($request, $requestService, $attributes, $user): void {
             $decision = $attributes['decision'];
             $lockedRequest = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
-            if (in_array($lockedRequest->status, ['closed', 'archived'], true)) throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing and service decisions.']);
+            if (in_array($lockedRequest->status, ['closed', 'archived'], true)) {
+                throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing and service decisions.']);
+            }
             if ($lockedRequest->billing?->isLocked()) {
                 throw ValidationException::withMessages(['pricing' => 'Request pricing is frozen. Use the audited Unlock Pricing action before changing service decisions.']);
             }
@@ -203,7 +205,9 @@ class RequestWorkflowService
     {
         DB::transaction(function () use ($request, $attributes, $user): void {
             $lockedRequest = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
-            if (in_array($lockedRequest->status, ['closed', 'archived'], true)) throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing.']);
+            if (in_array($lockedRequest->status, ['closed', 'archived'], true)) {
+                throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing.']);
+            }
             if (! $lockedRequest->billing && ($lockedRequest->payment_status === 'received' || $lockedRequest->requestServices()->whereNotNull('pricing_locked_at')->exists())) {
                 throw ValidationException::withMessages(['pricing' => 'Historical paid or frozen pricing is preserved and cannot be converted automatically.']);
             }
@@ -224,7 +228,7 @@ class RequestWorkflowService
                 throw ValidationException::withMessages(['pricing' => 'Request pricing is locked. Use the audited Unlock Pricing action before changing it.']);
             }
 
-            $original = round((float) $services->sum('professional_fee'), 2);
+            $original = round((float) $services->sum(fn (RequestService $service): float => $service->billingProfessionalFee()), 2);
             $type = $attributes['discount_type'];
             $value = round((float) $attributes['discount_value'], 2);
             if ($type === 'percentage' && $value > 100) {
@@ -272,7 +276,9 @@ class RequestWorkflowService
     public function unlockRequestBilling(CustomerRequest $request, string $reason, User $user): void
     {
         DB::transaction(function () use ($request, $reason, $user): void {
-            if (in_array($request->status, ['closed', 'archived'], true)) throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing.']);
+            if (in_array($request->status, ['closed', 'archived'], true)) {
+                throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing.']);
+            }
             $billing = $request->billing()->with('charges')->lockForUpdate()->first();
             if (! $billing || ! $billing->isLocked()) {
                 throw ValidationException::withMessages(['pricing' => 'Request pricing is not currently locked.']);
@@ -296,10 +302,21 @@ class RequestWorkflowService
     public function recordPayment(CustomerRequest $request, array $attributes, User $user): void
     {
         DB::transaction(function () use ($request, $attributes, $user): void {
-            $lockedRequest = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
+            $lockedRequest = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
             $eligibleStatuses = ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
             if (! $lockedRequest->file_number || ! in_array($lockedRequest->status, $eligibleStatuses, true)) {
                 throw ValidationException::withMessages(['payment' => 'Payment can only be recorded after approval and file-number assignment.']);
+            }
+
+            $acceptedServiceFee = (float) $lockedRequest->requestServices()
+                ->where('status', 'approved')
+                ->get()
+                ->sum(fn (RequestService $service): float => $service->billingProfessionalFee());
+            $payableAmount = (float) ($lockedRequest->billing?->grand_total ?? $lockedRequest->amount_due);
+            if ($acceptedServiceFee > 0 && $payableAmount <= 0) {
+                throw ValidationException::withMessages([
+                    'payment' => 'Payment cannot be recorded because the frozen billing Grand Total is zero while an accepted service has a professional fee. Approve and freeze the request billing again.',
+                ]);
             }
 
             if (! in_array($attributes['payment_status'], ['pending', 'received', 'failed', 'refunded'], true)) {

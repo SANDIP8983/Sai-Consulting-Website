@@ -1,6 +1,7 @@
 @php
     $billing = $customerRequest->billing;
     $approvedServices = $customerRequest->requestServices->where('status', 'approved');
+    $totalProfessionalFee = $approvedServices->sum(fn ($service) => $service->billingProfessionalFee());
     $allDecided = $customerRequest->requestServices->every(fn ($item) => in_array($item->status, ['approved', 'rejected', 'under_review'], true) && ($customerRequest->case_planning_version === 0 || $item->decided_at));
     $rates = $approvedServices->pluck('gst_rate')->map(fn ($rate) => (string) $rate)->unique()->values();
     $defaultGstRate = old('gst_rate', $billing?->gst_rate ?? ($rates->count() === 1 ? $rates->first() : ($rates->first() ?? 0)));
@@ -14,16 +15,16 @@
         <h2 class="h6">Selected Services</h2>
         <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Service</th><th class="text-end">Original Professional Fee</th><th class="text-end">GST Snapshot</th><th>Decision</th></tr></thead><tbody>
         @foreach($customerRequest->requestServices as $item)
-            <tr><td><strong>{{ $item->service_name_en_snapshot ?: $item->service?->name_en }}</strong><div class="small text-muted">{{ $item->service_name_gu_snapshot ?: $item->service?->name_gu }} · {{ $item->estimated_days ?: '—' }} day(s)</div></td><td class="text-end">₹{{ number_format((float)$item->professional_fee, 2) }}</td><td class="text-end">{{ number_format((float)$item->gst_rate, 2) }}%</td><td style="min-width:240px">@include('admin.requests.partials.status-badge',['status'=>$item->status])
+            <tr><td><strong>{{ $item->service_name_en_snapshot ?: $item->service?->name_en }}</strong><div class="small text-muted">{{ $item->service_name_gu_snapshot ?: $item->service?->name_gu }} · {{ $item->estimated_days ?: '—' }} day(s)</div></td><td class="text-end">₹{{ number_format($item->billingProfessionalFee(), 2) }}</td><td class="text-end">{{ number_format((float)$item->gst_rate, 2) }}%</td><td style="min-width:240px">@include('admin.requests.partials.status-badge',['status'=>$item->status])
             @unless($billing?->isLocked())<form method="POST" action="{{ route('admin.requests.services.decision', [$customerRequest, $item]) }}" class="d-flex gap-2 mt-2">@csrf @method('PATCH')<input name="decision_notes" class="form-control form-control-sm" placeholder="Optional decision note" value="{{ $item->decision_notes }}"><button name="decision" value="approved" class="btn btn-sm btn-outline-success">Approve</button><button name="decision" value="rejected" class="btn btn-sm btn-outline-danger">Reject</button></form>@endunless</td></tr>
         @endforeach
         </tbody></table></div>
 
         <hr class="my-4"><h2 class="h5">Request Billing Summary</h2>
         @if($rates->count() > 1)<div class="alert alert-warning py-2">Approved services have different GST snapshots ({{ $rates->implode('%, ') }}%). Confirm the request GST rate before freezing.</div>@endif
-        <form method="POST" action="{{ route('admin.requests.billing.finalize', $customerRequest) }}" id="request-billing-form" data-original="{{ $approvedServices->sum('professional_fee') }}">@csrf @method('PATCH')
+        <form method="POST" action="{{ route('admin.requests.billing.finalize', $customerRequest) }}" id="request-billing-form" data-original="{{ $totalProfessionalFee }}">@csrf @method('PATCH')
             <div class="row g-3">
-                <div class="col-md-3"><label class="form-label">Total Professional Fee</label><input class="form-control" value="₹{{ number_format((float)$approvedServices->sum('professional_fee'),2) }}" disabled></div>
+                <div class="col-md-3"><label class="form-label">Total Professional Fee</label><input class="form-control" value="₹{{ number_format((float)$totalProfessionalFee,2) }}" disabled></div>
                 <div class="col-md-3"><label class="form-label">Discount Type</label><select name="discount_type" class="form-select" @disabled($billing?->isLocked())>@foreach(['none'=>'None','fixed'=>'Fixed Amount','percentage'=>'Percentage'] as $value=>$label)<option value="{{ $value }}" @selected(old('discount_type',$billing?->discount_type ?? 'none')===$value)>{{ $label }}</option>@endforeach</select></div>
                 <div class="col-md-3"><label class="form-label">Discount Value</label><input name="discount_value" type="number" min="0" step="0.01" value="{{ old('discount_value',$billing?->discount_value ?? 0) }}" class="form-control" @disabled($billing?->isLocked())></div>
                 <div class="col-md-3"><label class="form-label">GST Rate (%)</label><input name="gst_rate" type="number" min="0" max="100" step="0.01" value="{{ $defaultGstRate }}" class="form-control" required @disabled($billing?->isLocked())></div>
