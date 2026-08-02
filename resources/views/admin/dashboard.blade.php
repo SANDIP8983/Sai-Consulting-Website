@@ -13,7 +13,7 @@
             <h1 class="h2 mb-1">Dashboard</h1>
             <p class="text-muted mb-0">Overview of your administration workspace.</p>
         </div>
-        <a class="btn btn-primary mt-3 mt-md-0" href="{{ route('admin.settings.website') }}">Manage Settings</a>
+        <a class="btn btn-primary mt-3 mt-md-0" href="{{ route('admin.settings.company-branding') }}">Manage Settings</a>
     </div>
     <div class="row g-4 mt-1">
         <div class="col-sm-6"><a href="{{ route('admin.requests.index', ['source' => 'online']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Online Requests</p><p class="display-6 fw-semibold text-primary mb-0">{{ $summary['online_requests'] }}</p></div></a></div>

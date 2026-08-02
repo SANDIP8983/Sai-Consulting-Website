@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\RequestProcessingController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\ServiceRequiredDocumentController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\CustomerRequestController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PublicRequestPdfController;
@@ -40,6 +41,8 @@ Route::post('/request/track', [CustomerRequestController::class, 'lookup'])
 Route::get('/request/track/{customerRequest}/pdf/{documentType}', PublicRequestPdfController::class)
     ->middleware('throttle:10,1')
     ->name('request.track.pdf');
+
+Route::get('/branding/{asset}', [BrandingAssetController::class, 'publicAsset'])->name('branding.asset');
 
 Route::get('/admin', fn () => auth()->check()
     ? to_route('admin.dashboard')
@@ -83,6 +86,8 @@ Route::middleware('auth')
         Route::get('/{customerRequest}/documents/{document}', RequestDocumentController::class)->name('documents.download');
         Route::get('/{customerRequest}/pdf/{documentType}', RequestPdfController::class)->name('pdf.download');
     });
+
+Route::middleware('auth')->get('/admin/settings/branding/{asset}', [BrandingAssetController::class, 'privateAsset'])->name('admin.settings.branding.asset');
 
 Route::middleware('auth')->prefix('admin/requests/{customerRequest}/dispatches')->name('admin.requests.dispatches.')->controller(RequestDispatchController::class)->group(function () {
     Route::post('/', 'store')->name('store');
@@ -140,6 +145,8 @@ Route::middleware('auth')
     ->name('admin.settings.')
     ->controller(SettingsController::class)
     ->group(function () {
+        Route::get('/', 'companyBranding')->name('company-branding');
+        Route::put('/', 'updateCompanyBranding')->name('company-branding.update');
         Route::get('/website', 'website')->name('website');
         Route::put('/website', 'updateWebsite')->name('website.update');
         Route::get('/office', 'office')->name('office');

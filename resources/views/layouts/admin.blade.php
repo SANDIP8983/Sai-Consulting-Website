@@ -46,6 +46,7 @@
                         </button>
                         <div id="settingsMenu" class="collapse {{ request()->routeIs('admin.settings.*') ? 'show' : '' }}">
                             <div class="nav flex-column ms-3 mt-1 gap-1">
+                                <a class="nav-link {{ request()->routeIs('admin.settings.company-branding*') ? 'active' : '' }}" href="{{ route('admin.settings.company-branding') }}">Company &amp; Branding</a>
                                 <a class="nav-link {{ request()->routeIs('admin.settings.website*') ? 'active' : '' }}" href="{{ route('admin.settings.website') }}">Website</a>
                                 <a class="nav-link {{ request()->routeIs('admin.settings.office*') ? 'active' : '' }}" href="{{ route('admin.settings.office') }}">Office</a>
                                 <a class="nav-link {{ request()->routeIs('admin.settings.contact*') ? 'active' : '' }}" href="{{ route('admin.settings.contact') }}">Contact</a>

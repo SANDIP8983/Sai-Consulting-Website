@@ -5,11 +5,26 @@ namespace App\Services;
 use App\Models\Holiday;
 use App\Models\OfficeTiming;
 use App\Models\Setting;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class SettingsService
 {
+    private const CACHE_PREFIX = 'settings.group.';
+
+    /** @return array<string, string|null> */
+    public function companyBrandingSettings(): array
+    {
+        return $this->settingsForGroup('company_branding');
+    }
+
+    /** @param array<string, string|null> $values */
+    public function updateCompanyBrandingSettings(array $values): void
+    {
+        $this->updateGroup('company_branding', $values);
+    }
+
     /**
      * Return a form-friendly value array for a configuration group.
      *
@@ -37,7 +52,7 @@ class SettingsService
     }
 
     /**
-     * @param array<string, string|null> $values
+     * @param  array<string, string|null>  $values
      */
     public function updateWebsiteSettings(array $values): void
     {
@@ -45,7 +60,7 @@ class SettingsService
     }
 
     /**
-     * @param array<string, string|null> $values
+     * @param  array<string, string|null>  $values
      */
     public function updateOfficeSettings(array $values): void
     {
@@ -53,7 +68,7 @@ class SettingsService
     }
 
     /**
-     * @param array<string, string|null> $values
+     * @param  array<string, string|null>  $values
      */
     public function updateContactSettings(array $values): void
     {
@@ -87,7 +102,7 @@ class SettingsService
     }
 
     /**
-     * @param array<int, array{day_of_week: int, opens_at: string|null, closes_at: string|null, is_closed: bool, notes: string|null}> $timings
+     * @param  array<int, array{day_of_week: int, opens_at: string|null, closes_at: string|null, is_closed: bool, notes: string|null}>  $timings
      */
     public function updateOfficeTimings(array $timings): void
     {
@@ -117,7 +132,7 @@ class SettingsService
     }
 
     /**
-     * @param array<string, mixed> $attributes
+     * @param  array<string, mixed>  $attributes
      */
     public function createHoliday(array $attributes): Holiday
     {
@@ -125,7 +140,7 @@ class SettingsService
     }
 
     /**
-     * @param array<string, mixed> $attributes
+     * @param  array<string, mixed>  $attributes
      */
     public function updateHoliday(Holiday $holiday, array $attributes): void
     {
@@ -143,9 +158,9 @@ class SettingsService
     private function settingsForGroup(string $group): array
     {
         $definitions = $this->definitionsForGroup($group);
-        $storedValues = Setting::query()
-            ->where('setting_group', $group)
-            ->pluck('setting_value', 'setting_key');
+        $storedValues = Cache::rememberForever(self::CACHE_PREFIX.$group, fn () => Setting::query()
+            ->whereIn('setting_key', collect($definitions)->pluck('key'))
+            ->pluck('setting_value', 'setting_key'));
 
         $values = [];
 
@@ -157,7 +172,7 @@ class SettingsService
     }
 
     /**
-     * @param array<string, string|null> $values
+     * @param  array<string, string|null>  $values
      */
     private function updateGroup(string $group, array $values): void
     {
@@ -176,6 +191,9 @@ class SettingsService
                 );
             }
         });
+        foreach (['company_branding', 'website', 'office', 'contact'] as $cachedGroup) {
+            Cache::forget(self::CACHE_PREFIX.$cachedGroup);
+        }
     }
 
     /**
@@ -184,6 +202,22 @@ class SettingsService
     private function definitionsForGroup(string $group): array
     {
         return match ($group) {
+            'company_branding' => [
+                'business_name' => ['key' => 'website.name', 'type' => 'string', 'is_public' => true],
+                'tagline' => ['key' => 'business.tagline', 'type' => 'string', 'is_public' => true],
+                'address' => ['key' => 'office.address_line_1', 'type' => 'string', 'is_public' => true],
+                'mobile' => ['key' => 'contact.phone', 'type' => 'string', 'is_public' => false],
+                'whatsapp' => ['key' => 'contact.whatsapp_number', 'type' => 'string', 'is_public' => true],
+                'email' => ['key' => 'contact.email', 'type' => 'string', 'is_public' => true],
+                'website_url' => ['key' => 'business.website_url', 'type' => 'string', 'is_public' => true],
+                'gstin' => ['key' => 'business.gstin', 'type' => 'string', 'is_public' => false],
+                'primary_logo_path' => ['key' => 'branding.primary_logo_path', 'type' => 'string', 'is_public' => false],
+                'dark_logo_path' => ['key' => 'branding.dark_logo_path', 'type' => 'string', 'is_public' => false],
+                'favicon_path' => ['key' => 'branding.favicon_path', 'type' => 'string', 'is_public' => false],
+                'pdf_logo_path' => ['key' => 'branding.pdf_logo_path', 'type' => 'string', 'is_public' => false],
+                'stamp_path' => ['key' => 'branding.stamp_path', 'type' => 'string', 'is_public' => false],
+                'signature_path' => ['key' => 'branding.signature_path', 'type' => 'string', 'is_public' => false],
+            ],
             'website' => [
                 'website_name' => ['key' => 'website.name', 'type' => 'string', 'is_public' => true],
                 'website_status' => ['key' => 'website.status', 'type' => 'string', 'is_public' => true],

@@ -21,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        View::composer(['partials.header', 'partials.footer'], function ($view): void {
+        View::composer(['layouts.app', 'partials.header', 'partials.footer'], function ($view): void {
             $view->with('site', app(HomepageService::class)->publicSiteData());
         });
     }

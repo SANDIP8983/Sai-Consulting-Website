@@ -6,5 +6,6 @@ body{font-family:notosansgujarati,sans-serif;font-size:10pt;line-height:1.45;col
 <sethtmlpageheader name="document-header" value="on" show-this-page="1"/><sethtmlpagefooter name="document-footer" value="on" show-this-page="1"/>
 <h1 class="document-title">{{ $document->type->title() }}</h1><p class="document-subtitle">{{ $document->referenceNumber }}@if($document->fileNumber) &nbsp; | &nbsp; File: {{ $document->fileNumber }}@endif</p>
 @yield('pdf-content')
+@if($document->company['signature'] || $document->company['stamp'])<table style="width:100%;margin-top:8mm"><tr><td style="width:50%;text-align:center">@if($document->company['signature'])<img src="{{ $document->company['signature'] }}" style="max-width:42mm;max-height:20mm"><div style="font-size:8pt;color:#667085">Authorized Signature</div>@endif</td><td style="width:50%;text-align:center">@if($document->company['stamp'])<img src="{{ $document->company['stamp'] }}" style="max-width:32mm;max-height:24mm"><div style="font-size:8pt;color:#667085">Company Stamp</div>@endif</td></tr></table>@endif
 @if($document->showSignaturePlaceholder || $document->showQrPlaceholder)<div class="placeholder-row">@if($document->showSignaturePlaceholder)<div class="placeholder">Digital Signature</div>@endif @if($document->showQrPlaceholder)<div class="placeholder">QR Code</div>@endif</div>@endif
 </body></html>

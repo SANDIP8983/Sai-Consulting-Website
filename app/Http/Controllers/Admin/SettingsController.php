@@ -4,27 +4,45 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreHolidayRequest;
+use App\Http\Requests\Admin\UpdateCompanyBrandingRequest;
 use App\Http\Requests\Admin\UpdateContactSettingsRequest;
 use App\Http\Requests\Admin\UpdateHolidayRequest;
 use App\Http\Requests\Admin\UpdateOfficeSettingsRequest;
 use App\Http\Requests\Admin\UpdateOfficeTimingsRequest;
 use App\Http\Requests\Admin\UpdateWebsiteSettingsRequest;
 use App\Models\Holiday;
+use App\Services\BrandingAssetService;
 use App\Services\SettingsService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
 class SettingsController extends Controller
 {
-    public function __construct(private readonly SettingsService $settingsService)
-    {
-    }
+    public function __construct(private readonly SettingsService $settingsService) {}
 
     public function website(): View
     {
         return view('admin.settings.website', [
             'settings' => $this->settingsService->websiteSettings(),
         ]);
+    }
+
+    public function companyBranding(): View
+    {
+        return view('admin.settings.company-branding', [
+            'settings' => $this->settingsService->companyBrandingSettings(),
+        ]);
+    }
+
+    public function updateCompanyBranding(UpdateCompanyBrandingRequest $request, BrandingAssetService $assets): RedirectResponse
+    {
+        $current = $this->settingsService->companyBrandingSettings();
+        $validated = $request->validated();
+        $textFields = ['business_name', 'tagline', 'address', 'mobile', 'whatsapp', 'email', 'website_url', 'gstin'];
+        $values = array_merge($current, array_intersect_key($validated, array_flip($textFields)), $assets->updatedPaths($validated, $current));
+        $this->settingsService->updateCompanyBrandingSettings($values);
+
+        return to_route('admin.settings.company-branding')->with('success', 'Company information and branding updated successfully.');
     }
 
     public function updateWebsite(UpdateWebsiteSettingsRequest $request): RedirectResponse

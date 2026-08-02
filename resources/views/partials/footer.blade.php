@@ -2,7 +2,7 @@
     <div class="container">
         <div class="row g-5 footer-main">
             <div class="col-lg-4">
-                <a class="footer-brand d-flex align-items-center gap-2" href="{{ route('home') }}"><span class="brand-mark">SC</span><span><strong id="footer-title">{{ $site['businessName'] }}</strong><small>Documentation & Consulting</small></span></a>
+                <a class="footer-brand d-flex align-items-center gap-2" href="{{ route('home') }}">@if($site['darkLogoUrl'])<img src="{{ $site['darkLogoUrl'] }}" alt="{{ $site['businessName'] }} logo" style="max-height:48px;max-width:160px">@else<span class="brand-mark">SC</span>@endif<span><strong id="footer-title">{{ $site['businessName'] }}</strong><small>{{ $site['tagline'] }}</small></span></a>
                 <p class="footer-summary mt-4">વિશ્વાસપાત્ર દસ્તાવેજ ડ્રાફ્ટિંગ, મિલકત દસ્તાવેજ માર્ગદર્શન અને કન્સલ્ટિંગ સેવા.</p>
                 <div class="footer-contact-grid mt-4">
                     @if($site['email'])<a class="footer-contact-card" href="mailto:{{ $site['email'] }}"><span class="footer-contact-icon"><x-public-icon name="mail" size="20" /></span><span><small>Email</small><strong>{{ $site['email'] }}</strong></span></a>@endif

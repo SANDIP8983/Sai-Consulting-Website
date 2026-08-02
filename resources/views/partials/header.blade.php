@@ -3,8 +3,8 @@
     <nav class="navbar navbar-expand-xl navbar-light site-navbar sticky-top" aria-label="Main navigation">
         <div class="container">
             <a class="navbar-brand d-flex align-items-center gap-2" href="{{ route('home') }}" aria-label="Sai Consulting home">
-                <span class="brand-mark">SC</span>
-                <span><strong>{{ $site['businessName'] }}</strong><small>Documentation & Consulting</small></span>
+                @if($site['primaryLogoUrl'])<img src="{{ $site['primaryLogoUrl'] }}" alt="{{ $site['businessName'] }} logo" style="max-height:42px;max-width:150px">@else<span class="brand-mark">SC</span>@endif
+                <span><strong>{{ $site['businessName'] }}</strong><small>{{ $site['tagline'] }}</small></span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu" aria-controls="mainMenu" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="mainMenu">

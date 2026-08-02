@@ -40,6 +40,7 @@ class HomepageService
         $settings = Setting::query()
             ->where('is_public', true)
             ->pluck('setting_value', 'setting_key');
+        $branding = Setting::query()->whereIn('setting_key', ['branding.primary_logo_path', 'branding.dark_logo_path', 'branding.favicon_path'])->pluck('setting_value', 'setting_key');
         $timezone = Setting::query()->where('setting_key', 'office.timezone')->value('setting_value') ?: config('app.timezone');
         $now = CarbonImmutable::now($timezone);
         $timings = OfficeTiming::query()->orderBy('day_of_week')->get();
@@ -47,6 +48,7 @@ class HomepageService
 
         return [
             'businessName' => $settings->get('website.name') ?: 'Sai Consulting',
+            'tagline' => $settings->get('business.tagline') ?: 'Documentation & Consulting',
             'email' => $settings->get('contact.email') ?: null,
             'whatsappUrl' => $this->whatsappUrl($settings->get('contact.whatsapp_number')),
             'whatsappNumber' => $this->whatsappNumber($settings->get('contact.whatsapp_number')),
@@ -54,6 +56,9 @@ class HomepageService
             'timings' => $timings,
             'workingHoursLabel' => $this->workingHoursLabel($timings),
             'holidayNotice' => $this->holidayNotice($now, $holidays),
+            'primaryLogoUrl' => $branding->get('branding.primary_logo_path') ? route('branding.asset', 'primary-logo') : null,
+            'darkLogoUrl' => $branding->get('branding.dark_logo_path') ? route('branding.asset', 'dark-logo') : null,
+            'faviconUrl' => $branding->get('branding.favicon_path') ? route('branding.asset', 'favicon') : null,
         ];
     }
 
