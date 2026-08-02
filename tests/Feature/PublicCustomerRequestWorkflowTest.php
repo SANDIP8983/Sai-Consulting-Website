@@ -240,6 +240,52 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             ->assertSessionHasErrors('reference_no');
     }
 
+    public function test_tracking_shows_progress_without_exposing_internal_checklist_items(): void
+    {
+        $request = $this->createTrackedRequest();
+        $selected = $request->requestServices()->create(['service_id' => $request->service_id, 'service_name_en_snapshot' => 'Title Search', 'professional_fee' => 1000, 'status' => 'approved']);
+        $selected->workScopes()->create(['name_en_snapshot' => 'PRIVATE INTERNAL CHECKLIST ITEM', 'status' => 'completed']);
+
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+            ->assertOk()->assertSee('100%')->assertDontSee('PRIVATE INTERNAL CHECKLIST ITEM');
+    }
+
+    public function test_only_missing_required_documents_are_shown_as_pending(): void
+    {
+        $request = $this->createTrackedRequest();
+        $service = $request->service;
+        $uploaded = $service->requiredDocuments()->create(['name_en' => 'Uploaded Record', 'name_gu' => 'Uploaded Record', 'is_mandatory' => true, 'sort_order' => 1]);
+        $service->requiredDocuments()->create(['name_en' => 'Still Required', 'name_gu' => 'Still Required', 'is_mandatory' => true, 'sort_order' => 2]);
+        $request->documents()->create(['service_required_document_id' => $uploaded->id, 'file_name' => 'record.pdf', 'file_path' => 'requests/record.pdf']);
+
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+            ->assertOk()->assertSee('Still Required')->assertDontSee('Uploaded Record');
+    }
+
+    public function test_customer_safe_pdf_download_requires_a_verified_tracking_session(): void
+    {
+        $request = $this->createTrackedRequest();
+        $url = route('request.track.pdf', [$request, 'request-acknowledgement']);
+
+        $this->get($url)->assertNotFound();
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk();
+        $response = $this->get($url)->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+
+        $other = CustomerRequest::query()->create(['reference_no' => 'SC/2026/000002', 'service_id' => $request->service_id, 'name' => 'Other Customer', 'mobile' => '9888888888', 'status' => 'received', 'payment_status' => 'not_required']);
+        $this->get(route('request.track.pdf', [$other, 'request-acknowledgement']))->assertNotFound();
+    }
+
+    public function test_rejected_and_archived_requests_show_customer_appropriate_messages(): void
+    {
+        $request = $this->createTrackedRequest();
+        $request->update(['status' => 'rejected']);
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('This request was not approved.');
+
+        $request->update(['status' => 'archived']);
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('This request has been archived.');
+    }
+
     private function createService(): Service
     {
         return Service::query()->create([
@@ -288,23 +334,24 @@ class PublicCustomerRequestWorkflowTest extends TestCase
 
         return $request;
     }
+
     public function test_online_disabled_service_is_hidden_and_rejected(): void
     {
         $service = $this->createService();
-        $service->update(['available_online'=>false]);
-        $this->get(route('request.create'))->assertOk()->assertDontSee('<option value="'.$service->id.'"',false);
-        $this->post(route('request.store'),$this->validPayload($service))->assertSessionHasErrors('service_id');
+        $service->update(['available_online' => false]);
+        $this->get(route('request.create'))->assertOk()->assertDontSee('<option value="'.$service->id.'"', false);
+        $this->post(route('request.store'), $this->validPayload($service))->assertSessionHasErrors('service_id');
     }
 
     public function test_service_without_property_documents_accepts_request_without_uploads(): void
     {
         Storage::fake('local');
         $service = $this->createService();
-        $service->update(['requires_property_documents'=>false]);
+        $service->update(['requires_property_documents' => false]);
         $payload = $this->validPayload($service);
         unset($payload['documents']);
-        $this->post(route('request.store'),$payload)->assertRedirect(route('request.success'));
-        $this->assertDatabaseCount('requests',1);
-        $this->assertDatabaseCount('request_documents',0);
+        $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
+        $this->assertDatabaseCount('requests', 1);
+        $this->assertDatabaseCount('request_documents', 0);
     }
 }

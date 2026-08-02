@@ -64,6 +64,8 @@ class RequestPdfDownloadTest extends TestCase
             'completion_internal_note' => 'PRIVATE COMPLETION NOTE',
             'closure_internal_note' => 'PRIVATE CLOSURE NOTE',
         ]);
+        $selectedService = $request->requestServices()->create(['service_id' => $request->service_id, 'service_name_en_snapshot' => 'Safe Service', 'professional_fee' => 1000, 'status' => 'approved']);
+        $selectedService->workScopes()->create(['name_en_snapshot' => 'PRIVATE CHECKLIST ITEM', 'status' => 'completed']);
         $request->dispatches()->create([
             'dispatch_method' => 'courier',
             'dispatch_status' => 'dispatched',
@@ -85,6 +87,7 @@ class RequestPdfDownloadTest extends TestCase
         $this->assertStringNotContainsString('PRIVATE FAILURE REASON', $projection);
         $this->assertStringNotContainsString('PRIVATE ADMIN IDENTITY', $projection);
         $this->assertArrayNotHasKey('internal_note', $document->content['dispatches'][0]);
+        $this->assertArrayNotHasKey('scopes', $document->content['services'][0]);
     }
 
     public function test_no_public_pdf_download_endpoint_is_exposed(): void

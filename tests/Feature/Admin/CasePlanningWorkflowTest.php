@@ -99,7 +99,7 @@ class CasePlanningWorkflowTest extends TestCase
         $request->billing()->update(['pricing_locked_at' => now()]);
         $request->update(['payment_status' => 'received']);
         $this->actingAs($admin)->patch(route('admin.requests.case-planning.save', $request), $payload)->assertSessionHasErrors('case');
-        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('Drafting')->assertDontSee('Private scope note')->assertDontSee('Private rejection or negotiation note')->assertDontSee($admin->name);
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertDontSee('Drafting')->assertDontSee('Private scope note')->assertDontSee('Private rejection or negotiation note')->assertDontSee($admin->name);
     }
 
     public function test_case_completes_only_after_every_selected_scope_is_finished(): void

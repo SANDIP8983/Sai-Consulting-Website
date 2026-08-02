@@ -10,7 +10,7 @@ class PublicRequestTrackingService
     public function find(string $trackingNumber, string $mobile): CustomerRequest
     {
         $request = CustomerRequest::query()
-            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'property_village', 'property_taluka', 'property_district', 'survey_numbers', 'khata_number', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'closed_at', 'closure_customer_remark', 'last_status_changed_at', 'updated_at'])
+            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'property_village', 'property_taluka', 'property_district', 'survey_numbers', 'khata_number', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'closed_at', 'closure_customer_remark', 'last_status_changed_at', 'created_at', 'updated_at'])
             ->where(fn ($query) => $query->where('reference_no', $trackingNumber)->orWhere('file_number', $trackingNumber))
             ->where('mobile', $mobile)
             ->with([
@@ -18,7 +18,8 @@ class PublicRequestTrackingService
                 'service.activeRequiredDocuments:id,service_id,name_en,name_gu,sort_order,is_mandatory',
                 'requestServices:id,request_id,service_id,service_name_en_snapshot,service_name_gu_snapshot,professional_fee,original_professional_fee,net_professional_fee,gst_rate,gst_amount,government_charges,government_charges_snapshot,final_total,pricing_locked_at,estimated_days,required_documents_snapshot,status,customer_decision_message',
                 'requestServices.service:id,name_en,name_gu',
-                'requestServices.workScopes' => fn ($query) => $query->select(['id', 'request_service_id', 'name_en_snapshot', 'name_gu_snapshot', 'status', 'customer_remark', 'display_order'])->orderBy('display_order')->orderBy('id'),
+                'requestServices.workScopes' => fn ($query) => $query->select(['id', 'request_service_id', 'status', 'customer_remark']),
+                'documents' => fn ($query) => $query->select(['id', 'request_id', 'service_required_document_id']),
                 'billing' => fn ($query) => $query->select(['id', 'request_id', 'total_original_professional_fee', 'discount_amount', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'pricing_locked_at']),
                 'billing.charges' => fn ($query) => $query->select(['id', 'request_billing_id', 'name', 'amount', 'display_order'])->orderBy('display_order')->orderBy('id'),
                 'payments' => fn ($query) => $query
@@ -45,6 +46,46 @@ class PublicRequestTrackingService
             ]);
         }
 
+        $workScopes = $request->requestServices->where('status', 'approved')->flatMap->workScopes;
+        $resolvedScopes = $workScopes->whereIn('status', ['completed', 'not_required', 'cancelled'])->count();
+        $progress = $workScopes->isNotEmpty()
+            ? (int) round($resolvedScopes / $workScopes->count() * 100)
+            : $this->statusProgress($request->status);
+
+        $uploadedDocumentIds = $request->documents->pluck('service_required_document_id')->filter()->map(fn ($id) => (int) $id);
+        $requiredDocuments = $request->requestServices
+            ->where('status', '!=', 'rejected')
+            ->flatMap(fn ($service) => collect($service->required_documents_snapshot ?? []));
+        if ($requiredDocuments->isEmpty()) {
+            $requiredDocuments = $request->service?->activeRequiredDocuments
+                ?->map(fn ($document) => $document->only(['id', 'name_en', 'name_gu', 'is_mandatory'])) ?? collect();
+        }
+        $pendingDocuments = $requiredDocuments
+            ->filter(fn (array $document) => (bool) ($document['is_mandatory'] ?? true))
+            ->reject(fn (array $document) => isset($document['id']) && $uploadedDocumentIds->contains((int) $document['id']))
+            ->unique(fn (array $document) => ($document['id'] ?? '').'|'.($document['name_en'] ?? ''))
+            ->values();
+
+        $request->setAttribute('public_progress_percentage', $progress);
+        $request->setAttribute('public_pending_documents', $pendingDocuments);
+        $request->setAttribute('public_work_remarks', $workScopes->pluck('customer_remark')->filter()->unique()->values());
+
         return $request;
+    }
+
+    private function statusProgress(string $status): int
+    {
+        return match ($status) {
+            'received' => 10,
+            'under_review', 'need_documents' => 20,
+            'approved', 'payment_pending' => 35,
+            'payment_received' => 45,
+            'in_progress', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration' => 65,
+            'completed' => 85,
+            'dispatched' => 90,
+            'delivered', 'closed', 'archived' => 100,
+            'rejected' => 0,
+            default => 0,
+        };
     }
 }

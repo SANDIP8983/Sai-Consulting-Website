@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ServiceRequiredDocumentController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\CustomerRequestController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PublicRequestPdfController;
 use App\Http\Controllers\PublicServiceController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,10 @@ Route::get('/request/track', [CustomerRequestController::class, 'track'])
 Route::post('/request/track', [CustomerRequestController::class, 'lookup'])
     ->middleware('throttle:10,1')
     ->name('request.track.lookup');
+
+Route::get('/request/track/{customerRequest}/pdf/{documentType}', PublicRequestPdfController::class)
+    ->middleware('throttle:10,1')
+    ->name('request.track.pdf');
 
 Route::get('/admin', fn () => auth()->check()
     ? to_route('admin.dashboard')

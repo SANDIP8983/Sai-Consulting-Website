@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCustomerRequestRequest;
 use App\Http\Requests\TrackCustomerRequestRequest;
 use App\Models\Service;
-use App\Services\PublicRequestTrackingService;
 use App\Services\HomepageService;
+use App\Services\PublicRequestTrackingService;
 use App\Services\RequestWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -55,6 +55,7 @@ class CustomerRequestController extends Controller
             $request->validated('reference_no'),
             $request->validated('mobile'),
         );
+        $request->session()->put('public_tracking.verified_requests.'.$customerRequest->id, now()->timestamp);
 
         return view('frontend.request.track', ['customerRequest' => $customerRequest, 'whatsappUrl' => $homepage->publicSiteData()['whatsappUrl']]);
     }

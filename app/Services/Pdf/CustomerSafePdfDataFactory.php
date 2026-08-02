@@ -81,7 +81,7 @@ class CustomerSafePdfDataFactory
 
     private function caseSummary(CustomerRequest $request): array
     {
-        return [...$this->base($request), 'services' => $this->services($request, true), 'completion' => ['date' => $request->completed_at?->format('d M Y, g:i A'), 'customer_remark' => $request->completion_customer_remark], 'closure' => ['date' => $request->closed_at?->format('d M Y, g:i A'), 'customer_remark' => $request->closure_customer_remark], 'dispatches' => $this->safeDispatches($request)];
+        return [...$this->base($request), 'services' => $this->services($request), 'completion' => ['date' => $request->completed_at?->format('d M Y, g:i A'), 'customer_remark' => $request->completion_customer_remark], 'closure' => ['date' => $request->closed_at?->format('d M Y, g:i A'), 'customer_remark' => $request->closure_customer_remark], 'dispatches' => $this->safeDispatches($request)];
     }
 
     private function dispatch(CustomerRequest $request): array
