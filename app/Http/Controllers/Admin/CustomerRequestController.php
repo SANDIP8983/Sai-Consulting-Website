@@ -24,11 +24,12 @@ use App\Models\Service;
 use App\Models\User;
 use App\Models\WorkScopeItem;
 use App\Services\AdminRequestManagementService;
+use App\Services\AdminRequestPresentationService;
 use App\Services\CasePlanningService;
 use App\Services\DispatchManagementService;
 use App\Services\FileDocumentProcessingService;
-use App\Services\RequestWorkflowService;
 use App\Services\ProcessingChecklistService;
+use App\Services\RequestWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -39,6 +40,7 @@ class CustomerRequestController extends Controller
         private readonly RequestWorkflowService $workflow,
         private readonly CasePlanningService $casePlanning,
         private readonly ProcessingChecklistService $checklist,
+        private readonly AdminRequestPresentationService $presentation,
     ) {}
 
     public function index(FilterCustomerRequestsRequest $request): View
@@ -85,6 +87,7 @@ class CustomerRequestController extends Controller
             'processingEligibility' => $this->checklist->eligibility($customerRequest),
             'dispatchEligibility' => app(DispatchManagementService::class)->eligibility($customerRequest),
             'closeEligibility' => app(DispatchManagementService::class)->closeEligibility($customerRequest),
+            ...$this->presentation->detail($customerRequest, $transitions),
         ]);
     }
 
@@ -185,5 +188,4 @@ class CustomerRequestController extends Controller
 
         return back()->with('success', 'Final service fee updated successfully.');
     }
-
 }

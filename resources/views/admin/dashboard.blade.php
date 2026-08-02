@@ -20,6 +20,23 @@
         <div class="col-sm-6"><a href="{{ route('admin.requests.index', ['source' => 'offline']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Offline Requests</p><p class="display-6 fw-semibold text-secondary mb-0">{{ $summary['offline_requests'] }}</p></div></a></div>
     </div>
 
+    <div class="d-flex justify-content-between align-items-center mt-5 mb-3"><div><h2 class="h4 mb-1">Operational Overview</h2><p class="text-muted mb-0">Actionable request queues for today.</p></div></div>
+    <div class="row g-3">
+        @foreach([
+            'today_requests'=>['Today\'s Requests','primary',['date_from'=>today()->toDateString(),'date_to'=>today()->toDateString()]],
+            'pending_approval'=>['Pending Approval','warning',['queue'=>'pending_approval']],
+            'pending_payment'=>['Pending Payment','danger',['payment_status'=>'pending']],
+            'in_progress'=>['In Progress','primary',['processing_state'=>'in_progress']],
+            'ready_for_dispatch'=>['Ready For Dispatch','info',['dispatch_state'=>'pending']],
+            'completed_today'=>['Completed Today','success',['status'=>'completed','date_from'=>today()->toDateString(),'date_to'=>today()->toDateString()]],
+            'archived'=>['Archived','dark',['status'=>'archived']],
+            'rejected'=>['Rejected','danger',['status'=>'rejected']],
+            'overdue'=>['Overdue Cases','warning',['overdue'=>1]],
+        ] as $key=>[$label,$color,$filters])
+        <div class="col-6 col-lg-4 col-xl-3"><a href="{{ route('admin.requests.index',$filters) }}" class="card border-0 shadow-sm h-100 text-decoration-none focus-ring"><div class="card-body"><span class="badge text-bg-{{ $color }} mb-3">{{ $label }}</span><div class="display-6 fw-semibold text-dark">{{ (int)($operationalSummary[$key]??0) }}</div></div></a></div>
+        @endforeach
+    </div>
+
     <div class="row g-4">
         <div class="col-sm-6 col-xl-3"><a href="{{ route('admin.services.index', ['active'=>'1']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Active Services</p><p class="display-6 fw-semibold text-success mb-0">{{ $summary['active_services'] }}</p></div></a></div>
         <div class="col-sm-6 col-xl-3"><a href="{{ route('admin.services.index', ['availability'=>'online']) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><p class="text-muted mb-2">Total Online Services</p><p class="display-6 fw-semibold text-primary mb-0">{{ $summary['online_services'] }}</p></div></a></div>
