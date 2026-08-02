@@ -85,7 +85,7 @@ class CasePlanningService
     {
         DB::transaction(function () use ($request, $remarks, $user): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
-            if (in_array($locked->status, ['completed', 'archived', 'dispatched'], true)) {
+            if (in_array($locked->status, ['completed', 'dispatched', 'delivered', 'closed', 'archived'], true)) {
                 throw ValidationException::withMessages(['status' => 'This request is already completed or closed.']);
             }$accepted = $locked->requestServices()->where('status', 'approved')->with('workScopes')->get();
             if ($accepted->isEmpty() || $accepted->contains(fn ($s) => $s->workScopes->isEmpty()) || $accepted->flatMap->workScopes->contains(fn ($s) => ! in_array($s->status, ['completed', 'not_required', 'cancelled'], true))) {
@@ -100,7 +100,7 @@ class CasePlanningService
     {
         DB::transaction(function () use ($request, $scope, $attributes): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
-            if (in_array($locked->status, ['completed', 'dispatched', 'archived'], true)) {
+            if (in_array($locked->status, ['completed', 'dispatched', 'delivered', 'closed', 'archived'], true)) {
                 throw ValidationException::withMessages(['status' => 'Completed or closed cases cannot be changed.']);
             }
             $row = RequestServiceWorkScope::query()->whereKey($scope->id)->whereHas('requestService', fn ($query) => $query->where('request_id', $locked->id)->where('status', 'approved'))->lockForUpdate()->firstOrFail();
@@ -136,7 +136,7 @@ class CasePlanningService
 
     private function assertMutable(CustomerRequest $request): void
     {
-        if (in_array($request->status, ['completed', 'dispatched', 'archived'], true)) {
+        if (in_array($request->status, ['completed', 'dispatched', 'delivered', 'closed', 'archived'], true)) {
             throw ValidationException::withMessages(['case' => 'Completed or closed cases cannot be replanned.']);
         }
 

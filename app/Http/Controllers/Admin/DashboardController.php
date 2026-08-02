@@ -24,6 +24,11 @@ class DashboardController extends Controller
                 'completed' => CustomerRequest::query()->where('status', 'completed')->count(),
                 'processing_not_started' => CustomerRequest::query()->whereHas('requestServices.workScopes', fn($q)=>$q->where('status','pending'))->whereDoesntHave('requestServices.workScopes',fn($q)=>$q->whereIn('status',['in_progress','completed','not_required','cancelled']))->count(),
                 'ready_to_complete' => CustomerRequest::query()->whereHas('requestServices.workScopes')->whereDoesntHave('requestServices.workScopes',fn($q)=>$q->whereIn('status',['pending','in_progress']))->whereNotIn('status',['completed','dispatched','delivered','closed'])->count(),
+                'dispatch_pending' => CustomerRequest::query()->where('status','completed')->whereDoesntHave('dispatches',fn($q)=>$q->whereIn('dispatch_status',['dispatched','in_transit','delivered','collected']))->count(),
+                'in_transit' => CustomerRequest::query()->whereHas('dispatches',fn($q)=>$q->where('dispatch_status','in_transit'))->count(),
+                'delivered_today' => CustomerRequest::query()->whereHas('dispatches',fn($q)=>$q->where(fn($q)=>$q->whereDate('delivered_at',today())->orWhereDate('collected_at',today())))->count(),
+                'ready_to_close' => CustomerRequest::query()->where('status','delivered')->whereHas('dispatches',fn($q)=>$q->whereIn('dispatch_status',['delivered','collected']))->whereDoesntHave('dispatches',fn($q)=>$q->whereIn('dispatch_status',['prepared','not_dispatched','dispatched','in_transit','failed_returned']))->count(),
+                'closed_month' => CustomerRequest::query()->where('status','closed')->whereBetween('closed_at',[now()->startOfMonth(),now()->endOfMonth()])->count(),
             ],
             'summary' => [
                 'requests' => CustomerRequest::query()->count(),

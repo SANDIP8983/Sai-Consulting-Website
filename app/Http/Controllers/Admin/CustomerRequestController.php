@@ -11,7 +11,6 @@ use App\Http\Requests\Admin\FinalizeRequestBillingRequest;
 use App\Http\Requests\Admin\RecordRequestPaymentRequest;
 use App\Http\Requests\Admin\SaveCasePlanningRequest;
 use App\Http\Requests\Admin\StoreOfflineCustomerRequestRequest;
-use App\Http\Requests\Admin\StoreRequestDispatchRequest;
 use App\Http\Requests\Admin\StoreRequestRemarkRequest;
 use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
 use App\Http\Requests\Admin\UnlockRequestBillingRequest;
@@ -38,7 +37,6 @@ class CustomerRequestController extends Controller
     public function __construct(
         private readonly AdminRequestManagementService $management,
         private readonly RequestWorkflowService $workflow,
-        private readonly DispatchManagementService $dispatchManagement,
         private readonly CasePlanningService $casePlanning,
         private readonly ProcessingChecklistService $checklist,
     ) {}
@@ -71,7 +69,7 @@ class CustomerRequestController extends Controller
     {
         $transitions = $customerRequest->usesChecklistWorkflow() ? [] : array_values(array_filter(
             $this->workflow->transitions($customerRequest),
-            fn (string $status): bool => $status !== 'dispatched'
+            fn (string $status): bool => ! in_array($status, ['dispatched', 'delivered', 'closed'], true)
                 && (! $customerRequest->processing || ! in_array($status, ['draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'completed'], true)),
         ));
 
@@ -85,6 +83,8 @@ class CustomerRequestController extends Controller
             'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->orderBy('name_en')->get(),
             'availableServices' => Service::query()->where('is_active', true)->whereNotIn('id', $customerRequest->requestServices->pluck('service_id'))->orderBy('name_en')->get(['id', 'name_en', 'name_gu']),
             'processingEligibility' => $this->checklist->eligibility($customerRequest),
+            'dispatchEligibility' => app(DispatchManagementService::class)->eligibility($customerRequest),
+            'closeEligibility' => app(DispatchManagementService::class)->closeEligibility($customerRequest),
         ]);
     }
 
@@ -186,10 +186,4 @@ class CustomerRequestController extends Controller
         return back()->with('success', 'Final service fee updated successfully.');
     }
 
-    public function dispatch(StoreRequestDispatchRequest $request, CustomerRequest $customerRequest): RedirectResponse
-    {
-        $this->dispatchManagement->record($customerRequest, $request->validated(), $request->user());
-
-        return back()->with('success', 'Dispatch update recorded successfully.');
-    }
 }

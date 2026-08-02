@@ -37,12 +37,12 @@ class CustomerRequest extends Model
         'details',
         'status',
         'case_approved_at', 'case_approved_by',
-        'payment_status', 'amount_due', 'fee_updated_by', 'fee_updated_at', 'amount_paid', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'completion_internal_note', 'last_status_changed_at',
+        'payment_status', 'amount_due', 'fee_updated_by', 'fee_updated_at', 'amount_paid', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'completion_internal_note', 'closed_at', 'closure_customer_remark', 'closure_internal_note', 'closed_by', 'last_status_changed_at',
     ];
 
     protected function casts(): array
     {
-        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'completed_at' => 'datetime', 'last_status_changed_at' => 'datetime', 'case_approved_at' => 'datetime', 'case_planning_version' => 'integer'];
+        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'completed_at' => 'datetime', 'closed_at' => 'datetime', 'last_status_changed_at' => 'datetime', 'case_approved_at' => 'datetime', 'case_planning_version' => 'integer'];
     }
 
     /**
@@ -89,6 +89,8 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestDispatch::class, 'request_id')->latest('dispatch_date');
     }
 
+    public function dispatchHistory(): HasMany { return $this->hasMany(RequestDispatchHistory::class, 'request_id'); }
+
     public function processing(): HasOne
     {
         return $this->hasOne(RequestProcessingDetail::class, 'request_id');
@@ -103,6 +105,8 @@ class CustomerRequest extends Model
     {
         return $this->hasMany(RequestCaseActionHistory::class, 'request_id');
     }
+
+    public function closedBy(): BelongsTo { return $this->belongsTo(User::class, 'closed_by'); }
 
     public function usesChecklistWorkflow(): bool
     {

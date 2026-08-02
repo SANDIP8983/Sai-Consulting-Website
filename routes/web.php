@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequest
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\RequestDocumentController;
 use App\Http\Controllers\Admin\RequestProcessingController;
+use App\Http\Controllers\Admin\RequestDispatchController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\ServiceRequiredDocumentController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -72,10 +73,22 @@ Route::middleware('auth')
         Route::patch('/{customerRequest}/estimate', 'estimate')->name('estimate');
         Route::post('/{customerRequest}/remarks', 'remark')->name('remarks.store');
         Route::post('/{customerRequest}/payments', 'payment')->name('payments.store');
-        Route::post('/{customerRequest}/dispatches', 'dispatch')->name('dispatches.store');
         Route::patch('/{customerRequest}/fee', 'fee')->name('fee.update');
         Route::get('/{customerRequest}/documents/{document}', RequestDocumentController::class)->name('documents.download');
     });
+
+Route::middleware('auth')->prefix('admin/requests/{customerRequest}/dispatches')->name('admin.requests.dispatches.')->controller(RequestDispatchController::class)->group(function () {
+    Route::post('/', 'store')->name('store');
+    Route::patch('/{dispatch}', 'update')->name('update');
+    Route::patch('/{dispatch}/status', 'transition')->name('status');
+    Route::patch('/{dispatch}/reopen', 'reopen')->name('reopen');
+    Route::post('/{dispatch}/proofs', 'uploadProof')->name('proofs.store');
+    Route::get('/{dispatch}/proofs/{proof}', 'downloadProof')->name('proofs.download');
+});
+Route::middleware('auth')->prefix('admin/requests/{customerRequest}/closure')->name('admin.requests.closure.')->controller(RequestDispatchController::class)->group(function () {
+    Route::patch('/', 'close')->name('close');
+    Route::patch('/reopen', 'reopenCase')->name('reopen');
+});
 
 Route::middleware('auth')->prefix('admin/requests/{customerRequest}/processing')->name('admin.requests.processing.')->controller(RequestProcessingController::class)->group(function () {
     Route::patch('/work-items/{workScope}', 'updateWorkItem')->name('work-items.update');

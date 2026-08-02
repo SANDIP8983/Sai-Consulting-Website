@@ -10,7 +10,7 @@ class PublicRequestTrackingService
     public function find(string $trackingNumber, string $mobile): CustomerRequest
     {
         $request = CustomerRequest::query()
-            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'property_village', 'property_taluka', 'property_district', 'survey_numbers', 'khata_number', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'last_status_changed_at', 'updated_at'])
+            ->select(['id', 'reference_no', 'file_number', 'service_id', 'name', 'status', 'payment_status', 'amount_due', 'property_village', 'property_taluka', 'property_district', 'survey_numbers', 'khata_number', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'closed_at', 'closure_customer_remark', 'last_status_changed_at', 'updated_at'])
             ->where(fn ($query) => $query->where('reference_no', $trackingNumber)->orWhere('file_number', $trackingNumber))
             ->where('mobile', $mobile)
             ->with([
@@ -25,7 +25,7 @@ class PublicRequestTrackingService
                     ->select(['id', 'request_id', 'amount', 'payment_status', 'payment_method', 'received_at', 'customer_remark'])
                     ->latest('received_at'),
                 'dispatches' => fn ($query) => $query
-                    ->select(['id', 'request_id', 'dispatch_status', 'dispatch_method', 'dispatch_date', 'tracking_number', 'carrier_name', 'customer_remark'])
+                    ->select(['id', 'request_id', 'dispatch_status', 'dispatch_method', 'dispatch_date', 'tracking_number', 'tracking_url', 'carrier_name', 'customer_remark', 'delivered_at', 'collected_at'])
                     ->latest('dispatch_date'),
                 'processing' => fn ($query) => $query->select(['id', 'request_id', 'processing_stage', 'token_booking_status', 'token_scheduled_at', 'registration_date', 'registration_number', 'registration_number_public', 'certified_copy_status']),
                 'processingHistory' => fn ($query) => $query

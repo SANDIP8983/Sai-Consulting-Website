@@ -1,115 +1,69 @@
 @php
-    $dispatchStatuses = ['not_dispatched', 'dispatched', 'delivered'];
-    $dispatchMethods = [
-        'office_collection' => 'Office Collection',
-        'hand_delivery' => 'Hand Delivery',
-        'india_post_registered' => 'India Post Registered',
-        'india_post_speed_post' => 'India Post Speed Post',
-        'courier' => 'Courier',
-        'email' => 'Email',
-        'whatsapp' => 'WhatsApp',
-        'other' => 'Other',
-    ];
-    $latestDispatch = $customerRequest->dispatches->first();
-    $paymentSatisfied = !($customerRequest->processing?->requires_payment_before_processing ?? $customerRequest->service->requires_payment_before_processing) || $customerRequest->payment_status === 'received';
-    $dispatchEligible = $customerRequest->file_number
-        && $paymentSatisfied
-        && in_array($customerRequest->status, ['ready_for_registration', 'completed', 'dispatched'], true)
-        && (!$customerRequest->processing || in_array($customerRequest->processing->processing_stage, ['ready_for_dispatch','dispatched','completed'], true));
+$methods=['whatsapp'=>'WhatsApp / વોટ્સએપ','email'=>'Email / ઇમેઇલ','office_collection'=>'Office Collection / ઓફિસેથી મેળવી લીધું','hand_delivery'=>'Hand Delivery / રૂબરૂ પહોંચાડ્યું','courier'=>'Courier / કુરિયર','speed_post'=>'Speed Post / સ્પીડ પોસ્ટ','rpad'=>'RPAD / આરપીએડી','other'=>'Other / અન્ય','india_post_registered'=>'RPAD (Legacy)','india_post_speed_post'=>'Speed Post (Legacy)'];
+$statuses=['prepared'=>'Prepared','not_dispatched'=>'Prepared (Legacy)','dispatched'=>'Dispatched','in_transit'=>'In Transit','delivered'=>'Delivered','collected'=>'Collected','failed_returned'=>'Failed / Returned','cancelled'=>'Cancelled'];
+$colors=['prepared'=>'secondary','not_dispatched'=>'secondary','dispatched'=>'primary','in_transit'=>'info','delivered'=>'success','collected'=>'success','failed_returned'=>'danger','cancelled'=>'dark'];
+$proofTypes=['courier_receipt'=>'Courier Receipt','postal_receipt'=>'Postal Receipt','pod'=>'POD','delivery_acknowledgement'=>'Delivery Acknowledgement','office_collection_acknowledgement'=>'Office Collection Acknowledgement','other'=>'Other Proof'];
+$latest=$customerRequest->dispatches->first();
 @endphp
-
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <span class="fw-semibold">Dispatch Management</span>
-        @if($latestDispatch)
-            <span class="badge text-bg-{{ $latestDispatch->dispatch_status === 'delivered' ? 'success' : ($latestDispatch->dispatch_status === 'dispatched' ? 'primary' : 'secondary') }}">
-                {{ str($latestDispatch->dispatch_status)->replace('_', ' ')->title() }}
-            </span>
-        @endif
-    </div>
-    <div class="card-body">
-        @if($dispatchEligible)
-            <form method="POST" action="{{ route('admin.requests.dispatches.store', $customerRequest) }}" data-confirm-form>
-                @csrf
-                <div class="row g-3">
-                    <div class="col-sm-6">
-                        <label for="dispatch_status" class="form-label">Dispatch Status</label>
-                        <select id="dispatch_status" name="dispatch_status" class="form-select @error('dispatch_status') is-invalid @enderror" required>
-                            @foreach($dispatchStatuses as $status)
-                                <option value="{{ $status }}" @selected(old('dispatch_status') === $status)>{{ str($status)->replace('_', ' ')->title() }}</option>
-                            @endforeach
-                        </select>
-                        @error('dispatch_status')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-sm-6">
-                        <label for="dispatch_method" class="form-label">Dispatch Method</label>
-                        <select id="dispatch_method" name="dispatch_method" class="form-select @error('dispatch_method') is-invalid @enderror" required>
-                            @foreach($dispatchMethods as $value => $label)
-                                <option value="{{ $value }}" @selected(old('dispatch_method') === $value)>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                        @error('dispatch_method')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-12">
-                        <label for="dispatch_date" class="form-label">Dispatch Date & Time</label>
-                        <input id="dispatch_date" name="dispatch_date" type="datetime-local" value="{{ old('dispatch_date', now()->format('Y-m-d\TH:i')) }}" class="form-control @error('dispatch_date') is-invalid @enderror" required>
-                        @error('dispatch_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-sm-6">
-                        <label for="tracking_number" class="form-label">Tracking Number</label>
-                        <input id="tracking_number" name="tracking_number" value="{{ old('tracking_number') }}" class="form-control @error('tracking_number') is-invalid @enderror" maxlength="150">
-                        @error('tracking_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-sm-6">
-                        <label for="carrier_name" class="form-label">Carrier / Service Name</label>
-                        <input id="carrier_name" name="carrier_name" value="{{ old('carrier_name') }}" class="form-control @error('carrier_name') is-invalid @enderror" maxlength="150">
-                        @error('carrier_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-12">
-                        <div class="form-text mb-2">Tracking is required for India Post and courier. Courier also requires a carrier name.</div>
-                        <label for="internal_note" class="form-label">Internal Dispatch Note</label>
-                        <textarea id="internal_note" name="internal_note" class="form-control @error('internal_note') is-invalid @enderror" rows="2">{{ old('internal_note') }}</textarea>
-                        <div class="form-text">Never visible to the customer.</div>
-                        @error('internal_note')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-12">
-                        <label for="customer_remark" class="form-label">Customer-visible Dispatch Remark</label>
-                        <textarea id="customer_remark" name="customer_remark" class="form-control @error('customer_remark') is-invalid @enderror" rows="2">{{ old('customer_remark') }}</textarea>
-                        @error('customer_remark')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                </div>
-                @error('dispatch')<div class="alert alert-danger mt-3 mb-0">{{ $message }}</div>@enderror
-                <button class="btn btn-primary w-100 mt-3"><i class="bi bi-send-check me-1"></i> Save Dispatch Update</button>
-            </form>
-        @else
-            <div class="alert alert-light border mb-0">
-                Dispatch becomes available after case processing is Completed and applicable payment requirements are satisfied.
-            </div>
-        @endif
-    </div>
+<section class="card border-0 shadow-sm mb-4" id="dispatch-delivery">
+<div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2"><div><h2 class="h4 mb-0">Dispatch &amp; Delivery</h2><small class="text-muted">મોકલવાની અને ડિલિવરીની માહિતી</small></div>@if($latest)<span class="badge text-bg-{{ $colors[$latest->dispatch_status]??'secondary' }}">{{ $statuses[$latest->dispatch_status]??str($latest->dispatch_status)->headline() }}</span>@endif</div>
+<div class="card-body">
+<div class="row g-3 mb-4">
+@foreach([['Reference Number',$customerRequest->reference_no],['File Number',$customerRequest->file_number?:'—'],['Customer',$customerRequest->name],['Mobile',$customerRequest->mobile],['Overall Status',str($customerRequest->status)->headline()],['Payment Status',str($customerRequest->payment_status)->headline()],['Completion Date',$customerRequest->completed_at?->format('d M Y, g:i A')?:'—'],['Total Dispatch Records',$customerRequest->dispatches->count()],['Latest Delivery Status',$latest?($statuses[$latest->dispatch_status]??str($latest->dispatch_status)->headline()):'Dispatch Pending']] as [$label,$value])
+<div class="col-6 col-lg-4"><small class="text-muted d-block">{{ $label }}</small><strong>{{ $value }}</strong></div>
+@endforeach
 </div>
 
-@if($customerRequest->dispatches->isNotEmpty())
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white fw-semibold">Dispatch History</div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-                <thead class="table-light"><tr><th>Date</th><th>Status</th><th>Method</th><th>Tracking / Carrier</th><th>Recorded By</th></tr></thead>
-                <tbody>
-                    @foreach($customerRequest->dispatches as $dispatch)
-                        <tr>
-                            <td>{{ $dispatch->dispatch_date->format('d M Y, g:i A') }}</td>
-                            <td>{{ str($dispatch->dispatch_status)->replace('_', ' ')->title() }}</td>
-                            <td>{{ $dispatchMethods[$dispatch->dispatch_method] ?? str($dispatch->dispatch_method)->headline() }}</td>
-                            <td>{{ $dispatch->tracking_number ?: '—' }}@if($dispatch->carrier_name)<div class="small text-muted">{{ $dispatch->carrier_name }}</div>@endif</td>
-                            <td>{{ $dispatch->performedBy?->name ?? 'System' }}</td>
-                        </tr>
-                        @if($dispatch->internal_note || $dispatch->customer_remark)
-                            <tr class="table-light"><td></td><td colspan="4"><small>@if($dispatch->internal_note)<strong>Internal:</strong> {{ $dispatch->internal_note }} @endif @if($dispatch->customer_remark)<strong class="ms-2">Customer visible:</strong> {{ $dispatch->customer_remark }}@endif</small></td></tr>
-                        @endif
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    </div>
+@if(!$dispatchEligibility['eligible'])
+<div class="alert alert-{{ $dispatchEligibility['payment_pending']?'warning':'light border' }} mb-4"><strong>{{ $dispatchEligibility['payment_pending']?'Payment Pending.':'Dispatch unavailable.' }}</strong><ul class="mb-0 mt-1">@foreach($dispatchEligibility['reasons'] as $reason)<li>{{ $reason }}</li>@endforeach</ul></div>
+@elseif($customerRequest->status!=='closed')
+<details class="border rounded p-3 mb-4" @if($errors->hasAny(['dispatch_method','dispatch_status','document_description','recipient_mobile','recipient_email','delivery_address','carrier_name','tracking_number','method_description'])) open @endif><summary class="fw-semibold">Add Dispatch</summary>
+<form method="POST" action="{{ route('admin.requests.dispatches.store',$customerRequest) }}" enctype="multipart/form-data" class="row g-3 mt-1">@csrf
+<div class="col-md-4"><label class="form-label">Dispatch Method</label><select name="dispatch_method" class="form-select" required>@foreach(array_slice($methods,0,8,true) as $value=>$label)<option value="{{ $value }}" @selected(old('dispatch_method')===$value)>{{ $label }}</option>@endforeach</select></div>
+<div class="col-md-4"><label class="form-label">Initial Status</label><select name="dispatch_status" class="form-select" required>@foreach(['prepared'=>'Prepared','dispatched'=>'Dispatched','collected'=>'Collected'] as $value=>$label)<option value="{{ $value }}" @selected(old('dispatch_status','prepared')===$value)>{{ $label }}</option>@endforeach</select></div>
+<div class="col-md-4"><label class="form-label">Dispatch Date &amp; Time</label><input type="datetime-local" name="dispatch_date" value="{{ old('dispatch_date',now()->format('Y-m-d\TH:i')) }}" class="form-control" required></div>
+<div class="col-12"><label class="form-label">Document / Package Description</label><input name="document_description" value="{{ old('document_description') }}" class="form-control" required maxlength="2000"></div>
+<div class="col-md-4"><label class="form-label">Recipient / Collected By</label><input name="recipient_name" value="{{ old('recipient_name',$customerRequest->name) }}" class="form-control"></div>
+<div class="col-md-4"><label class="form-label">Recipient Mobile</label><input name="recipient_mobile" value="{{ old('recipient_mobile',$customerRequest->mobile) }}" class="form-control"></div>
+<div class="col-md-4"><label class="form-label">Recipient Email</label><input type="email" name="recipient_email" value="{{ old('recipient_email',$customerRequest->email) }}" class="form-control"></div>
+<div class="col-12"><label class="form-label">Postal / Delivery Address</label><textarea name="delivery_address" class="form-control" rows="2">{{ old('delivery_address',$customerRequest->address) }}</textarea></div>
+<div class="col-md-4"><label class="form-label">Courier / Postal Service</label><input name="carrier_name" value="{{ old('carrier_name') }}" class="form-control"></div>
+<div class="col-md-4"><label class="form-label">Tracking / Consignment No.</label><input name="tracking_number" value="{{ old('tracking_number') }}" class="form-control"></div>
+<div class="col-md-4"><label class="form-label">Tracking URL</label><input type="url" name="tracking_url" value="{{ old('tracking_url') }}" class="form-control"></div>
+<div class="col-md-6"><label class="form-label">Other Method Description</label><input name="method_description" value="{{ old('method_description') }}" class="form-control"></div>
+<div class="col-md-6"><label class="form-label">Collection Date &amp; Time</label><input type="datetime-local" name="collected_at" value="{{ old('collected_at') }}" class="form-control"></div>
+<div class="col-md-6"><label class="form-label">Customer-visible Remark</label><textarea name="customer_remark" class="form-control" rows="2">{{ old('customer_remark') }}</textarea></div>
+<div class="col-md-6"><label class="form-label">Internal Note</label><textarea name="internal_note" class="form-control" rows="2">{{ old('internal_note') }}</textarea></div>
+<div class="col-md-4"><label class="form-label">Optional Proof Type</label><select name="proof_type" class="form-select"><option value="">No proof</option>@foreach($proofTypes as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></div>
+<div class="col-md-8"><label class="form-label">Private Proof (PDF/JPG/JPEG/PNG, max 10 MB)</label><input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" class="form-control"></div>
+@if($errors->any())<div class="col-12"><div class="alert alert-danger mb-0">{{ $errors->first() }}</div></div>@endif
+<div class="col-12"><button class="btn btn-primary">Create Dispatch</button></div></form></details>
 @endif
+
+<div class="vstack gap-3">
+@forelse($customerRequest->dispatches as $dispatch)
+<article class="border rounded p-3"><div class="d-flex flex-wrap justify-content-between gap-2"><div><h3 class="h5 mb-1">{{ $methods[$dispatch->dispatch_method]??str($dispatch->dispatch_method)->headline() }}</h3><div>{{ $dispatch->document_description?:'Historical dispatch record' }}</div></div><span class="badge text-bg-{{ $colors[$dispatch->dispatch_status]??'secondary' }} align-self-start">{{ $statuses[$dispatch->dispatch_status]??str($dispatch->dispatch_status)->headline() }}</span></div>
+<dl class="row small mt-3 mb-2"><dt class="col-sm-3 text-muted">Dispatch Date</dt><dd class="col-sm-9">{{ $dispatch->dispatch_date->format('d M Y, g:i A') }}</dd><dt class="col-sm-3 text-muted">Tracking</dt><dd class="col-sm-9">{{ $dispatch->tracking_number?:'—' }} @if($dispatch->carrier_name)<span class="text-muted">· {{ $dispatch->carrier_name }}</span>@endif</dd>@if($dispatch->customer_remark)<dt class="col-sm-3 text-muted">Customer Remark</dt><dd class="col-sm-9">{{ $dispatch->customer_remark }}</dd>@endif @if($dispatch->internal_note)<dt class="col-sm-3 text-muted">Internal Note</dt><dd class="col-sm-9">{{ $dispatch->internal_note }}</dd>@endif</dl>
+<div class="small text-muted mb-3">Created {{ $dispatch->created_at->format('d M Y, g:i A') }} by {{ $dispatch->performedBy?->name??'System' }} · Updated {{ $dispatch->updated_at->format('d M Y, g:i A') }} by {{ $dispatch->updatedBy?->name??$dispatch->performedBy?->name??'System' }}</div>
+@if($dispatch->proofs->isNotEmpty())<div class="d-flex flex-wrap gap-2 mb-3">@foreach($dispatch->proofs as $proof)<a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.requests.dispatches.proofs.download',[$customerRequest,$dispatch,$proof]) }}">View Proof: {{ $proofTypes[$proof->proof_type]??str($proof->proof_type)->headline() }}</a>@endforeach</div>@endif
+@if($customerRequest->status!=='closed')
+@if(in_array($dispatch->dispatch_status,['delivered','collected'],true))<form method="POST" action="{{ route('admin.requests.dispatches.reopen',[$customerRequest,$dispatch]) }}" class="input-group input-group-sm">@csrf @method('PATCH')<input name="reason" class="form-control" required placeholder="Required audited reopen reason"><button class="btn btn-outline-danger">Reopen Record</button></form>
+@elseif(!in_array($dispatch->dispatch_status,['cancelled','not_dispatched'],true))
+<details class="mb-3"><summary class="small fw-semibold">Edit Dispatch Details</summary><form method="POST" action="{{ route('admin.requests.dispatches.update',[$customerRequest,$dispatch]) }}" class="row g-2 mt-1">@csrf @method('PATCH')<div class="col-md-4"><select name="dispatch_method" class="form-select form-select-sm" required>@foreach(array_slice($methods,0,8,true) as $value=>$label)<option value="{{ $value }}" @selected($dispatch->dispatch_method===$value)>{{ $label }}</option>@endforeach</select></div><div class="col-md-4"><input type="datetime-local" name="dispatch_date" value="{{ $dispatch->dispatch_date->format('Y-m-d\TH:i') }}" class="form-control form-control-sm" required></div><div class="col-md-4"><input name="document_description" value="{{ $dispatch->document_description }}" class="form-control form-control-sm" placeholder="Package description" required></div><div class="col-md-4"><input name="recipient_name" value="{{ $dispatch->recipient_name }}" class="form-control form-control-sm" placeholder="Recipient name"></div><div class="col-md-4"><input name="recipient_mobile" value="{{ $dispatch->recipient_mobile }}" class="form-control form-control-sm" placeholder="Recipient mobile"></div><div class="col-md-4"><input type="email" name="recipient_email" value="{{ $dispatch->recipient_email }}" class="form-control form-control-sm" placeholder="Recipient email"></div><div class="col-12"><textarea name="delivery_address" class="form-control form-control-sm" placeholder="Delivery address">{{ $dispatch->delivery_address }}</textarea></div><div class="col-md-4"><input name="carrier_name" value="{{ $dispatch->carrier_name }}" class="form-control form-control-sm" placeholder="Carrier / postal service"></div><div class="col-md-4"><input name="tracking_number" value="{{ $dispatch->tracking_number }}" class="form-control form-control-sm" placeholder="Tracking number"></div><div class="col-md-4"><input type="url" name="tracking_url" value="{{ $dispatch->tracking_url }}" class="form-control form-control-sm" placeholder="Tracking URL"></div><div class="col-md-4"><input name="method_description" value="{{ $dispatch->method_description }}" class="form-control form-control-sm" placeholder="Other method description"></div><div class="col-md-4"><input name="customer_remark" value="{{ $dispatch->customer_remark }}" class="form-control form-control-sm" placeholder="Customer remark"></div><div class="col-md-4"><input name="internal_note" value="{{ $dispatch->internal_note }}" class="form-control form-control-sm" placeholder="Internal note"></div><div class="col-12"><button class="btn btn-sm btn-outline-primary">Save Dispatch Details</button></div></form></details>
+<form method="POST" action="{{ route('admin.requests.dispatches.status',[$customerRequest,$dispatch]) }}" class="row g-2 align-items-end">@csrf @method('PATCH')
+<div class="col-md-3"><label class="form-label small">Update Status</label><select name="dispatch_status" class="form-select form-select-sm">@foreach(['dispatched','in_transit','delivered','collected','failed_returned','cancelled'] as $status)<option value="{{ $status }}">{{ $statuses[$status] }}</option>@endforeach</select></div>
+<div class="col-md-3"><label class="form-label small">Delivery / Collection Time</label><input type="datetime-local" name="delivered_at" value="{{ now()->format('Y-m-d\TH:i') }}" class="form-control form-control-sm"><input type="hidden" name="collected_at" value="{{ now()->format('Y-m-d\TH:i') }}"></div>
+<div class="col-md-3"><label class="form-label small">Collected By / Reason</label><input name="recipient_name" value="{{ $dispatch->recipient_name }}" class="form-control form-control-sm" placeholder="Collected by"><input name="reason" class="form-control form-control-sm mt-1" placeholder="Required for failure/cancel"></div>
+<div class="col-md-3"><button class="btn btn-sm btn-primary w-100">Update Status</button></div></form>
+@endif
+<form method="POST" action="{{ route('admin.requests.dispatches.proofs.store',[$customerRequest,$dispatch]) }}" enctype="multipart/form-data" class="row g-2 mt-2">@csrf<div class="col-md-3"><select name="proof_type" class="form-select form-select-sm" required>@foreach($proofTypes as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></div><div class="col-md-6"><input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" class="form-control form-control-sm" required></div><div class="col-md-3"><button class="btn btn-sm btn-outline-secondary w-100">Upload Private Proof</button></div></form>
+@endif
+</article>
+@empty<div class="text-muted">No dispatch records have been created.</div>@endforelse
+</div>
+
+@if($customerRequest->status==='closed')<div class="alert alert-success mt-4"><strong>Case Closed:</strong> {{ $customerRequest->closed_at?->format('d M Y, g:i A') }}@if($customerRequest->closure_customer_remark)<div>{{ $customerRequest->closure_customer_remark }}</div>@endif</div><form method="POST" action="{{ route('admin.requests.closure.reopen',$customerRequest) }}" class="input-group">@csrf @method('PATCH')<input name="reason" class="form-control" required placeholder="Required audited reopen reason"><button class="btn btn-outline-danger">Reopen Closed Case</button></form>
+@elseif(in_array($customerRequest->status,['completed','dispatched','delivered'],true))
+<form method="POST" action="{{ route('admin.requests.closure.close',$customerRequest) }}" class="border rounded p-3 mt-4">@csrf @method('PATCH')<h3 class="h5">Close Case</h3>@unless($closeEligibility['eligible'])<div class="alert alert-warning"><ul class="mb-0">@foreach($closeEligibility['reasons'] as $reason)<li>{{ $reason }}</li>@endforeach</ul></div>@endunless<div class="row g-2"><div class="col-md-3"><input type="datetime-local" name="closure_date" value="{{ now()->format('Y-m-d\TH:i') }}" class="form-control" required @disabled(!$closeEligibility['eligible'])></div><div class="col-md-3"><input name="customer_remark" class="form-control" placeholder="Customer-visible closure remark" @disabled(!$closeEligibility['eligible'])></div><div class="col-md-4"><input name="internal_note" class="form-control" placeholder="Internal closure note" @disabled(!$closeEligibility['eligible'])></div><div class="col-md-2"><div class="form-check mb-1"><input id="close_confirmed" name="confirmed" value="1" type="checkbox" class="form-check-input" required @disabled(!$closeEligibility['eligible'])><label for="close_confirmed" class="form-check-label small">Confirm</label></div><button class="btn btn-dark w-100" @disabled(!$closeEligibility['eligible'])>Close Case</button></div></div></form>
+@endif
+</div></section>

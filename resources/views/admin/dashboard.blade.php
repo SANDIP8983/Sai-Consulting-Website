@@ -36,5 +36,11 @@
             <div class="col-6 col-lg-4 col-xl-2"><a href="{{ route('admin.requests.index', $key === 'in_progress' ? [] : ['status' => $key]) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><span class="badge text-bg-{{ $color }} mb-3">{{ $label }}</span><div class="display-6 fw-semibold text-dark">{{ $requestSummary[$key] }}</div></div></a></div>
         @endforeach
     </div>
+    <div class="d-flex justify-content-between align-items-center mt-5 mb-3"><div><h2 class="h4 mb-1">Dispatch &amp; Delivery</h2><p class="text-muted mb-0">Final-stage operational workload.</p></div></div>
+    <div class="row g-3">
+        @foreach(['dispatch_pending'=>['Completed Awaiting Dispatch','warning','pending'],'in_transit'=>['In Transit','info','in_transit'],'delivered_today'=>['Delivered Today','success','delivered'],'ready_to_close'=>['Ready to Close','primary','ready_to_close'],'closed_month'=>['Closed This Month','dark','closed']] as $key=>[$label,$color,$filter])
+            <div class="col-6 col-lg"><a href="{{ route('admin.requests.index',['dispatch_state'=>$filter]) }}" class="card border-0 shadow-sm h-100 text-decoration-none"><div class="card-body"><span class="badge text-bg-{{ $color }} mb-3">{{ $label }}</span><div class="display-6 fw-semibold text-dark">{{ $requestSummary[$key] }}</div></div></a></div>
+        @endforeach
+    </div>
 </div>
 @endsection

@@ -1,51 +1,10 @@
 @php
-    $latestDispatch = $customerRequest->dispatches->first();
-    $dispatchStatusLabels = [
-        'not_dispatched' => ['મોકલવાનું બાકી', 'Not Dispatched'],
-        'dispatched' => ['મોકલી આપેલ', 'Dispatched'],
-        'delivered' => ['પહોંચાડેલ', 'Delivered'],
-    ];
-    $dispatchMethodLabels = [
-        'office_collection' => 'Office Collection',
-        'hand_delivery' => 'Hand Delivery',
-        'india_post_registered' => 'India Post Registered',
-        'india_post_speed_post' => 'India Post Speed Post',
-        'courier' => 'Courier',
-        'email' => 'Email',
-        'whatsapp' => 'WhatsApp',
-        'other' => 'Other',
-    ];
+$publicMethods=['whatsapp'=>'Sent through WhatsApp','email'=>'Sent through Email','office_collection'=>'Office Collection','hand_delivery'=>'Hand Delivery','courier'=>'Courier','speed_post'=>'Speed Post','rpad'=>'RPAD','other'=>'Other','india_post_registered'=>'RPAD','india_post_speed_post'=>'Speed Post'];
+$publicStatuses=['prepared'=>'Prepared','not_dispatched'=>'Prepared','dispatched'=>'Dispatched','in_transit'=>'In Transit','delivered'=>'Delivered / Shared successfully','collected'=>'Collected successfully','failed_returned'=>'Delivery unsuccessful / Returned','cancelled'=>'Cancelled'];
 @endphp
-
-@if($latestDispatch)
-    <div class="tracking-side-card premium-card mb-4">
-        <div class="tracking-card-title">
-            <span class="icon-box"><i class="bi bi-send-check"></i></span>
-            <div><h3>મોકલવાની માહિતી</h3><p>Dispatch Information</p></div>
-        </div>
-        <dl class="row g-2 small mb-0">
-            <dt class="col-5 text-muted">Status</dt>
-            <dd class="col-7 fw-semibold">{{ $dispatchStatusLabels[$latestDispatch->dispatch_status][0] ?? str($latestDispatch->dispatch_status)->headline() }} <span class="d-block fw-normal text-muted">{{ $dispatchStatusLabels[$latestDispatch->dispatch_status][1] ?? '' }}</span></dd>
-            <dt class="col-5 text-muted">Method</dt>
-            <dd class="col-7 fw-semibold">{{ $dispatchMethodLabels[$latestDispatch->dispatch_method] ?? str($latestDispatch->dispatch_method)->headline() }}</dd>
-            <dt class="col-5 text-muted">Date</dt>
-            <dd class="col-7 fw-semibold">{{ $latestDispatch->dispatch_date->format('d M Y') }}</dd>
-            @if($latestDispatch->tracking_number)
-                <dt class="col-5 text-muted">Tracking No.</dt>
-                <dd class="col-7 fw-semibold text-break">{{ $latestDispatch->tracking_number }}</dd>
-            @endif
-            @if($latestDispatch->carrier_name)
-                <dt class="col-5 text-muted">Carrier</dt>
-                <dd class="col-7 fw-semibold">{{ $latestDispatch->carrier_name }}</dd>
-            @endif
-        </dl>
-        @if($latestDispatch->customer_remark)
-            <div class="tracking-document-note mt-3"><i class="bi bi-chat-left-text"></i> {{ $latestDispatch->customer_remark }}</div>
-        @endif
-    </div>
-@elseif($dispatchUpdate || in_array($customerRequest->status, ['dispatched', 'completed', 'archived'], true))
-    <div class="dispatch-card premium-card mb-4">
-        <i class="bi bi-send-check"></i>
-        <span><small>Dispatch Information</small><strong>તમારી સેવા મોકલી આપવામાં આવી છે.</strong>@if($dispatchUpdate)<em>{{ $dispatchUpdate->created_at->format('d M Y, g:i A') }}</em>@endif @if($dispatchUpdate?->remarks)<p>{{ $dispatchUpdate->remarks }}</p>@endif</span>
-    </div>
-@endif
+@if($customerRequest->dispatches->isNotEmpty())
+<div class="tracking-side-card premium-card mb-4"><div class="tracking-card-title"><span class="icon-box"><i class="bi bi-send-check"></i></span><div><h3>મોકલવાની માહિતી</h3><p>Dispatch &amp; Delivery</p></div></div>
+<div class="vstack gap-3">@foreach($customerRequest->dispatches as $dispatch)<article class="border-bottom pb-3"><strong>{{ $publicMethods[$dispatch->dispatch_method]??str($dispatch->dispatch_method)->headline() }}</strong><div class="small text-muted">{{ $publicStatuses[$dispatch->dispatch_status]??str($dispatch->dispatch_status)->headline() }}</div><dl class="row g-1 small mt-2 mb-0"><dt class="col-5 text-muted">Dispatch Date</dt><dd class="col-7">{{ $dispatch->dispatch_date->format('d M Y, g:i A') }}</dd>@if($dispatch->carrier_name)<dt class="col-5 text-muted">Service</dt><dd class="col-7">{{ $dispatch->carrier_name }}</dd>@endif @if($dispatch->tracking_number)<dt class="col-5 text-muted">Tracking No.</dt><dd class="col-7 text-break">{{ $dispatch->tracking_number }}</dd>@endif @if($dispatch->delivered_at)<dt class="col-5 text-muted">Delivered</dt><dd class="col-7">{{ $dispatch->delivered_at->format('d M Y, g:i A') }}</dd>@endif @if($dispatch->collected_at)<dt class="col-5 text-muted">Collected</dt><dd class="col-7">{{ $dispatch->collected_at->format('d M Y, g:i A') }}</dd>@endif</dl>@if($dispatch->tracking_url)<a href="{{ $dispatch->tracking_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary mt-2">Track Shipment</a>@endif @if($dispatch->customer_remark)<div class="tracking-document-note mt-2"><i class="bi bi-chat-left-text"></i> {{ $dispatch->customer_remark }}</div>@endif</article>@endforeach</div>
+@if($customerRequest->closed_at)<div class="alert alert-success mt-3 mb-0"><strong>Case Closed:</strong> {{ $customerRequest->closed_at->format('d M Y, g:i A') }}@if($customerRequest->closure_customer_remark)<div>{{ $customerRequest->closure_customer_remark }}</div>@endif</div>@endif
+</div>
+@elseif(in_array($customerRequest->status,['completed','dispatched','delivered','closed'],true))<div class="dispatch-card premium-card mb-4"><i class="bi bi-send-check"></i><span><small>Dispatch Information</small><strong>Dispatch details will appear here when available.</strong></span></div>@endif

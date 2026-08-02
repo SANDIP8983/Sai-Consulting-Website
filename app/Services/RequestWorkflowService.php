@@ -180,6 +180,7 @@ class RequestWorkflowService
         DB::transaction(function () use ($request, $requestService, $attributes, $user): void {
             $decision = $attributes['decision'];
             $lockedRequest = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
+            if (in_array($lockedRequest->status, ['closed', 'archived'], true)) throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing and service decisions.']);
             if ($lockedRequest->billing?->isLocked()) {
                 throw ValidationException::withMessages(['pricing' => 'Request pricing is frozen. Use the audited Unlock Pricing action before changing service decisions.']);
             }
@@ -202,6 +203,7 @@ class RequestWorkflowService
     {
         DB::transaction(function () use ($request, $attributes, $user): void {
             $lockedRequest = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
+            if (in_array($lockedRequest->status, ['closed', 'archived'], true)) throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing.']);
             if (! $lockedRequest->billing && ($lockedRequest->payment_status === 'received' || $lockedRequest->requestServices()->whereNotNull('pricing_locked_at')->exists())) {
                 throw ValidationException::withMessages(['pricing' => 'Historical paid or frozen pricing is preserved and cannot be converted automatically.']);
             }
@@ -270,6 +272,7 @@ class RequestWorkflowService
     public function unlockRequestBilling(CustomerRequest $request, string $reason, User $user): void
     {
         DB::transaction(function () use ($request, $reason, $user): void {
+            if (in_array($request->status, ['closed', 'archived'], true)) throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing.']);
             $billing = $request->billing()->with('charges')->lockForUpdate()->first();
             if (! $billing || ! $billing->isLocked()) {
                 throw ValidationException::withMessages(['pricing' => 'Request pricing is not currently locked.']);
