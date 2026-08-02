@@ -3,9 +3,10 @@
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequestController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\RequestDocumentController;
-use App\Http\Controllers\Admin\RequestProcessingController;
 use App\Http\Controllers\Admin\RequestDispatchController;
+use App\Http\Controllers\Admin\RequestDocumentController;
+use App\Http\Controllers\Admin\RequestPdfController;
+use App\Http\Controllers\Admin\RequestProcessingController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\ServiceRequiredDocumentController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -75,6 +76,7 @@ Route::middleware('auth')
         Route::post('/{customerRequest}/payments', 'payment')->name('payments.store');
         Route::patch('/{customerRequest}/fee', 'fee')->name('fee.update');
         Route::get('/{customerRequest}/documents/{document}', RequestDocumentController::class)->name('documents.download');
+        Route::get('/{customerRequest}/pdf/{documentType}', RequestPdfController::class)->name('pdf.download');
     });
 
 Route::middleware('auth')->prefix('admin/requests/{customerRequest}/dispatches')->name('admin.requests.dispatches.')->controller(RequestDispatchController::class)->group(function () {

@@ -1,0 +1,1 @@
+<table style="width:100%;border-top:1px solid #cfd8e8;color:#667085;font-size:8pt;padding-top:2mm"><tr><td>Generated: {{ $document->generatedAt->format('d M Y, g:i A T') }}</td><td style="text-align:center">Reference: {{ $document->referenceNumber }}</td><td style="text-align:right">Page {PAGENO} of {nbpg}</td></tr></table>
