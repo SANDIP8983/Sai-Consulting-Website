@@ -196,7 +196,8 @@ class FileDocumentProcessingService
         return match ($stage) {
             'drafting_started' => ['draft_started_at' => $attributes['draft_started_at'] ?? now()->toDateString()],
             'draft_ready' => ['draft_ready_at' => $attributes['draft_ready_at'] ?? now()->toDateString()],
-            'final_draft_ready' => ['final_draft_at' => $attributes['final_draft_at'] ?? now()->toDateString()],
+            'final_draft_ready' => ['final_draft_at' => $attributes['final_draft_at'] ?? now()->toDateString()]
+                + (array_key_exists('customer_verification_at', $attributes) ? ['customer_verification_at' => $attributes['customer_verification_at']] : []),
             'ready_for_dispatch' => ['ready_for_dispatch_date' => $attributes['ready_for_dispatch_date'] ?? now()->toDateString()],
             'completed' => ['actual_completion_date' => $attributes['actual_completion_date'] ?? now()->toDateString()], default => [],
         };

@@ -89,6 +89,19 @@ class ProcessingWorkChecklistTest extends TestCase
         $this->actingAs($admin)->get(route('admin.requests.show',$request))->assertOk()->assertDontSee('Advance Processing Stage')->assertSee('Start Selected')->assertSee('Save Processing Progress');
     }
 
+    public function test_selected_case_planning_scope_uses_checklist_and_keeps_legacy_history_readable(): void
+    {
+        [$admin,$request]=$this->planned(false,true);
+        $request->update(['case_approved_at'=>null]);
+        $request->processing()->create(['processing_stage'=>'customer_verification_pending','uses_drafting_workflow'=>true]);
+        $request->processingHistory()->create(['to_stage'=>'customer_verification_pending','remarks'=>'Historical verification note','changed_by'=>$admin->id]);
+
+        $this->actingAs($admin)->get(route('admin.requests.show',$request))->assertOk()
+            ->assertSee('Processing &amp; Work Checklist',false)->assertSee('Historical verification note')
+            ->assertDontSee('Advance Processing Stage')->assertDontSee('name="processing_stage"',false)
+            ->assertDontSee('Unselected Review');
+    }
+
     private function planned(bool $requiresPayment, bool $paid): array
     {
         $admin=User::factory()->create(); $service=$this->service($requiresPayment);

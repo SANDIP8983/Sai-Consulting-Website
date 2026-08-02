@@ -20,7 +20,7 @@ class ProcessingChecklistService
         $requiresPayment = $accepted->contains(fn ($service) => (bool) ($service->service?->requires_payment_before_processing ?? true));
         $reasons = [];
         if ($accepted->isEmpty()) $reasons[] = 'At least one accepted service is required.';
-        if (! $request->case_approved_at) $reasons[] = 'Case Planning must be approved.';
+        if (! $request->case_approved_at && $request->case_planning_version < 1) $reasons[] = 'Case Planning must be approved.';
         if (! $request->file_number) $reasons[] = 'A file number must be generated.';
         if ($accepted->isNotEmpty() && $accepted->contains(fn ($service) => $service->workScopes->isEmpty())) $reasons[] = 'Every accepted service must have selected work-scope items.';
         if ($requiresPayment && $request->payment_status !== 'received') $reasons[] = 'Payment Pending: payment must be confirmed before processing can start.';

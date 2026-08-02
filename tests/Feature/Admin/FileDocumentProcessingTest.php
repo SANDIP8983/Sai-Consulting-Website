@@ -126,6 +126,30 @@ class FileDocumentProcessingTest extends TestCase
         $this->assertSame('completed',$request->fresh()->status);
         $this->assertDatabaseCount('request_dispatches',0);
     }
+
+    public function test_legacy_request_advances_beyond_customer_verification_pending(): void
+    {
+        $request=$this->request(['status'=>'ready_for_verification','file_number'=>'SC/2026/F000001','payment_status'=>'received']);
+        $request->processing()->create(['processing_stage'=>'customer_verification_pending','uses_drafting_workflow'=>true,'requires_payment_before_processing'=>true]);
+        $admin=User::factory()->create();
+
+        $this->actingAs($admin)->patch(route('admin.requests.processing.stage.update',$request),['processing_stage'=>'final_draft_ready'])->assertSessionHasErrors('customer_verification_at');
+        $this->actingAs($admin)->get(route('admin.requests.show',$request))->assertOk()->assertSee('Customer verification date is required before the final draft is ready.');
+        $this->actingAs($admin)->patch(route('admin.requests.processing.stage.update',$request),['processing_stage'=>'final_draft_ready','customer_verification_at'=>now()->toDateString()])->assertSessionHasNoErrors();
+
+        $this->assertSame('final_draft_ready',$request->processing->fresh()->processing_stage);
+        $this->assertNotNull($request->processing->fresh()->customer_verification_at);
+    }
+
+    public function test_legacy_payment_gate_is_clear_and_disables_processing(): void
+    {
+        $request=$this->request(['status'=>'payment_pending','file_number'=>'SC/2026/F000001','payment_status'=>'pending']);
+        $request->processing()->create(['processing_stage'=>'customer_verification_pending','uses_drafting_workflow'=>true,'requires_payment_before_processing'=>true]);
+
+        $this->actingAs(User::factory()->create())->get(route('admin.requests.show',$request))->assertOk()
+            ->assertSee('Payment Pending.')->assertSee('Payment must be confirmed before processing can continue.')
+            ->assertSee('disabled',false);
+    }
     private function request(array $attributes = []): CustomerRequest
     {
         $service = Service::query()->create(['name_en' => 'Processing Service', 'name_gu' => 'Processing Service', 'slug' => 'processing-service', 'is_active' => true, 'sort_order' => 1, 'uses_drafting_workflow' => true, 'requires_registration' => true]);

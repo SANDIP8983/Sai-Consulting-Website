@@ -106,7 +106,7 @@ class CustomerRequest extends Model
 
     public function usesChecklistWorkflow(): bool
     {
-        return $this->case_planning_version > 0 && $this->case_approved_at && $this->file_number
+        return $this->case_planning_version > 0 && $this->file_number
             && $this->requestServices()->where('status', 'approved')->whereHas('workScopes')->exists();
     }
 
