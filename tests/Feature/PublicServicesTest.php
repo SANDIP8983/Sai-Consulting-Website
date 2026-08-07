@@ -38,23 +38,33 @@ class PublicServicesTest extends TestCase
         $service->requiredDocuments()->create(['name_en' => 'Property Card', 'name_gu' => 'પ્રોપર્ટી કાર્ડ', 'sort_order' => 1]);
         $this->publicSetting('contact.whatsapp_number', '9687621876');
 
-        $this->get(route('services.show', $service->slug))
+        $response = $this->get(route('services.show', $service->slug))
             ->assertOk()
             ->assertSee('Home')
             ->assertSee('Services')
             ->assertSee($service->name_gu)
-            ->assertSee('₹1,250.00')
-            ->assertSee('50%')
-            ->assertSee('7 days')
+            ->assertSee($service->name_en)
+            ->assertSee('સેવા વિશે')
+            ->assertSee(config('public-service-pages.fallback_description'))
             ->assertSee('Property Card')
             ->assertSee('પ્રોપર્ટી કાર્ડ')
-            ->assertSee('Original records may be requested')
             ->assertSee(route('request.create', ['service' => $service->id]), false)
             ->assertSee(route('request.track'), false)
             ->assertSee(route('services.index'), false)
             ->assertSee('https://wa.me/9687621876', false)
-            ->assertSee('Need Help?')
+            ->assertSee('ઓનલાઇન અરજી કરો')
+            ->assertSee('અરજી ટ્રેક કરો')
+            ->assertDontSee('₹1,250.00')
+            ->assertDontSee('Professional Fee')
+            ->assertDontSee('Advance')
+            ->assertDontSee('Estimated Completion')
+            ->assertDontSee('Original records may be requested')
+            ->assertDontSee('How It Works')
+            ->assertDontSee('Service Availability')
+            ->assertDontSee('Related Services')
             ->assertDontSee('tel:');
+
+        $this->assertSame(1, substr_count($response->getContent(), '<h1'));
     }
 
     public function test_invalid_or_inactive_service_slug_returns_not_found(): void
@@ -74,6 +84,45 @@ class PublicServicesTest extends TestCase
             ->assertDontSee('Service Fee')
             ->assertDontSee('Estimated Completion')
             ->assertDontSee('Advance');
+    }
+
+    public function test_all_thirteen_stable_slugs_use_the_shared_gujarati_detail_presentation(): void
+    {
+        $this->seed(ServiceSeeder::class);
+
+        $services = Service::query()->where('is_active', true)->orderBy('sort_order')->get();
+        $this->assertCount(13, $services);
+
+        foreach ($services as $service) {
+            $response = $this->get(route('services.show', $service->slug))
+                ->assertOk()
+                ->assertSee($service->name_gu)
+                ->assertSee($service->name_en)
+                ->assertSee(config("public-service-pages.descriptions.{$service->slug}"))
+                ->assertSee('સેવા વિશે')
+                ->assertSee('જરૂરી દસ્તાવેજો')
+                ->assertDontSee('Professional Fee')
+                ->assertDontSee('How It Works')
+                ->assertDontSee('Related Services');
+
+            $this->assertSame(1, substr_count($response->getContent(), '<h1'));
+        }
+    }
+
+    public function test_service_detail_uses_gujarati_fallbacks_without_documents_or_configured_slug_copy(): void
+    {
+        $service = $this->service([
+            'name_en' => 'Future Documentation Service',
+            'name_gu' => 'નવી દસ્તાવેજ સેવા',
+            'slug' => 'future-documentation-service',
+        ]);
+
+        $this->get(route('services.show', $service->slug))
+            ->assertOk()
+            ->assertSee(config('public-service-pages.fallback_description'))
+            ->assertSee('આ સેવા માટે જરૂરી દસ્તાવેજોની યાદી હાલમાં ઉપલબ્ધ નથી')
+            ->assertDontSee('WhatsApp')
+            ->assertDontSee('tel:');
     }
 
     public function test_service_search_matches_bilingual_names_and_validates_length(): void

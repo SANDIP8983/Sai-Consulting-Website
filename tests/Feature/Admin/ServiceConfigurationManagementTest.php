@@ -43,7 +43,7 @@ class ServiceConfigurationManagementTest extends TestCase
             ->assertSessionHasErrors(['processing_time_label', 'disclaimer']);
     }
 
-    public function test_public_service_uses_configuration_and_separates_documents(): void
+    public function test_public_service_uses_gujarati_configuration_and_customer_safe_document_presentation(): void
     {
         $service = $this->service([
             'description_gu' => 'ગુજરાતી સેવા વર્ણન', 'description_en' => 'English service description',
@@ -56,12 +56,12 @@ class ServiceConfigurationManagementTest extends TestCase
 
         $this->get(route('services.index'))->assertOk()->assertSee($service->name_en);
         $this->get(route('services.show', $service->slug))->assertOk()
-            ->assertSee('ગુજરાતી સેવા વર્ણન')->assertSee('English service description')
-            ->assertSee('₹1,250.00')->assertSee('1-3 Days')->assertSee('3 estimated day(s)')
+            ->assertSee('ગુજરાતી સેવા વર્ણન')->assertDontSee('English service description')
             ->assertSee('Required Documents')->assertSee('Mandatory Copy')
-            ->assertSee('Optional Documents')->assertSee('Optional Copy')
-            ->assertSee('Customer instructions here.')->assertSee('Important note here.')
-            ->assertSee('Optional disclaimer here.')->assertSee('Offline service available.')
+            ->assertSee('Optional Copy')->assertSee('Required')->assertSee('Optional')
+            ->assertDontSee('₹1,250.00')->assertDontSee('1-3 Days')
+            ->assertDontSee('Customer instructions here.')->assertDontSee('Important note here.')
+            ->assertDontSee('Optional disclaimer here.')->assertDontSee('Offline service available.')
             ->assertDontSee(route('request.create', ['service' => $service->id]), false);
     }
 

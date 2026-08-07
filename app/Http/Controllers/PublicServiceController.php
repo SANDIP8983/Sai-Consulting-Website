@@ -26,10 +26,18 @@ class PublicServiceController extends Controller
     {
         $service = $this->catalog->findActiveBySlug($slug);
         $site = $this->homepage->publicSiteData();
+        $documents = $service->activeRequiredDocuments
+            ->unique(fn ($document): string => $document->common_required_document_id
+                ? 'common-'.$document->common_required_document_id
+                : 'name-'.str($document->name_en)->trim()->lower())
+            ->values();
 
         return view('frontend.services.show', [
             'service' => $service,
-            'relatedServices' => $this->catalog->relatedTo($service),
+            'aboutService' => config("public-service-pages.descriptions.{$service->slug}")
+                ?: $service->description_gu
+                ?: config('public-service-pages.fallback_description'),
+            'documents' => $documents,
             'whatsappUrl' => $site['whatsappUrl'],
         ]);
     }

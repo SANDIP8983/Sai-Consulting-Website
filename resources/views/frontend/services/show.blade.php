@@ -1,16 +1,68 @@
 @extends('layouts.app')
+
 @section('title', $service->name_gu.' | '.$service->name_en.' | Sai Consulting')
-@section('description', \Illuminate\Support\Str::limit(strip_tags($service->description_en ?: $service->description ?: $service->name_en.' documentation service by Sai Consulting.'), 155))
+@section('description', \Illuminate\Support\Str::limit($aboutService, 155))
+
 @section('content')
-@php($requiredDocuments = $service->activeRequiredDocuments->where('is_mandatory', true))
-@php($optionalDocuments = $service->activeRequiredDocuments->where('is_mandatory', false))
-<section class="service-detail-hero"><div class="container py-5"><nav><ol class="breadcrumb service-breadcrumb"><li class="breadcrumb-item"><a href="{{ route('home') }}">Home</a></li><li class="breadcrumb-item"><a href="{{ route('services.index') }}">Services</a></li><li class="breadcrumb-item active">{{ $service->name_en }}</li></ol></nav><div class="row align-items-center g-5"><div class="col-lg-8"><span class="service-detail-icon"><i class="bi bi-file-earmark-richtext"></i></span><h1>{{ $service->name_gu }}</h1><p class="service-english-name">{{ $service->name_en }}</p>@if($service->description_gu)<p class="service-lead">{{ $service->description_gu }}</p>@endif @if($service->description_en ?: $service->description)<p class="text-secondary">{{ $service->description_en ?: $service->description }}</p>@endif<div class="d-flex flex-wrap gap-3 mt-4">@if($service->available_online)<a href="{{ route('request.create', ['service' => $service->id]) }}" class="btn btn-primary btn-lg rounded-pill px-4">Apply Online</a>@endif<a href="{{ route('request.track') }}" class="btn btn-secondary-action btn-lg rounded-pill px-4">Track Request</a></div></div><div class="col-lg-4"><div class="service-summary-card premium-card">@if(!is_null($service->service_fee))<div class="summary-row"><i class="bi bi-currency-rupee"></i><div><small>Professional Fee</small><strong>₹{{ number_format((float) $service->service_fee, 2) }}</strong></div></div>@endif @if($service->requires_payment_before_processing && !is_null($service->service_fee) && !is_null($service->advance_percentage))<div class="summary-row"><i class="bi bi-percent"></i><div><small>Advance</small><strong>{{ $service->advance_percentage }}%</strong></div></div>@endif @if($service->processing_time_label || $service->estimated_days)<div class="summary-row"><i class="bi bi-calendar-check"></i><div><small>Estimated Completion</small><strong>{{ $service->processing_time_label ?: $service->estimated_days.' days' }}</strong>@if($service->processing_time_label && $service->estimated_days)<small>{{ $service->estimated_days }} estimated day(s)</small>@endif</div></div>@endif<div class="summary-row"><i class="bi bi-globe"></i><div><small>Availability</small><strong>{{ $service->available_online ? 'Online' : '' }}{{ $service->available_online && $service->available_offline ? ' & ' : '' }}{{ $service->available_offline ? 'Offline' : '' }}</strong></div></div><small class="summary-note">Final scope and charges are confirmed after document review.</small></div></div></div></div></section>
-<section class="section-space service-detail-content"><div class="container"><div class="row g-5"><div class="col-lg-8">
-@if($requiredDocuments->isNotEmpty())<section class="detail-section premium-card mt-4"><span class="detail-kicker">Required Documents</span><h2>જરૂરી દસ્તાવેજો <small>Required Documents</small></h2><div class="required-document-grid">@foreach($requiredDocuments as $document)<div class="required-document document-required"><span><i class="bi bi-file-earmark-check"></i></span><div><strong>{{ $document->name_gu }}</strong><small>{{ $document->name_en }} <span class="badge text-bg-danger">Required</span></small></div></div>@endforeach</div></section>@endif
-@if($optionalDocuments->isNotEmpty())<section class="detail-section premium-card"><span class="detail-kicker">Optional Documents</span><h2>વૈકલ્પિક દસ્તાવેજો <small>Optional Documents</small></h2><div class="required-document-grid">@foreach($optionalDocuments as $document)<div class="required-document document-optional"><span><i class="bi bi-file-earmark-plus"></i></span><div><strong>{{ $document->name_gu }}</strong><small>{{ $document->name_en }} <span class="badge text-bg-secondary">Optional</span></small></div></div>@endforeach</div></section>@endif
-@if($service->customer_instructions ?: $service->notes)<section class="detail-section service-notes premium-card mt-4"><i class="bi bi-info-circle"></i><div><h2>Customer Instructions</h2><p>{{ $service->customer_instructions ?: $service->notes }}</p></div></section>@endif
-@if($service->important_notes)<section class="detail-section premium-card mt-4"><span class="detail-kicker">Important Notes</span><p class="mb-0">{{ $service->important_notes }}</p></section>@endif
-@if($service->disclaimer)<section class="identity-warning mt-4"><i class="bi bi-shield-exclamation"></i><span><strong>Disclaimer:</strong> {{ $service->disclaimer }}</span></section>@endif
-<section class="detail-section premium-card mt-4"><span class="detail-kicker">Process</span><h2>How It Works</h2>@include('frontend.services._process')</section></div><aside class="col-lg-4"><div class="service-side-panel premium-card"><h2>Service Availability</h2>@if($service->available_online)<p>This service is available through the secure online request form.</p><a href="{{ route('request.create', ['service' => $service->id]) }}" class="btn btn-primary w-100 rounded-pill">Apply Online</a>@endif @if($service->available_offline)<div class="alert alert-info mt-3 mb-0"><strong>Offline service available.</strong><br>Visit or contact the office for assistance.</div>@endif @if(!$service->available_online && !$service->available_offline)<p class="text-muted">This service is temporarily unavailable.</p>@endif<a href="{{ route('services.index') }}" class="btn btn-outline-primary w-100 rounded-pill mt-3">Back to Services</a></div>@if($whatsappUrl)<div class="whatsapp-help premium-card mt-4"><span class="icon-box"><i class="bi bi-whatsapp"></i></span><h2>Need Help?</h2><p>Chat with Sai Consulting through WhatsApp.</p><a href="{{ $whatsappUrl }}" target="_blank" rel="noopener" class="btn btn-whatsapp-outline rounded-pill">Chat on WhatsApp</a></div>@endif</aside></div></div></section>
-@if($relatedServices->isNotEmpty())<section class="section-space bg-soft-blue"><div class="container"><div class="section-heading"><span class="eyebrow"><span></span> Related Services</span><h2>અન્ય સક્રિય સેવાઓ</h2></div><div class="row g-4 mt-3">@foreach($relatedServices as $related)<div class="col-md-6 col-lg-4 d-flex"><x-public-service-card :service="$related" compact /></div>@endforeach</div></div></section>@endif
+<section class="service-detail-hero" aria-labelledby="service-title">
+    <div class="container py-5">
+        <nav aria-label="Breadcrumb">
+            <ol class="breadcrumb service-breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ route('home') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ route('services.index') }}">Services</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ $service->name_en }}</li>
+            </ol>
+        </nav>
+        <div class="service-detail-heading">
+            <span class="service-detail-icon" aria-hidden="true"><i class="bi bi-file-earmark-richtext"></i></span>
+            <div>
+                <h1 id="service-title">{{ $service->name_gu }}</h1>
+                <p class="service-english-name mb-0">{{ $service->name_en }}</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-space service-detail-content">
+    <div class="container service-detail-simple">
+        <section class="detail-section premium-card" aria-labelledby="about-service-title">
+            <span class="detail-kicker">Service Information</span>
+            <h2 id="about-service-title">સેવા વિશે</h2>
+            <p class="service-about-copy mb-0">{{ $aboutService }}</p>
+            @if($service->slug === 'legal-consulting')
+                <p class="service-scope-note mb-0"><x-public-icon name="shield" size="20" /> Sai Consulting દસ્તાવેજીકરણ અને સલાહકાર સેવાઓ આપે છે; એડવોકેટ તરીકે પ્રેક્ટિસ કરતું નથી.</p>
+            @endif
+        </section>
+
+        <section class="detail-section premium-card" aria-labelledby="required-documents-title">
+            <span class="detail-kicker">Required Documents</span>
+            <h2 id="required-documents-title">જરૂરી દસ્તાવેજો</h2>
+            @if($documents->isNotEmpty())
+                <ul class="required-document-grid service-document-list list-unstyled mb-0">
+                    @foreach($documents as $document)
+                        <li class="required-document {{ $document->is_mandatory ? 'document-required' : 'document-optional' }}">
+                            <span aria-hidden="true"><i class="bi {{ $document->is_mandatory ? 'bi-file-earmark-check' : 'bi-file-earmark-plus' }}"></i></span>
+                            <div>
+                                <strong>{{ $document->name_gu }}</strong>
+                                <small>{{ $document->name_en }} <span class="badge {{ $document->is_mandatory ? 'text-bg-danger' : 'text-bg-secondary' }}">{{ $document->is_mandatory ? 'Required' : 'Optional' }}</span></small>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            @else
+                <div class="service-documents-empty"><x-public-icon name="document" size="24" /><p class="mb-0">આ સેવા માટે જરૂરી દસ્તાવેજોની યાદી હાલમાં ઉપલબ્ધ નથી. અરજી પછી જરૂરી માહિતી આપવામાં આવશે.</p></div>
+            @endif
+        </section>
+
+        <section class="service-detail-actions" aria-label="Customer actions">
+            @if($service->available_online)
+                <a href="{{ route('request.create', ['service' => $service->id]) }}" class="btn btn-primary btn-lg rounded-pill px-4">ઓનલાઇન અરજી કરો</a>
+            @endif
+            <a href="{{ route('request.track') }}" class="btn btn-outline-primary btn-lg rounded-pill px-4">અરજી ટ્રેક કરો</a>
+            @if($whatsappUrl)
+                <a href="{{ $whatsappUrl }}" target="_blank" rel="noopener" class="btn btn-whatsapp-outline btn-lg rounded-pill px-4"><i class="bi bi-whatsapp" aria-hidden="true"></i> WhatsApp</a>
+            @endif
+        </section>
+    </div>
+</section>
 @endsection
