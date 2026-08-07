@@ -2,7 +2,7 @@
 @foreach([
     ['Customer Name',$customerRequest->name],['Mobile',$customerRequest->mobile],['Email',$customerRequest->email ?: 'Not provided'],
     ['Reference Number',$customerRequest->reference_no],['File Number',$customerRequest->file_number ?: 'Not assigned'],
-    ['Submission Date',$customerRequest->created_at->format('d M Y, g:i A')],['Source',$customerRequest->isOffline()?'Offline':'Online'],
+    ['Submission Date',$customerRequest->created_at->format('d M Y, g:i A')],['Request Source',$customerRequest->isOffline()?'Offline':'Online'],
     ['Village',$customerRequest->property_village ?: $customerRequest->village ?: 'Not provided'],['Survey Number',$customerRequest->survey_numbers ?: 'Not provided'],
     ['Current Status',str($customerRequest->status)->headline()],
 ] as [$label,$value])

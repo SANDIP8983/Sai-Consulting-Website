@@ -9,6 +9,7 @@ class PublicDocumentPolicy
     public static function isSafe(string $name): bool
     {
         $normalized = str($name)->lower()->replace(['-', '_'], ' ')->squish()->value();
+
         return collect(self::PROHIBITED_TERMS)->doesntContain(fn (string $term) => str_contains($normalized, $term));
     }
 }

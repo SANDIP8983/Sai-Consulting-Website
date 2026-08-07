@@ -35,8 +35,9 @@ class ManualPaymentManagementTest extends TestCase
         $admin = User::factory()->create();
         $request = $this->request(['status' => 'approved', 'file_number' => 'SC/2026/F000001']);
         $this->actingAs($admin)->patch(route('admin.requests.fee.update', $request), ['final_fee' => 1250])->assertSessionHasNoErrors();
+        $this->createFrozenBilling($request, 1250);
         $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), $this->paymentPayload(['payment_status' => 'pending']))->assertSessionHasNoErrors();
-        $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), $this->paymentPayload(['payment_status' => 'received', 'customer_remark' => 'Payment confirmed.']))->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), $this->paymentPayload(['amount' => 1250, 'payment_status' => 'received', 'customer_remark' => 'Payment confirmed.']))->assertSessionHasNoErrors();
 
         $request->refresh();
         $this->assertSame('1250.00', $request->amount_due);
@@ -74,6 +75,7 @@ class ManualPaymentManagementTest extends TestCase
     {
         $admin = User::factory()->create();
         $request = $this->request(['status' => 'approved', 'file_number' => 'SC/2026/F000001', 'request_origin' => 'offline']);
+        $this->createFrozenBilling($request, 500);
         $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), $this->paymentPayload(['payment_method' => 'cash']))->assertSessionHasNoErrors();
         $this->assertDatabaseHas('request_payments', ['request_id' => $request->id, 'payment_method' => 'cash']);
     }
@@ -94,9 +96,26 @@ class ManualPaymentManagementTest extends TestCase
         return ['amount' => 500, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => '2026-08-01 11:00:00', ...$attributes];
     }
 
+    private function createFrozenBilling(CustomerRequest $request, float $total): void
+    {
+        $request->billing()->create([
+            'total_original_professional_fee' => $total,
+            'discount_type' => 'none',
+            'discount_value' => 0,
+            'discount_amount' => 0,
+            'net_professional_fee' => $total,
+            'gst_rate' => 0,
+            'gst_amount' => 0,
+            'government_charges_total' => 0,
+            'grand_total' => $total,
+            'pricing_locked_at' => now(),
+        ]);
+    }
+
     private function request(array $attributes = []): CustomerRequest
     {
         $service = Service::query()->firstOrCreate(['slug' => 'payment-test'], ['name_en' => 'Payment Test', 'name_gu' => 'ચુકવણી ટેસ્ટ', 'is_active' => true, 'sort_order' => 1]);
+
         return CustomerRequest::query()->create(['reference_no' => 'SC/2026/000901', 'request_origin' => 'online', 'service_id' => $service->id, 'name' => 'Payment Customer', 'mobile' => '9999999999', 'address' => 'Patan, Gujarat', 'status' => 'received', 'payment_status' => 'not_required', 'last_status_changed_at' => now(), ...$attributes]);
     }
 }

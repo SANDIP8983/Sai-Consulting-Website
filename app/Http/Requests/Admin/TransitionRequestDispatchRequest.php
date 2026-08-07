@@ -8,7 +8,11 @@ use Illuminate\Validation\Rule;
 
 class TransitionRequestDispatchRequest extends FormRequest
 {
-    public function authorize(): bool { return $this->user() !== null; }
+    public function authorize(): bool
+    {
+        return $this->user() !== null;
+    }
+
     public function rules(): array
     {
         return [

@@ -10,7 +10,7 @@ class RequestServiceWorkScope extends Model
 {
     public const STATUSES = ['pending', 'in_progress', 'completed', 'not_required', 'cancelled'];
 
-    protected $fillable = ['request_service_id','work_scope_item_id','name_en_snapshot','name_gu_snapshot','is_custom','status','internal_note','customer_remark','resolution_reason','display_order','selected_by','started_at','completed_at','updated_by'];
+    protected $fillable = ['request_service_id', 'work_scope_item_id', 'name_en_snapshot', 'name_gu_snapshot', 'is_custom', 'status', 'internal_note', 'customer_remark', 'resolution_reason', 'display_order', 'selected_by', 'started_at', 'completed_at', 'updated_by'];
 
     protected function casts(): array
     {
@@ -31,6 +31,14 @@ class RequestServiceWorkScope extends Model
     {
         return $this->belongsTo(User::class, 'selected_by');
     }
-    public function updatedBy(): BelongsTo { return $this->belongsTo(User::class, 'updated_by'); }
-    public function history(): HasMany { return $this->hasMany(RequestServiceWorkScopeHistory::class); }
+
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function history(): HasMany
+    {
+        return $this->hasMany(RequestServiceWorkScopeHistory::class);
+    }
 }

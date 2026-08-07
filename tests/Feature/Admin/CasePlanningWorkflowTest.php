@@ -57,7 +57,7 @@ class CasePlanningWorkflowTest extends TestCase
         [$request] = $this->case();
         $added = $this->service('Added');
         $reference = $request->reference_no;
-        $this->actingAs($admin)->post(route('admin.requests.services.add', $request), ['service_id' => $added->id])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->post(route('admin.requests.services.add', $request), ['service_id' => $added->id, 'professional_fee' => 1000])->assertSessionHasNoErrors();
         $this->assertSame($reference, $request->fresh()->reference_no);
         $this->assertDatabaseHas('request_services', ['request_id' => $request->id, 'service_id' => $added->id, 'status' => 'under_review']);
     }
@@ -67,13 +67,13 @@ class CasePlanningWorkflowTest extends TestCase
         $admin = User::factory()->create();
         [$request,$accepted,$rejected,$review] = $this->case(3);
         $scope = WorkScopeItem::where('name_en', 'Drafting')->sole();
-        $this->actingAs($admin)->patch(route('admin.requests.case-planning.save', $request), ['services' => [$accepted->id => ['decision' => 'approved', 'work_scope_ids' => [$scope->id]], $rejected->id => ['decision' => 'rejected', 'decision_notes' => 'Excluded'], $review->id => ['decision' => 'under_review']]])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.case-planning.save', $request), ['services' => [$accepted->id => ['decision' => 'approved', 'work_scope_ids' => [$scope->id]], $rejected->id => ['decision' => 'rejected', 'decision_notes' => 'Excluded'], $review->id => ['decision' => 'rejected', 'decision_notes' => 'Not included']]])->assertSessionHasNoErrors();
         $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload())->assertSessionHasNoErrors();
         $request->refresh();
         $file = $request->file_number;
         $this->assertSame('1000.00', $request->billing->total_original_professional_fee);
-        $this->assertNull($request->billing->pricing_locked_at);
-        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload())->assertSessionHasNoErrors();
+        $this->assertNotNull($request->billing->pricing_locked_at);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload())->assertSessionHasErrors('pricing');
         $this->assertSame($file, $request->fresh()->file_number);
     }
 
@@ -114,17 +114,22 @@ class CasePlanningWorkflowTest extends TestCase
                 'work_scope_ids' => [$drafting->id, $review->id],
             ]],
         ])->assertSessionHasNoErrors();
+        $request->update(['file_number' => 'SC/2026/F000001', 'case_approved_at' => now(), 'case_approved_by' => $admin->id]);
+        $service->service->update(['requires_payment_before_processing' => false]);
 
-        $this->actingAs($admin)->patch(route('admin.requests.case-planning.complete', $request))
+        $this->actingAs($admin)->patch(route('admin.requests.processing.complete', $request), ['completion_date' => now()->toDateString()])
             ->assertSessionHasErrors('work_scopes');
 
         foreach ($service->fresh()->workScopes as $index => $scope) {
-            $this->actingAs($admin)->patch(route('admin.requests.work-scopes.update', [$request, $scope]), [
-                'status' => $index === 0 ? 'completed' : 'cancelled',
-            ])->assertSessionHasNoErrors();
+            if ($index === 0) {
+                $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update', [$request, $scope]), ['status' => 'in_progress'])->assertSessionHasNoErrors();
+                $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update', [$request, $scope]), ['status' => 'completed'])->assertSessionHasNoErrors();
+            } else {
+                $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update', [$request, $scope]), ['status' => 'cancelled', 'reason' => 'Not needed for this case'])->assertSessionHasNoErrors();
+            }
         }
 
-        $this->actingAs($admin)->patch(route('admin.requests.case-planning.complete', $request))
+        $this->actingAs($admin)->patch(route('admin.requests.processing.complete', $request), ['completion_date' => now()->toDateString()])
             ->assertSessionHasNoErrors();
         $this->assertSame('completed', $request->fresh()->status);
         $this->actingAs($admin)->get(route('admin.requests.show', $request))

@@ -17,7 +17,8 @@ class ProcessingWorkChecklistTest extends TestCase
     {
         [$admin,$request,$service,$scope] = $this->planned(true, false);
         $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update', [$request, $scope]), ['status' => 'in_progress'])->assertSessionHasErrors('case');
-        $request->update(['payment_status' => 'received']);
+        $request->billing()->create(['total_original_professional_fee' => 1000, 'discount_type' => 'none', 'discount_value' => 0, 'discount_amount' => 0, 'net_professional_fee' => 1000, 'gst_rate' => 0, 'gst_amount' => 0, 'government_charges_total' => 0, 'grand_total' => 1000, 'pricing_locked_at' => now()]);
+        $request->payments()->create(['amount' => 1000, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => now()]);
         $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update', [$request, $scope]), ['status' => 'in_progress'])->assertSessionHasNoErrors();
         $this->assertSame('in_progress', $request->fresh()->status);
     }
@@ -109,6 +110,10 @@ class ProcessingWorkChecklistTest extends TestCase
         $service = $this->service($requiresPayment);
         $request = CustomerRequest::create(['reference_no' => 'SC/2026/'.fake()->unique()->numerify('######'), 'file_number' => 'SC/2026/F'.fake()->unique()->numerify('######'), 'case_planning_version' => 1, 'case_approved_at' => now(), 'case_approved_by' => $admin->id, 'service_id' => $service->id, 'name' => 'Customer', 'mobile' => '9999999999', 'status' => $requiresPayment && ! $paid ? 'payment_pending' : 'approved', 'payment_status' => $paid ? 'received' : ($requiresPayment ? 'pending' : 'not_required')]);
         $requestService = $request->requestServices()->create(['service_id' => $service->id, 'service_name_en_snapshot' => $service->name_en, 'service_name_gu_snapshot' => $service->name_gu, 'professional_fee' => 1000, 'status' => 'approved']);
+        if ($paid) {
+            $request->billing()->create(['total_original_professional_fee' => 1000, 'discount_type' => 'none', 'discount_value' => 0, 'discount_amount' => 0, 'net_professional_fee' => 1000, 'gst_rate' => 0, 'gst_amount' => 0, 'government_charges_total' => 0, 'grand_total' => 1000, 'pricing_locked_at' => now()]);
+            $request->payments()->create(['amount' => 1000, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => now()]);
+        }
         $item = WorkScopeItem::create(['name_en' => 'Drafting', 'name_gu' => 'ડ્રાફ્ટિંગ', 'normalized_name' => 'drafting-'.fake()->unique()->numerify('######'), 'is_active' => true]);
         WorkScopeItem::create(['name_en' => 'Unselected Review', 'name_gu' => 'ચકાસણી', 'normalized_name' => 'review-'.fake()->unique()->numerify('######'), 'is_active' => true]);
         $scope = $requestService->workScopes()->create(['work_scope_item_id' => $item->id, 'name_en_snapshot' => 'Drafting', 'name_gu_snapshot' => 'ડ્રાફ્ટિંગ', 'status' => 'pending', 'selected_by' => $admin->id]);

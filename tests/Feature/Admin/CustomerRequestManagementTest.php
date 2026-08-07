@@ -110,6 +110,7 @@ class CustomerRequestManagementTest extends TestCase
     {
         $admin = User::factory()->create();
         $request = $this->customerRequest(['status' => 'payment_pending', 'payment_status' => 'pending', 'amount_due' => 500, 'file_number' => 'SC/2026/F000001']);
+        $request->billing()->create(['total_original_professional_fee' => 500, 'discount_type' => 'none', 'discount_value' => 0, 'discount_amount' => 0, 'net_professional_fee' => 500, 'gst_rate' => 0, 'gst_amount' => 0, 'government_charges_total' => 0, 'grand_total' => 500, 'pricing_locked_at' => now()]);
 
         $this->actingAs($admin)->patch(route('admin.requests.estimate', $request), ['estimated_completion_date' => '2026-08-15'])->assertSessionHasNoErrors();
         $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), ['amount' => 500, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => '2026-08-01 11:00:00'])->assertSessionHasNoErrors();
@@ -136,6 +137,7 @@ class CustomerRequestManagementTest extends TestCase
     private function customerRequest(array $attributes = []): CustomerRequest
     {
         $service = Service::query()->firstOrCreate(['slug' => 'sale-deed'], ['name_en' => 'Sale Deed', 'name_gu' => 'વેચાણ દસ્તાવેજ', 'is_active' => true, 'sort_order' => 1]);
+
         return CustomerRequest::query()->create(['reference_no' => 'SC/2026/000001', 'service_id' => $service->id, 'name' => 'Test Customer', 'mobile' => '9999999999', 'address' => 'Patan, Gujarat', 'survey_numbers' => '12/1', 'khata_number' => 'KH-1', 'details' => 'Draft request', 'status' => 'received', 'payment_status' => 'not_required', 'last_status_changed_at' => now(), ...$attributes]);
     }
 }

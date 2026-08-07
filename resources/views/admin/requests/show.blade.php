@@ -9,7 +9,7 @@
 
 <div class="accordion request-detail-accordion" id="request-detail-sections">
     <div class="accordion-item" id="section-file"><h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#panel-file" aria-expanded="true" aria-controls="panel-file">1. File Summary</button></h2><div id="panel-file" class="accordion-collapse collapse show" data-bs-parent="#request-detail-sections"><div class="accordion-body">
-        <div class="row g-3 mb-4">@foreach([['Reference Number',$customerRequest->reference_no],['File Number',$customerRequest->file_number?:'Not assigned'],['Status',str($customerRequest->status)->headline()],['Payment',str($customerRequest->payment_status)->headline()],['Processing',$processingSummary['percentage'].'%'],['Submitted',$customerRequest->created_at->format('d M Y, g:i A')]] as [$label,$value])<div class="col-6 col-lg-4"><small class="text-muted d-block">{{ $label }}</small><strong>{{ $value }}</strong></div>@endforeach</div>
+        <div class="row g-3 mb-4">@foreach([['Reference Number',$customerRequest->reference_no],['File Number',$customerRequest->file_number?:'Not assigned'],['Status',str($customerRequest->status)->headline()],['Payment',str($billingState->paymentStatus)->replace('_',' ')->headline()],['Processing',$processingSummary['percentage'].'%'],['Submitted',$customerRequest->created_at->format('d M Y, g:i A')]] as [$label,$value])<div class="col-6 col-lg-4"><small class="text-muted d-block">{{ $label }}</small><strong>{{ $value }}</strong></div>@endforeach</div>
         @unless($customerRequest->usesChecklistWorkflow() || in_array($customerRequest->status,['completed','dispatched','delivered','closed','archived'],true))@include('admin.requests.partials.file-summary')@endunless
         @include('admin.requests.partials.workflow-actions')
         <div class="mt-4">@include('admin.requests.partials.pdf-downloads')</div>
@@ -23,8 +23,18 @@
     </div></div></div>
 
     <div class="accordion-item" id="section-services"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panel-services" aria-expanded="false" aria-controls="panel-services">4. Selected Services</button></h2><div id="panel-services" class="accordion-collapse collapse" data-bs-parent="#request-detail-sections"><div class="accordion-body">
-        <div class="row g-3 mb-4">@forelse($customerRequest->requestServices as $selectedService)<div class="col-lg-6"><div class="border rounded p-3 h-100"><div class="d-flex justify-content-between gap-2"><strong>{{ $selectedService->service_name_en_snapshot?:$selectedService->service?->name_en }}</strong>@include('admin.requests.partials.status-badge',['status'=>$selectedService->status])</div>@if($selectedService->service_name_gu_snapshot?:$selectedService->service?->name_gu)<div class="small text-muted">{{ $selectedService->service_name_gu_snapshot?:$selectedService->service?->name_gu }}</div>@endif<div class="small mt-2">Professional fee ₹{{ number_format((float)$selectedService->professional_fee,2) }} · GST {{ number_format((float)$selectedService->gst_rate,2) }}%</div></div></div>@empty<div class="text-muted">No selected service snapshots are available.</div>@endforelse</div>
-        @unless($customerRequest->usesChecklistWorkflow())@include('admin.requests.partials.case-planning')@endunless
+        <div class="row g-3 mb-4">
+            @forelse($customerRequest->requestServices as $selectedService)
+                <div class="col-lg-6"><div class="border rounded p-3 h-100"><div class="d-flex justify-content-between gap-2"><strong>{{ $selectedService->service_name_en_snapshot?:$selectedService->service?->name_en }}</strong>@include('admin.requests.partials.status-badge',['status'=>$selectedService->status])</div>@if($selectedService->service_name_gu_snapshot?:$selectedService->service?->name_gu)<div class="small text-muted">{{ $selectedService->service_name_gu_snapshot?:$selectedService->service?->name_gu }}</div>@endif<div class="small mt-2">Professional fee ₹{{ number_format($selectedService->billingProfessionalFee(),2) }} · GST {{ number_format((float)$selectedService->gst_rate,2) }}%</div></div></div>
+            @empty
+                @if(!$customerRequest->usesChecklistWorkflow() && $customerRequest->service)
+                    <div class="col-lg-6"><div class="border rounded p-3 h-100"><strong>{{ $customerRequest->service->name_en }}</strong>@if($customerRequest->service->name_gu)<div class="small text-muted">{{ $customerRequest->service->name_gu }}</div>@endif<div class="small mt-2 text-muted">Historical primary service record</div></div></div>
+                @else
+                    <div class="text-muted">No selected service snapshots are available.</div>
+                @endif
+            @endforelse
+        </div>
+        @if($customerRequest->usesChecklistWorkflow())@include('admin.requests.partials.case-planning')@endif
     </div></div></div>
 
     <div class="accordion-item" id="section-billing"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panel-billing" aria-expanded="false" aria-controls="panel-billing">5. Billing Summary</button></h2><div id="panel-billing" class="accordion-collapse collapse" data-bs-parent="#request-detail-sections"><div class="accordion-body">

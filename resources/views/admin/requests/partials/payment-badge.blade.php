@@ -1,2 +1,3 @@
-@php($colors = ['not_required'=>'secondary','pending'=>'warning','received'=>'success','failed'=>'danger','refunded'=>'info'])
-<span class="badge text-bg-{{ $colors[$status] ?? 'secondary' }}">{{ str($status)->replace('_', ' ')->title() }}</span>
+@php($colors = ['billing_error'=>'danger','billing_pending'=>'secondary','not_required'=>'secondary','pending'=>'warning','partial'=>'warning','paid'=>'success','received'=>'success','failed'=>'danger','refunded'=>'info'])
+@php($labels = ['billing_error'=>'Billing Error','billing_pending'=>'Billing Pending','not_required'=>'Not Required','pending'=>'Payment Pending','partial'=>'Partially Paid','paid'=>'Paid','received'=>'Paid','failed'=>'Failed','refunded'=>'Refunded'])
+<span class="badge text-bg-{{ $colors[$status] ?? 'secondary' }}">{{ $labels[$status] ?? str($status)->replace('_', ' ')->title() }}</span>

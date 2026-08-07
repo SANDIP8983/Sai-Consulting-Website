@@ -76,7 +76,9 @@ return new class extends Migration
                         'service_name_en_snapshot' => $service->name_en,
                         'service_name_gu_snapshot' => $service->name_gu,
                     ];
-                    if ($row->original_professional_fee === null) $snapshot['original_professional_fee'] = $row->professional_fee;
+                    if ($row->original_professional_fee === null) {
+                        $snapshot['original_professional_fee'] = $row->professional_fee;
+                    }
                     DB::table('request_services')->where('id', $row->id)->update($snapshot);
                 }
             }

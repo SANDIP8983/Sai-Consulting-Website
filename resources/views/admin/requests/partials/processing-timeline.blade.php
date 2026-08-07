@@ -1,5 +1,5 @@
 @if($customerRequest->processing)
-@php($paymentBlocked = $customerRequest->processing->requires_payment_before_processing && $customerRequest->payment_status !== 'received')
+@php($paymentBlocked = $customerRequest->processing->requires_payment_before_processing && $billingState->paymentStatus !== 'paid')
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-white fw-semibold">પ્રક્રિયા સમયરેખા · Processing Timeline</div>
     <div class="card-body">

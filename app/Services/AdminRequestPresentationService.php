@@ -7,6 +7,8 @@ use Illuminate\Support\Collection;
 
 class AdminRequestPresentationService
 {
+    public function __construct(private readonly RequestBillingStateResolver $billingStateResolver) {}
+
     public function detail(CustomerRequest $request, array $transitions): array
     {
         $scopes = $request->requestServices
@@ -21,6 +23,7 @@ class AdminRequestPresentationService
         $approvedServices = $request->requestServices->where('status', 'approved');
         $allServicesDecided = $request->requestServices->every(fn ($item): bool => in_array($item->status, ['approved', 'rejected', 'under_review'], true)
             && ($request->case_planning_version === 0 || $item->decided_at));
+        $billingState = $this->billingStateResolver->resolve($request);
         $paymentEligible = $request->file_number && in_array($request->status, ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'], true);
 
         return [
@@ -36,11 +39,12 @@ class AdminRequestPresentationService
             ],
             'checklistGroups' => $this->groupScopes($scopes),
             'billingSummary' => $this->billing($request),
+            'billingState' => $billingState,
             'activityItems' => $this->activity($request),
             'stickyActions' => [
                 'save' => ! in_array($request->status, ['closed', 'archived'], true),
-                'approve' => $approvedServices->isNotEmpty() && $allServicesDecided && ! $request->billing?->isLocked() && ! in_array($request->status, ['closed', 'archived'], true),
-                'mark_paid' => $paymentEligible && $request->payment_status !== 'received',
+                'approve' => $approvedServices->isNotEmpty() && $allServicesDecided && ! $billingState->pricingLocked && ! in_array($request->status, ['closed', 'archived'], true),
+                'mark_paid' => $paymentEligible && $billingState->canRecordPayment(),
                 'complete' => $scopes->isNotEmpty() && $remaining === 0 && ! in_array($request->status, ['completed', 'dispatched', 'delivered', 'closed', 'archived'], true),
                 'dispatch' => in_array($request->status, ['completed', 'dispatched', 'delivered'], true),
                 'archive' => in_array('archived', $transitions, true),
@@ -69,23 +73,19 @@ class AdminRequestPresentationService
 
     private function billing(CustomerRequest $request): array
     {
-        $billing = $request->billing;
-        $professionalFee = (float) ($billing?->total_original_professional_fee ?? $request->requestServices->where('status', 'approved')->sum(fn ($service) => $service->billingProfessionalFee()));
-        $discount = (float) ($billing?->discount_amount ?? 0);
-        $gst = (float) ($billing?->gst_amount ?? 0);
-        $government = (float) ($billing?->government_charges_total ?? 0);
-        $grandTotal = (float) ($billing?->grand_total ?? $request->amount_due);
-        $paid = (float) $request->amount_paid;
+        $state = $this->billingStateResolver->resolve($request);
 
         return [
-            'professional_fee' => $professionalFee,
-            'discount' => $discount,
-            'gst' => $gst,
-            'government_charges' => $government,
-            'grand_total' => $grandTotal,
-            'paid' => $paid,
-            'balance' => max(0, $grandTotal - $paid),
-            'locked' => (bool) $billing?->isLocked(),
+            'professional_fee' => $state->professionalFee,
+            'discount' => $state->discountAmount,
+            'gst' => $state->gstAmount,
+            'government_charges' => $state->governmentChargesTotal,
+            'grand_total' => $state->grandTotal,
+            'paid' => $state->confirmedPaidAmount,
+            'balance' => $state->balanceDue,
+            'payment_status' => $state->paymentStatus,
+            'locked' => $state->pricingLocked,
+            'frozen' => $state->hasFrozenBilling || $state->legacy,
         ];
     }
 

@@ -32,7 +32,7 @@ class ServiceRequiredDocumentManagementService
     {
         return DB::transaction(function () use ($attributes): ServiceRequiredDocument {
             $master = $this->master($attributes);
-            Service::query()->pluck('id')->each(function (int $serviceId) use ($master, $attributes): void {
+            Service::query()->pluck('id')->each(function (int $serviceId) use ($master): void {
                 ServiceRequiredDocument::query()->firstOrCreate(
                     ['service_id' => $serviceId, 'common_required_document_id' => $master->id],
                     ['name_en' => $master->name_en, 'name_gu' => $master->name_gu, 'is_mandatory' => false, 'is_active' => false, 'sort_order' => 999, 'allowed_file_types' => $master->allowed_file_types ?? ['pdf', 'jpg', 'jpeg', 'png'], 'max_upload_size_kb' => $master->max_upload_size_kb ?? 10240],
@@ -40,6 +40,7 @@ class ServiceRequiredDocumentManagementService
             });
             $configuration = ServiceRequiredDocument::query()->where('service_id', $attributes['service_id'])->where('common_required_document_id', $master->id)->firstOrFail();
             $configuration->update($this->attributes($attributes) + ['common_required_document_id' => $master->id]);
+
             return $configuration;
         });
     }
@@ -95,6 +96,7 @@ class ServiceRequiredDocumentManagementService
         if (! $master->is_common) {
             $master->update(['is_common' => true, 'is_active' => true]);
         }
+
         return $master;
     }
 

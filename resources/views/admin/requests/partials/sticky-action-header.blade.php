@@ -4,7 +4,7 @@
             <strong>{{ $customerRequest->reference_no }}</strong>
             <span class="text-muted">{{ $customerRequest->file_number ?: 'File not assigned' }}</span>
             @include('admin.requests.partials.status-badge',['status'=>$customerRequest->status])
-            @include('admin.requests.partials.payment-badge',['status'=>$customerRequest->payment_status])
+            @include('admin.requests.partials.payment-badge',['status'=>$billingState->paymentStatus])
             <span class="badge text-bg-light border">{{ $processingSummary['percentage'] }}% processed</span>
         </div>
         <div class="d-flex flex-wrap gap-2" role="group" aria-label="Workflow shortcuts">

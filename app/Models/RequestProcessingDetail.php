@@ -37,7 +37,18 @@ class RequestProcessingDetail extends Model
         ];
     }
 
-    public function request(): BelongsTo { return $this->belongsTo(CustomerRequest::class, 'request_id'); }
-    public function fileInCharge(): BelongsTo { return $this->belongsTo(User::class, 'file_in_charge_user_id'); }
-    public function registeredDocument(): BelongsTo { return $this->belongsTo(RequestDocument::class, 'registered_document_id'); }
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(CustomerRequest::class, 'request_id');
+    }
+
+    public function fileInCharge(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'file_in_charge_user_id');
+    }
+
+    public function registeredDocument(): BelongsTo
+    {
+        return $this->belongsTo(RequestDocument::class, 'registered_document_id');
+    }
 }

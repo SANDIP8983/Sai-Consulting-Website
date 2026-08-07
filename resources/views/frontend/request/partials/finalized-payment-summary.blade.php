@@ -1,7 +1,6 @@
-@if($customerRequest->billing?->pricing_locked_at)
+@if($customerRequest->billing)
 <div class="premium-card p-4 mt-4"><h3 class="h5">Payment Summary</h3>
     <div class="table-responsive"><table class="table"><tbody>
-        @foreach($customerRequest->requestServices->where('status','approved') as $item)<tr><td>{{ $item->service_name_gu_snapshot ?: $item->service?->name_gu }} <small class="text-muted">{{ $item->service_name_en_snapshot ?: $item->service?->name_en }}</small></td><td class="text-end">₹{{ number_format((float)$item->professional_fee,2) }}</td></tr>@endforeach
         <tr><th>Total Professional Fee</th><th class="text-end">₹{{ number_format((float)$customerRequest->billing->total_original_professional_fee,2) }}</th></tr>
         @if((float)$customerRequest->billing->discount_amount > 0)<tr><td>Discount</td><td class="text-end text-success">− ₹{{ number_format((float)$customerRequest->billing->discount_amount,2) }}</td></tr>@endif
         <tr><td>Net Professional Fee</td><td class="text-end">₹{{ number_format((float)$customerRequest->billing->net_professional_fee,2) }}</td></tr>

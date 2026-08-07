@@ -13,7 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class CasePlanningService
 {
-    public function __construct(private readonly FileNumberService $fileNumbers) {}
+    public function __construct(
+        private readonly FileNumberService $fileNumbers,
+        private readonly RequestBillingStateResolver $billingStateResolver,
+    ) {}
 
     public function save(CustomerRequest $request, array $services, User $user): void
     {
@@ -43,7 +46,7 @@ class CasePlanningService
                 $row->approvalHistory()->create(['request_id' => $locked->id, 'approved_by' => $user->id, 'pricing_snapshot' => ['decision' => $decision, 'work_scope_ids' => $scopeIds, 'custom_work_item' => $custom ?: null], 'action' => 'decision', 'note' => $note ?: null]);
             }
             $from = $locked->status;
-            $changes = ['case_planning_version' => 1];
+            $changes = ['case_planning_version' => CustomerRequest::CURRENT_CASE_PLANNING_VERSION];
             if ($from === 'received') {
                 $changes += ['status' => 'under_review', 'last_status_changed_at' => now()];
             }$locked->update($changes);
@@ -53,18 +56,47 @@ class CasePlanningService
         });
     }
 
-    public function addService(CustomerRequest $request, int $serviceId, User $user): RequestService
+    public function addService(CustomerRequest $request, int $serviceId, float $professionalFee, ?string $internalNote, User $user): RequestService
     {
-        return DB::transaction(function () use ($request, $serviceId) {
+        return DB::transaction(function () use ($request, $serviceId, $professionalFee, $internalNote, $user) {
             $locked = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
             $this->assertMutable($locked);
             $service = Service::query()->with('activeRequiredDocuments')->where('is_active', true)->findOrFail($serviceId);
             if ($locked->requestServices()->where('service_id', $service->id)->exists()) {
                 throw ValidationException::withMessages(['service_id' => 'This service is already part of the request.']);
-            }$row = $locked->requestServices()->create(['service_id' => $service->id, 'service_name_en_snapshot' => $service->name_en, 'service_name_gu_snapshot' => $service->name_gu, 'professional_fee' => $service->service_fee ?? 0, 'original_professional_fee' => $service->service_fee ?? 0, 'gst_rate' => $service->gst_rate ?? 0, 'government_charges' => 0, 'government_charges_snapshot' => [], 'estimated_days' => $service->estimated_days, 'required_documents_snapshot' => $service->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'is_mandatory', 'sort_order'])->values()->all(), 'status' => 'under_review']);
-            $locked->update(['case_planning_version' => 1]);
+            }$row = $locked->requestServices()->create(['service_id' => $service->id, 'added_by' => $user->id, 'is_admin_added' => true, 'service_name_en_snapshot' => $service->name_en, 'service_name_gu_snapshot' => $service->name_gu, 'professional_fee' => round($professionalFee, 2), 'original_professional_fee' => $service->service_fee ?? 0, 'gst_rate' => $service->gst_rate ?? 0, 'government_charges' => 0, 'government_charges_snapshot' => [], 'estimated_days' => $service->estimated_days, 'required_documents_snapshot' => $service->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'is_mandatory', 'sort_order'])->values()->all(), 'status' => 'under_review', 'internal_note' => $internalNote]);
+            $row->approvalHistory()->create(['request_id' => $locked->id, 'approved_by' => $user->id, 'pricing_snapshot' => ['default_professional_fee' => (float) ($service->service_fee ?? 0), 'professional_fee' => round($professionalFee, 2), 'gst_rate' => (float) ($service->gst_rate ?? 0)], 'action' => 'added', 'note' => $internalNote]);
+            $locked->update(['case_planning_version' => CustomerRequest::CURRENT_CASE_PLANNING_VERSION]);
 
             return $row;
+        });
+    }
+
+    public function updateServiceFee(CustomerRequest $request, RequestService $requestService, float $professionalFee, ?string $internalNote, User $user): void
+    {
+        DB::transaction(function () use ($request, $requestService, $professionalFee, $internalNote, $user): void {
+            $locked = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
+            $this->assertMutable($locked);
+            $row = $locked->requestServices()->whereKey($requestService->id)->lockForUpdate()->firstOrFail();
+            if (! $row->is_admin_added) {
+                throw ValidationException::withMessages(['professional_fee' => 'Only services added by Admin can use this request-specific fee editor.']);
+            }
+            $previousFee = $row->professional_fee;
+            $row->update(['professional_fee' => round($professionalFee, 2), 'internal_note' => $internalNote]);
+            $row->approvalHistory()->create(['request_id' => $locked->id, 'approved_by' => $user->id, 'pricing_snapshot' => ['previous_professional_fee' => (float) $previousFee, 'professional_fee' => round($professionalFee, 2), 'default_professional_fee' => (float) ($row->original_professional_fee ?? 0), 'gst_rate' => (float) $row->gst_rate], 'action' => 'fee_updated', 'note' => $internalNote]);
+        });
+    }
+
+    public function removeService(CustomerRequest $request, RequestService $requestService): void
+    {
+        DB::transaction(function () use ($request, $requestService): void {
+            $locked = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
+            $this->assertMutable($locked);
+            $row = $locked->requestServices()->whereKey($requestService->id)->lockForUpdate()->firstOrFail();
+            if (! $row->is_admin_added || $row->status === 'approved' || $row->workScopes()->exists()) {
+                throw ValidationException::withMessages(['service' => 'Only an unfinalized Admin-added service can be removed. Reject it and clear its work scope first.']);
+            }
+            $row->delete();
         });
     }
 
@@ -142,7 +174,7 @@ class CasePlanningService
 
         // A confirmed payment locks planning through the billing lock. An explicit,
         // audited pricing unlock deliberately makes the case editable again.
-        if ($request->billing?->isLocked() || ($request->payment_status === 'received' && ! $request->billing)) {
+        if ($this->billingStateResolver->resolve($request)->pricingLocked) {
             throw ValidationException::withMessages(['case' => 'Payment-confirmed pricing is locked. Use the audited Unlock Pricing action before making changes.']);
         }
     }

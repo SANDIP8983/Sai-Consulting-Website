@@ -64,6 +64,7 @@ class MultipleServicesPerRequestTest extends TestCase
         $first = Service::query()->create(['name_en' => 'First Service', 'name_gu' => 'First', 'slug' => 'first', 'service_fee' => 1000, 'gst_rate' => 18, 'government_charges' => 200, 'estimated_days' => 5, 'is_active' => true, 'available_online' => true]);
         $first->requiredDocuments()->create(['name_en' => 'Record', 'name_gu' => 'Record', 'sort_order' => 1, 'is_active' => true, 'is_mandatory' => true]);
         $second = Service::query()->create(['name_en' => 'Second Service', 'name_gu' => 'Second', 'slug' => 'second', 'service_fee' => 2000, 'gst_rate' => 5, 'government_charges' => 230, 'estimated_days' => 10, 'is_active' => true, 'available_online' => true]);
+
         return [$first, $second];
     }
 }

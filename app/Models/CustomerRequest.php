@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CustomerRequest extends Model
 {
+    public const CURRENT_CASE_PLANNING_VERSION = 1;
+
+    public const CHECKLIST_WORKFLOW_CUTOFF_AT = '2026-08-02 12:00:00';
+
     /**
      * Laravel ને જણાવો કે આ Model "requests" table વાપરે છે.
      */
@@ -89,7 +93,10 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestDispatch::class, 'request_id')->latest('dispatch_date');
     }
 
-    public function dispatchHistory(): HasMany { return $this->hasMany(RequestDispatchHistory::class, 'request_id'); }
+    public function dispatchHistory(): HasMany
+    {
+        return $this->hasMany(RequestDispatchHistory::class, 'request_id');
+    }
 
     public function processing(): HasOne
     {
@@ -106,12 +113,14 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestCaseActionHistory::class, 'request_id');
     }
 
-    public function closedBy(): BelongsTo { return $this->belongsTo(User::class, 'closed_by'); }
+    public function closedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
+    }
 
     public function usesChecklistWorkflow(): bool
     {
-        return $this->case_planning_version > 0 && $this->file_number
-            && $this->requestServices()->where('status', 'approved')->whereHas('workScopes')->exists();
+        return $this->case_planning_version >= self::CURRENT_CASE_PLANNING_VERSION;
     }
 
     public function feeUpdatedBy(): BelongsTo

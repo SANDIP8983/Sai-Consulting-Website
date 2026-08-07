@@ -5,11 +5,15 @@ namespace App\Services\Pdf;
 use App\Data\Pdf\PdfDocumentData;
 use App\Enums\PdfDocumentType;
 use App\Models\CustomerRequest;
+use App\Services\RequestBillingStateResolver;
 use Illuminate\Support\Carbon;
 
 class CustomerSafePdfDataFactory
 {
-    public function __construct(private readonly PdfCompanyContext $companies) {}
+    public function __construct(
+        private readonly PdfCompanyContext $companies,
+        private readonly RequestBillingStateResolver $billingStateResolver,
+    ) {}
 
     public function make(PdfDocumentType $type, CustomerRequest $request): PdfDocumentData
     {
@@ -66,6 +70,7 @@ class CustomerSafePdfDataFactory
     private function payment(CustomerRequest $request): array
     {
         $billing = $request->billing()->with('charges')->first();
+        $state = $this->billingStateResolver->resolve($request);
 
         return [...$this->base($request), 'billing' => $billing ? [
             'original_fee' => (float) $billing->total_original_professional_fee, 'discount' => (float) $billing->discount_amount,
@@ -73,8 +78,8 @@ class CustomerSafePdfDataFactory
             'gst_amount' => (float) $billing->gst_amount, 'government_charges' => (float) $billing->government_charges_total,
             'grand_total' => (float) $billing->grand_total,
             'charges' => $billing->charges->map(fn ($charge) => ['name' => $charge->name, 'amount' => (float) $charge->amount])->all(),
-        ] : ['grand_total' => (float) $request->amount_due, 'charges' => []],
-            'payment_status' => str($request->payment_status)->headline()->toString(), 'amount_paid' => (float) $request->amount_paid,
+        ] : ['grand_total' => $state->grandTotal, 'charges' => []],
+            'payment_status' => str($state->paymentStatus)->headline()->toString(), 'amount_paid' => $state->confirmedPaidAmount,
             'payments' => $request->payments()->latest('received_at')->get()->map(fn ($payment) => ['amount' => (float) $payment->amount, 'status' => str($payment->payment_status)->headline()->toString(), 'method' => str($payment->payment_method)->headline()->toString(), 'reference' => $payment->transaction_reference, 'received_at' => $payment->received_at?->format('d M Y, g:i A'), 'customer_remark' => $payment->customer_remark])->all(),
         ];
     }

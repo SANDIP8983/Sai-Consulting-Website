@@ -25,7 +25,18 @@ class RequestDispatch extends Model
         return $this->belongsTo(User::class, 'performed_by');
     }
 
-    public function updatedBy(): BelongsTo { return $this->belongsTo(User::class, 'updated_by'); }
-    public function proofs(): HasMany { return $this->hasMany(RequestDispatchProof::class); }
-    public function history(): HasMany { return $this->hasMany(RequestDispatchHistory::class); }
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function proofs(): HasMany
+    {
+        return $this->hasMany(RequestDispatchProof::class);
+    }
+
+    public function history(): HasMany
+    {
+        return $this->hasMany(RequestDispatchHistory::class);
+    }
 }

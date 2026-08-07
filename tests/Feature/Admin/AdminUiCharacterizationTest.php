@@ -49,7 +49,7 @@ class AdminUiCharacterizationTest extends TestCase
             ->assertOk()
             ->assertSee($request->reference_no)
             ->assertSee('name="status"', false)
-            ->assertSee('name="payment_status"', false)
+            ->assertDontSee('name="payment_status"', false)
             ->assertSee('name="processing_state"', false)
             ->assertSee('name="dispatch_state"', false)
             ->assertSee('name="date_from"', false)

@@ -189,7 +189,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             ->assertSee($request->reference_no)
             ->assertSee('Title Search')
             ->assertSee('Under Review')
-            ->assertSee('Not Required')
+            ->assertSee('Billing Pending Approval')
             ->assertSee('Public update.')
             ->assertSee('SC/2026/F000001')
             ->assertDontSee('Private internal note.')

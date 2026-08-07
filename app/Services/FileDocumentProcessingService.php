@@ -5,14 +5,17 @@ namespace App\Services;
 use App\Models\CustomerRequest;
 use App\Models\RequestProcessingDetail;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class FileDocumentProcessingService
 {
-    public function __construct(private readonly RequestWorkflowService $workflow) {}
+    public function __construct(
+        private readonly RequestWorkflowService $workflow,
+        private readonly RequestBillingStateResolver $billingStateResolver,
+    ) {}
 
     public const STAGES = ['file_opened', 'documents_under_review', 'documents_incomplete', 'drafting_started', 'draft_ready', 'customer_verification_pending', 'correction_required', 'final_draft_ready', 'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch', 'dispatched', 'completed'];
 
@@ -33,10 +36,19 @@ class FileDocumentProcessingService
     public function transitions(RequestProcessingDetail $processing): array
     {
         $transitions = array_values(array_filter(self::TRANSITIONS[$processing->processing_stage] ?? [], function (string $stage) use ($processing): bool {
-            if (in_array($stage, ['drafting_started','draft_ready','customer_verification_pending','correction_required','final_draft_ready'], true) && ! $processing->uses_drafting_workflow) return false;
-            if (in_array($stage, ['token_booking_pending','token_booked'], true) && ! $processing->requires_token_booking) return false;
-            if (in_array($stage, ['registration_pending','registered'], true) && ! $processing->requires_registration) return false;
-            if (in_array($stage, ['certified_copy_pending','certified_copy_received'], true) && ! $processing->requires_certified_copy) return false;
+            if (in_array($stage, ['drafting_started', 'draft_ready', 'customer_verification_pending', 'correction_required', 'final_draft_ready'], true) && ! $processing->uses_drafting_workflow) {
+                return false;
+            }
+            if (in_array($stage, ['token_booking_pending', 'token_booked'], true) && ! $processing->requires_token_booking) {
+                return false;
+            }
+            if (in_array($stage, ['registration_pending', 'registered'], true) && ! $processing->requires_registration) {
+                return false;
+            }
+            if (in_array($stage, ['certified_copy_pending', 'certified_copy_received'], true) && ! $processing->requires_certified_copy) {
+                return false;
+            }
+
             return true;
         }));
 
@@ -54,6 +66,7 @@ class FileDocumentProcessingService
     public function open(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
     {
         $this->assertLegacyWorkflow($request);
+
         return DB::transaction(function () use ($request, $attributes, $user): RequestProcessingDetail {
             $locked = CustomerRequest::query()->with('service')->lockForUpdate()->findOrFail($request->id);
             if (! $locked->file_number || ! in_array($locked->status, $this->eligibleRequestStatuses(), true)) {
@@ -74,6 +87,7 @@ class FileDocumentProcessingService
                 'requires_payment_before_processing' => $locked->service->requires_payment_before_processing,
             ]);
             $locked->processingHistory()->create(['from_stage' => null, 'to_stage' => 'file_opened', 'remarks' => $attributes['customer_remark'] ?? null, 'is_visible_to_customer' => filled($attributes['customer_remark'] ?? null), 'changed_by' => $user->id]);
+
             return $processing;
         });
     }
@@ -81,6 +95,7 @@ class FileDocumentProcessingService
     public function transition(CustomerRequest $request, string $to, array $attributes, User $user): RequestProcessingDetail
     {
         $this->assertLegacyWorkflow($request);
+
         return DB::transaction(function () use ($request, $to, $attributes, $user): RequestProcessingDetail {
             $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
             $from = $processing->processing_stage;
@@ -91,6 +106,7 @@ class FileDocumentProcessingService
             $processing->update(['processing_stage' => $to, ...$this->automaticDates($to, $attributes)]);
             $request->processingHistory()->create(['from_stage' => $from, 'to_stage' => $to, 'remarks' => $attributes['remarks'] ?? null, 'is_visible_to_customer' => (bool) ($attributes['is_visible_to_customer'] ?? false), 'changed_by' => $user->id]);
             $this->syncRequestStatus($request->fresh(), $to, $user);
+
             return $processing->refresh();
         });
     }
@@ -119,13 +135,16 @@ class FileDocumentProcessingService
     {
         $this->assertLegacyWorkflow($request);
         $path = $file->store("customer-requests/{$request->id}", 'local');
-        if ($path === false) { throw new \RuntimeException('The registered document scan could not be stored.'); }
+        if ($path === false) {
+            throw new \RuntimeException('The registered document scan could not be stored.');
+        }
         try {
             return DB::transaction(function () use ($request, $file, $path, $user): RequestProcessingDetail {
                 $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
                 $document = $request->documents()->create(['file_name' => $file->getClientOriginalName(), 'file_path' => $path, 'file_type' => $file->getMimeType(), 'file_size' => $file->getSize(), 'source' => 'admin']);
                 $processing->update(['registered_document_id' => $document->id, 'registered_scan_received_at' => now()]);
                 $request->processingHistory()->create(['from_stage' => $processing->processing_stage, 'to_stage' => $processing->processing_stage, 'remarks' => 'Registered document scan received.', 'is_visible_to_customer' => false, 'changed_by' => $user->id]);
+
                 return $processing->refresh();
             });
         } catch (\Throwable $exception) {
@@ -147,11 +166,13 @@ class FileDocumentProcessingService
     private function updateInformation(CustomerRequest $request, array $attributes, User $user, string $auditRemark, ?string $customerRemarkKey = null): RequestProcessingDetail
     {
         $this->assertLegacyWorkflow($request);
+
         return DB::transaction(function () use ($request, $attributes, $user, $auditRemark, $customerRemarkKey): RequestProcessingDetail {
             $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
             $processing->update($attributes);
             $customerRemark = $customerRemarkKey ? ($attributes[$customerRemarkKey] ?? null) : null;
             $request->processingHistory()->create(['from_stage' => $processing->processing_stage, 'to_stage' => $processing->processing_stage, 'remarks' => $customerRemark ?: $auditRemark, 'is_visible_to_customer' => filled($customerRemark), 'changed_by' => $user->id]);
+
             return $processing->refresh();
         });
     }
@@ -174,7 +195,7 @@ class FileDocumentProcessingService
     private function enforceStageRules(CustomerRequest $request, RequestProcessingDetail $processing, string $to, array $attributes): void
     {
         $processingStages = ['drafting_started', 'draft_ready', 'customer_verification_pending', 'correction_required', 'final_draft_ready', 'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch', 'completed'];
-        if ($processing->requires_payment_before_processing && in_array($to, $processingStages, true) && $request->payment_status !== 'received') {
+        if ($processing->requires_payment_before_processing && in_array($to, $processingStages, true) && $this->billingStateResolver->resolve($request)->paymentStatus !== 'paid') {
             throw ValidationException::withMessages(['processing_stage' => 'Payment must be received before processing this service.']);
         }
         if ($to === 'final_draft_ready' && blank($attributes['customer_verification_at'] ?? $processing->customer_verification_at)) {

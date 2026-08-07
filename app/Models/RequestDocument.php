@@ -13,7 +13,11 @@ class RequestDocument extends Model
 
     ];
 
-    protected function casts(): array { return ['is_verified' => 'boolean', 'verified_at' => 'datetime']; }
+    protected function casts(): array
+    {
+        return ['is_verified' => 'boolean', 'verified_at' => 'datetime'];
+    }
+
     public function request(): BelongsTo
     {
         return $this->belongsTo(CustomerRequest::class, 'request_id');

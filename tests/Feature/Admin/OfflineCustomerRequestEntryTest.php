@@ -135,12 +135,13 @@ class OfflineCustomerRequestEntryTest extends TestCase
             'last_status_changed_at' => now(),
         ]);
     }
+
     public function test_offline_disabled_service_is_hidden_and_rejected(): void
     {
-        $admin=User::factory()->create();
-        $service=$this->service();
-        $service->update(['available_offline'=>false]);
-        $this->actingAs($admin)->get(route('admin.requests.create'))->assertOk()->assertDontSee('<option value="'.$service->id.'"',false);
-        $this->post(route('admin.requests.store'),$this->payload($service))->assertSessionHasErrors('service_id');
+        $admin = User::factory()->create();
+        $service = $this->service();
+        $service->update(['available_offline' => false]);
+        $this->actingAs($admin)->get(route('admin.requests.create'))->assertOk()->assertDontSee('<option value="'.$service->id.'"', false);
+        $this->post(route('admin.requests.store'), $this->payload($service))->assertSessionHasErrors('service_id');
     }
 }

@@ -13,7 +13,7 @@ class AdminRequestManagementService
     public function paginate(array $filters): LengthAwarePaginator
     {
         return CustomerRequest::query()
-            ->with(['service:id,name_en,name_gu', 'requestServices.service:id,name_en,name_gu', 'requestServices.workScopes', 'dispatches'])
+            ->with(['service:id,name_en,name_gu', 'requestServices.service:id,name_en,name_gu', 'requestServices.workScopes', 'billing', 'payments', 'dispatches'])
             ->when($filters['q'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('reference_no', 'like', "%{$term}%")->orWhere('file_number', 'like', "%{$term}%")->orWhere('name', 'like', "%{$term}%")->orWhere('mobile', 'like', "%{$term}%")->orWhere('property_village', 'like', "%{$term}%")->orWhere('village', 'like', "%{$term}%")->orWhere('survey_numbers', 'like', "%{$term}%")->orWhere('khata_number', 'like', "%{$term}%")->orWhereHas('requestServices.service', fn ($service) => $service->where('name_en', 'like', "%{$term}%")->orWhere('name_gu', 'like', "%{$term}%"))))
             ->when($filters['village'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('property_village', 'like', "%{$v}%")->orWhere('village', 'like', "%{$v}%")->orWhere('revenue_village', 'like', "%{$v}%")))
             ->when($filters['survey_number'] ?? null, fn ($q, $v) => $q->where('survey_numbers', 'like', "%{$v}%"))
@@ -37,7 +37,6 @@ class AdminRequestManagementService
                     $q->whereIn('status', ['completed', 'dispatched', 'delivered', 'closed']);
                 }
             })
-            ->when($filters['payment_status'] ?? null, fn ($q, $v) => $q->where('payment_status', $v))
             ->when($filters['dispatch_state'] ?? null, function ($q, $state): void {
                 if ($state === 'pending') {
                     $q->where('status', 'completed')->whereDoesntHave('dispatches', fn ($d) => $d->whereIn('dispatch_status', ['dispatched', 'in_transit', 'delivered', 'collected']));
@@ -73,6 +72,7 @@ class AdminRequestManagementService
             'service',
             'requestServices.service',
             'requestServices.decidedBy:id,name',
+            'requestServices.addedBy:id,name',
             'requestServices.approvalHistory' => fn ($q) => $q->with('approvedBy:id,name')->latest(),
             'requestServices.workScopes.updatedBy:id,name',
             'requestServices.workScopes.history' => fn ($q) => $q->with('changedBy:id,name')->latest(),

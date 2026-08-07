@@ -16,6 +16,7 @@ use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
 use App\Http\Requests\Admin\UnlockRequestBillingRequest;
 use App\Http\Requests\Admin\UpdateRequestEstimateRequest;
 use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
+use App\Http\Requests\Admin\UpdateRequestServiceFeeRequest;
 use App\Http\Requests\Admin\UpdateWorkScopeStatusRequest;
 use App\Models\CustomerRequest;
 use App\Models\RequestService;
@@ -83,7 +84,7 @@ class CustomerRequestController extends Controller
             'processingTransitions' => $customerRequest->processing ? app(FileDocumentProcessingService::class)->transitions($customerRequest->processing) : [],
             'fileInChargeUsers' => User::query()->orderBy('name')->get(['id', 'name']),
             'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->orderBy('name_en')->get(),
-            'availableServices' => Service::query()->where('is_active', true)->whereNotIn('id', $customerRequest->requestServices->pluck('service_id'))->orderBy('name_en')->get(['id', 'name_en', 'name_gu']),
+            'availableServices' => Service::query()->where('is_active', true)->whereNotIn('id', $customerRequest->requestServices->pluck('service_id'))->orderBy('name_en')->get(['id', 'name_en', 'name_gu', 'service_fee', 'gst_rate', 'estimated_days']),
             'processingEligibility' => $this->checklist->eligibility($customerRequest),
             'dispatchEligibility' => app(DispatchManagementService::class)->eligibility($customerRequest),
             'closeEligibility' => app(DispatchManagementService::class)->closeEligibility($customerRequest),
@@ -95,14 +96,22 @@ class CustomerRequestController extends Controller
     {
         $this->workflow->transition($customerRequest, $request->validated(), $request->user());
 
-        return back()->with('success', 'Request status updated successfully.');
+        $message = $request->validated('status') === 'approved'
+            ? 'Request approved. Service decisions are separate: accept or reject every selected service in Billing Summary before freezing billing.'
+            : 'Request status updated successfully.';
+
+        return back()->with('success', $message);
     }
 
     public function decideService(DecideRequestServiceRequest $request, CustomerRequest $customerRequest, RequestService $requestService): RedirectResponse
     {
         $this->workflow->decideService($customerRequest, $requestService, $request->validated(), $request->user());
 
-        return back()->with('success', 'Selected service decision updated successfully.');
+        $message = $request->validated('decision') === 'approved'
+            ? 'Selected service accepted. Review the calculated request totals, then approve and freeze billing.'
+            : 'Selected service rejected. Resolve every remaining service decision before freezing billing.';
+
+        return redirect()->to(route('admin.requests.show', $customerRequest).'#section-billing')->with('success', $message);
     }
 
     public function saveCasePlanning(SaveCasePlanningRequest $request, CustomerRequest $customerRequest): RedirectResponse
@@ -114,9 +123,23 @@ class CustomerRequestController extends Controller
 
     public function addService(AddRequestServiceRequest $request, CustomerRequest $customerRequest): RedirectResponse
     {
-        $this->casePlanning->addService($customerRequest, (int) $request->validated('service_id'), $request->user());
+        $this->casePlanning->addService($customerRequest, (int) $request->validated('service_id'), (float) $request->validated('professional_fee'), $request->validated('internal_note'), $request->user());
 
         return back()->with('success', 'Service added to the existing case without changing its reference number.');
+    }
+
+    public function updateServiceFee(UpdateRequestServiceFeeRequest $request, CustomerRequest $customerRequest, RequestService $requestService): RedirectResponse
+    {
+        $this->casePlanning->updateServiceFee($customerRequest, $requestService, (float) $request->validated('professional_fee'), $request->validated('internal_note'), $request->user());
+
+        return back()->with('success', 'Fee for this request updated. Refreeze billing after reviewing the recalculated summary.');
+    }
+
+    public function removeService(CustomerRequest $customerRequest, RequestService $requestService): RedirectResponse
+    {
+        $this->casePlanning->removeService($customerRequest, $requestService);
+
+        return back()->with('success', 'Unfinalized Admin-added service removed.');
     }
 
     public function rejectCase(CustomerRequest $customerRequest): RedirectResponse
@@ -151,7 +174,7 @@ class CustomerRequestController extends Controller
     {
         $this->workflow->finalizeRequestBilling($customerRequest, $request->validated(), $request->user());
 
-        return back()->with('success', $customerRequest->case_planning_version > 0 ? 'Case approved and billing saved. Pricing remains editable until payment confirmation.' : 'Request billing approved and frozen successfully.');
+        return back()->with('success', 'Request billing approved and frozen successfully.');
     }
 
     public function unlockBilling(UnlockRequestBillingRequest $request, CustomerRequest $customerRequest): RedirectResponse

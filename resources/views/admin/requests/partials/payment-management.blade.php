@@ -1,21 +1,19 @@
 @php
     $paymentEligibleStatuses = ['approved','payment_pending','payment_received','draft_in_progress','ready_for_verification','customer_approved','ready_for_registration','dispatched','completed','archived'];
-    $paymentEligible = $customerRequest->file_number && in_array($customerRequest->status, $paymentEligibleStatuses, true);
-    $acceptedServiceFee = $customerRequest->requestServices->where('status', 'approved')->sum(fn ($service) => $service->billingProfessionalFee());
-    $payableAmount = (float) ($customerRequest->billing?->grand_total ?? $customerRequest->amount_due);
-    $invalidFrozenBilling = $acceptedServiceFee > 0 && $payableAmount <= 0;
-    $paymentEligible = $paymentEligible && ! $invalidFrozenBilling;
+    $paymentEligible = $customerRequest->file_number && in_array($customerRequest->status, $paymentEligibleStatuses, true) && $billingState->canRecordPayment();
+    $payableAmount = $billingState->grandTotal;
     $methods = $customerRequest->isOffline() ? ['upi','bank_transfer','cheque','cash','other'] : ['upi','bank_transfer','other'];
 @endphp
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-white d-flex justify-content-between align-items-center"><span class="fw-semibold">Payment Management</span><span class="badge text-bg-{{ $customerRequest->isOffline() ? 'secondary' : 'primary' }}">{{ $customerRequest->isOffline() ? 'Offline / Walk-in' : 'Online / Public' }}</span></div>
     <div class="card-body">
-        <div class="row g-3 mb-4"><div class="col-6"><small class="text-muted">Frozen Billing Total</small><div class="h5 mb-0">₹{{ number_format($payableAmount,2) }}</div></div><div class="col-6"><small class="text-muted">Paid Amount</small><div class="h5 mb-0">₹{{ number_format((float)$customerRequest->amount_paid,2) }}</div></div></div>
+        <div class="row g-3 mb-4"><div class="col-6"><small class="text-muted">Frozen Billing Total</small><div class="h5 mb-0">{{ $payableAmount === null ? 'Not frozen' : '₹'.number_format($payableAmount,2) }}</div></div><div class="col-6"><small class="text-muted">Confirmed Paid Amount</small><div class="h5 mb-0">₹{{ number_format($billingState->confirmedPaidAmount,2) }}</div></div></div>
         @error('payment')<div class="alert alert-danger" role="alert">{{ $message }}</div>@enderror
-        @if($invalidFrozenBilling)<div class="alert alert-danger" role="alert">Payment cannot be recorded because the frozen billing Grand Total is zero while an accepted service has a professional fee. Approve and freeze the request billing again.</div>
-        @elseif($paymentEligible && !$customerRequest->billing)
-            <form method="POST" action="{{ route('admin.requests.fee.update',$customerRequest) }}" class="border-top pt-3">@csrf @method('PATCH')<label class="form-label" for="final_fee">Final Service Fee</label><div class="input-group"><span class="input-group-text">₹</span><input id="final_fee" name="final_fee" type="number" min="0" max="99999999.99" step="0.01" value="{{ old('final_fee',$customerRequest->amount_due) }}" class="form-control @error('final_fee') is-invalid @enderror" required><button class="btn btn-outline-primary">Update Fee</button>@error('final_fee')<div class="invalid-feedback">{{ $message }}</div>@enderror</div></form>
-        @elseif(!$paymentEligible)<div class="alert alert-light border mb-0">Payment actions become available only after approval and file-number assignment.</div>@endif
+        @if($billingState->lifecycle === 'invalid_frozen')<div class="alert alert-danger mb-0">Payment cannot be recorded because the frozen billing Grand Total is zero while an accepted service has a professional fee. Approve and freeze the request billing again.</div>
+        @elseif($billingState->lifecycle === 'unpriced')<div class="alert alert-warning mb-0">Accept or reject every selected service, then approve and freeze request billing before recording payment.</div>
+        @elseif(!$paymentEligible && $billingState->paymentStatus === 'paid')<div class="alert alert-success mb-0">Payment is fully confirmed.</div>
+        @elseif(!$paymentEligible && $billingState->paymentStatus === 'not_required')<div class="alert alert-light border mb-0">The frozen Grand Total is zero. Payment is not required.</div>
+        @elseif(!$paymentEligible)<div class="alert alert-light border mb-0">Payment actions are not currently available for this request.</div>@endif
         @if($customerRequest->fee_updated_at)<div class="small text-muted mt-2">Fee last updated {{ $customerRequest->fee_updated_at->format('d M Y, g:i A') }} by {{ $customerRequest->feeUpdatedBy?->name ?? 'System' }}.</div>@endif
     </div>
 </div>

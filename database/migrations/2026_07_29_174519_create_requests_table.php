@@ -10,42 +10,42 @@ return new class extends Migration
      * Run the migrations.
      */
     public function up(): void
-{
-    Schema::create('requests', function (Blueprint $table) {
+    {
+        Schema::create('requests', function (Blueprint $table) {
 
-        $table->id();
+            $table->id();
 
-        $table->string('reference_no')->unique();
+            $table->string('reference_no')->unique();
 
-        $table->foreignId('service_id')
-              ->constrained('services')
-              ->cascadeOnUpdate()
-              ->restrictOnDelete();
+            $table->foreignId('service_id')
+                ->constrained('services')
+                ->cascadeOnUpdate()
+                ->restrictOnDelete();
 
-        $table->string('name');
-        $table->string('mobile', 15);
-        $table->string('email')->nullable();
+            $table->string('name');
+            $table->string('mobile', 15);
+            $table->string('email')->nullable();
 
-        $table->string('village')->nullable();
-        $table->string('taluka')->nullable();
-        $table->string('district')->nullable();
+            $table->string('village')->nullable();
+            $table->string('taluka')->nullable();
+            $table->string('district')->nullable();
 
-        $table->text('survey_numbers')->nullable();
-        $table->string('khata_number')->nullable();
+            $table->text('survey_numbers')->nullable();
+            $table->string('khata_number')->nullable();
 
-        $table->text('details')->nullable();
+            $table->text('details')->nullable();
 
-        $table->enum('status', [
-            'received',
-            'under_review',
-            'need_documents',
-            'contact_customer',
-            'completed'
-        ])->default('received');
+            $table->enum('status', [
+                'received',
+                'under_review',
+                'need_documents',
+                'contact_customer',
+                'completed',
+            ])->default('received');
 
-        $table->timestamps();
-    });
-}
+            $table->timestamps();
+        });
+    }
 
     public function down(): void
     {

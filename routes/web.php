@@ -74,6 +74,8 @@ Route::middleware('auth')
         Route::patch('/{customerRequest}/services/{requestService}', 'decideService')->name('services.decision');
         Route::patch('/{customerRequest}/case-planning', 'saveCasePlanning')->name('case-planning.save');
         Route::post('/{customerRequest}/services', 'addService')->name('services.add');
+        Route::patch('/{customerRequest}/services/{requestService}/fee', 'updateServiceFee')->name('services.fee.update');
+        Route::delete('/{customerRequest}/services/{requestService}', 'removeService')->name('services.remove');
         Route::patch('/{customerRequest}/case-planning/reject', 'rejectCase')->name('case-planning.reject');
         Route::patch('/{customerRequest}/case-planning/complete', 'completePlanned')->name('case-planning.complete');
         Route::patch('/{customerRequest}/work-scopes/{workScope}', 'updateWorkScope')->name('work-scopes.update');

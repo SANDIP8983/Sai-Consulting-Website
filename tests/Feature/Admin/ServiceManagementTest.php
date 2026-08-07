@@ -141,26 +141,27 @@ class ServiceManagementTest extends TestCase
 
         $this->assertDatabaseHas('services', ['id' => $service->id]);
     }
+
     public function test_service_filters_and_validation_rules_are_enforced(): void
     {
         $admin = User::factory()->create();
-        Service::query()->create(['name_en'=>'Online Only','name_gu'=>'ઓનલાઇન','slug'=>'online-only','is_active'=>true,'available_online'=>true,'available_offline'=>false]);
-        Service::query()->create(['name_en'=>'Offline Only','name_gu'=>'ઓફલાઇન','slug'=>'offline-only','is_active'=>false,'available_online'=>false,'available_offline'=>true]);
+        Service::query()->create(['name_en' => 'Online Only', 'name_gu' => 'ઓનલાઇન', 'slug' => 'online-only', 'is_active' => true, 'available_online' => true, 'available_offline' => false]);
+        Service::query()->create(['name_en' => 'Offline Only', 'name_gu' => 'ઓફલાઇન', 'slug' => 'offline-only', 'is_active' => false, 'available_online' => false, 'available_offline' => true]);
 
-        $this->actingAs($admin)->get(route('admin.services.index',['availability'=>'online']))->assertOk()->assertSee('Online Only')->assertDontSee('Offline Only');
-        $this->get(route('admin.services.index',['availability'=>'offline']))->assertOk()->assertSee('Offline Only')->assertDontSee('Online Only');
-        $this->post(route('admin.services.store'), ['name_en'=>'Online Only','name_gu'=>'નવી','service_fee'=>-1,'estimated_days'=>-1,'sort_order'=>0,'is_active'=>1])
-            ->assertSessionHasErrors(['name_en','service_fee','estimated_days']);
+        $this->actingAs($admin)->get(route('admin.services.index', ['availability' => 'online']))->assertOk()->assertSee('Online Only')->assertDontSee('Offline Only');
+        $this->get(route('admin.services.index', ['availability' => 'offline']))->assertOk()->assertSee('Offline Only')->assertDontSee('Online Only');
+        $this->post(route('admin.services.store'), ['name_en' => 'Online Only', 'name_gu' => 'નવી', 'service_fee' => -1, 'estimated_days' => -1, 'sort_order' => 0, 'is_active' => 1])
+            ->assertSessionHasErrors(['name_en', 'service_fee', 'estimated_days']);
     }
 
     public function test_required_document_updates_preserve_the_document_id(): void
     {
-        $service = Service::query()->create(['name_en'=>'Document Service','name_gu'=>'દસ્તાવેજ સેવા','slug'=>'document-service','is_active'=>true]);
-        $document = $service->requiredDocuments()->create(['name_en'=>'Old','name_gu'=>'જૂનું','sort_order'=>1]);
-        $this->actingAs(User::factory()->create())->put(route('admin.services.update',$service), [
-            'name_en'=>$service->name_en,'name_gu'=>$service->name_gu,'sort_order'=>0,'is_active'=>1,
-            'documents'=>[['id'=>$document->id,'name_en'=>'Updated','name_gu'=>'સુધારેલ','is_mandatory'=>0,'allowed_file_types'=>['pdf'],'max_upload_size_kb'=>2048,'sort_order'=>5]],
+        $service = Service::query()->create(['name_en' => 'Document Service', 'name_gu' => 'દસ્તાવેજ સેવા', 'slug' => 'document-service', 'is_active' => true]);
+        $document = $service->requiredDocuments()->create(['name_en' => 'Old', 'name_gu' => 'જૂનું', 'sort_order' => 1]);
+        $this->actingAs(User::factory()->create())->put(route('admin.services.update', $service), [
+            'name_en' => $service->name_en, 'name_gu' => $service->name_gu, 'sort_order' => 0, 'is_active' => 1,
+            'documents' => [['id' => $document->id, 'name_en' => 'Updated', 'name_gu' => 'સુધારેલ', 'is_mandatory' => 0, 'allowed_file_types' => ['pdf'], 'max_upload_size_kb' => 2048, 'sort_order' => 5]],
         ])->assertRedirect(route('admin.services.index'));
-        $this->assertDatabaseHas('service_required_documents',['id'=>$document->id,'name_en'=>'Updated','is_mandatory'=>false,'max_upload_size_kb'=>2048,'sort_order'=>5]);
+        $this->assertDatabaseHas('service_required_documents', ['id' => $document->id, 'name_en' => 'Updated', 'is_mandatory' => false, 'max_upload_size_kb' => 2048, 'sort_order' => 5]);
     }
 }

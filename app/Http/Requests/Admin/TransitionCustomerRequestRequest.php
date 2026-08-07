@@ -8,7 +8,11 @@ use Illuminate\Validation\Rule;
 
 class TransitionCustomerRequestRequest extends FormRequest
 {
-    public function authorize(): bool { return $this->user() !== null; }
+    public function authorize(): bool
+    {
+        return $this->user() !== null;
+    }
+
     public function rules(): array
     {
         return ['status' => ['required', Rule::in(RequestWorkflowService::STATUSES)], 'remarks' => ['nullable', 'string', 'max:2000', Rule::requiredIf(fn () => in_array($this->input('status'), ['need_documents', 'rejected'], true))], 'is_visible_to_customer' => ['nullable', 'boolean']];

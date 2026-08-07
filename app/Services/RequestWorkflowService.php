@@ -23,6 +23,9 @@ class RequestWorkflowService
     public function __construct(
         private readonly ReferenceNumberService $referenceNumbers,
         private readonly FileNumberService $fileNumbers,
+        private readonly RequestBillingCalculator $billingCalculator,
+        private readonly RequestBillingStateResolver $billingStateResolver,
+        private readonly RequestChecklistInitializer $checklistInitializer,
     ) {}
 
     public function transitions(CustomerRequest $request): array
@@ -83,6 +86,7 @@ class RequestWorkflowService
                         'submission_fingerprint' => $fingerprint,
                         'address' => $attributes['address'] ?? null,
                         'request_origin' => $origin,
+                        'case_planning_version' => CustomerRequest::CURRENT_CASE_PLANNING_VERSION,
                         'status' => 'received',
                         'amount_due' => $amountDue,
                         'estimated_completion_date' => $estimatedDays ? now()->addDays($estimatedDays)->toDateString() : null,
@@ -149,7 +153,8 @@ class RequestWorkflowService
             throw ValidationException::withMessages(['status' => 'This status transition is not allowed.']);
         }
         $requiresPayment = $request->processing?->requires_payment_before_processing ?? $request->service?->requires_payment_before_processing ?? true;
-        if ($to === 'dispatched' && (($requiresPayment && $request->payment_status !== 'received') || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {
+        $billingState = $this->billingStateResolver->resolve($request);
+        if ($to === 'dispatched' && (($requiresPayment && $billingState->paymentStatus !== 'paid') || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {
             throw ValidationException::withMessages([
                 'status' => 'Use Dispatch Management to record dispatch details before changing this status.',
             ]);
@@ -196,7 +201,14 @@ class RequestWorkflowService
                 'rejected_at' => $decision === 'rejected' ? now() : null,
                 'decision_notes' => $attributes['decision_notes'] ?? null,
                 'decided_by' => $user->id,
+                'decided_at' => now(),
             ]);
+
+            if ($decision === 'approved' && $lockedRequest->usesChecklistWorkflow()) {
+                $this->checklistInitializer->snapshotConfiguredDefaults($lockedService, $user);
+            } elseif ($decision === 'rejected' && $lockedRequest->usesChecklistWorkflow()) {
+                $lockedService->workScopes()->delete();
+            }
 
         });
     }
@@ -208,58 +220,51 @@ class RequestWorkflowService
             if (in_array($lockedRequest->status, ['closed', 'archived'], true)) {
                 throw ValidationException::withMessages(['pricing' => 'Closed cases have read-only billing.']);
             }
-            if (! $lockedRequest->billing && ($lockedRequest->payment_status === 'received' || $lockedRequest->requestServices()->whereNotNull('pricing_locked_at')->exists())) {
+            if (! $lockedRequest->billing && $this->billingStateResolver->resolve($lockedRequest)->legacy) {
                 throw ValidationException::withMessages(['pricing' => 'Historical paid or frozen pricing is preserved and cannot be converted automatically.']);
             }
             $services = $lockedRequest->requestServices()->where('status', 'approved')->lockForUpdate()->get();
             if ($services->isEmpty()) {
                 throw ValidationException::withMessages(['pricing' => 'Approve at least one selected service before freezing billing.']);
             }
+            if ($services->contains(fn (RequestService $service): bool => $service->professional_fee === null && $service->original_professional_fee === null)) {
+                throw ValidationException::withMessages(['pricing' => 'Every accepted service must have a Professional Fee before billing can be frozen.']);
+            }
             if ($lockedRequest->case_planning_version > 0 && $lockedRequest->requestServices()->whereNull('decided_at')->exists()) {
                 throw ValidationException::withMessages(['pricing' => 'Record a decision for every selected service before approving the case.']);
             }
-            if ($lockedRequest->requestServices()->whereNotIn('status', ['approved', 'rejected', 'under_review'])->exists()) {
-                throw ValidationException::withMessages(['pricing' => 'Decide every selected service before approving the case.']);
+            $undecided = $lockedRequest->requestServices()->whereNotIn('status', ['approved', 'rejected'])->pluck('service_name_en_snapshot')->filter()->values();
+            if ($undecided->isNotEmpty()) {
+                throw ValidationException::withMessages(['pricing' => 'Accept or reject every selected service before freezing billing. Undecided: '.$undecided->implode(', ').'.']);
             }
-            if ($lockedRequest->case_planning_version > 0 && $services->contains(fn ($service) => ! $service->workScopes()->exists())) {
+            if ($lockedRequest->usesChecklistWorkflow() && $services->contains(fn ($service) => ! $service->workScopes()->exists())) {
                 throw ValidationException::withMessages(['pricing' => 'Every accepted service requires at least one selected work-scope item.']);
             }
             if ($lockedRequest->billing?->isLocked()) {
                 throw ValidationException::withMessages(['pricing' => 'Request pricing is locked. Use the audited Unlock Pricing action before changing it.']);
             }
 
-            $original = round((float) $services->sum(fn (RequestService $service): float => $service->billingProfessionalFee()), 2);
             $type = $attributes['discount_type'];
             $value = round((float) $attributes['discount_value'], 2);
             if ($type === 'percentage' && $value > 100) {
                 throw ValidationException::withMessages(['discount_value' => 'Percentage discount must be between 0 and 100.']);
             }
-            $discount = match ($type) {
-                'fixed' => $value, 'percentage' => round($original * $value / 100, 2), default => 0.0
-            };
-            if ($discount > $original) {
-                throw ValidationException::withMessages(['discount_value' => 'Discount cannot exceed the total original professional fee.']);
-            }
-            $net = round($original - $discount, 2);
-            if ($net < 0) {
-                throw ValidationException::withMessages(['discount_value' => 'Net professional fee cannot be negative.']);
-            }
-            $gstRate = round((float) $attributes['gst_rate'], 2);
-            $gst = round($net * $gstRate / 100, 2);
             $charges = collect($attributes['government_charges'] ?? [])->map(fn ($charge, $index) => ['name' => $charge['name'], 'amount' => round((float) $charge['amount'], 2), 'note' => $charge['note'] ?? null, 'display_order' => (int) ($charge['display_order'] ?? $index)])->values();
-            $government = round((float) $charges->sum('amount'), 2);
-            $grandTotal = round($net + $gst + $government, 2);
+            try {
+                $calculation = $this->billingCalculator->calculate($services, $type, $value, (float) $attributes['gst_rate'], $charges->all());
+            } catch (\InvalidArgumentException $exception) {
+                throw ValidationException::withMessages(['discount_value' => $exception->getMessage()]);
+            }
 
             $billing = $lockedRequest->billing()->updateOrCreate([], [
-                'total_original_professional_fee' => $original, 'discount_type' => $type, 'discount_value' => $type === 'none' ? 0 : $value,
-                'discount_amount' => $discount, 'discount_reason' => $type === 'none' ? null : $attributes['discount_reason'], 'internal_note' => $attributes['internal_note'] ?? null,
-                'net_professional_fee' => $net, 'gst_rate' => $gstRate, 'gst_amount' => $gst, 'government_charges_total' => $government,
-                'grand_total' => $grandTotal, 'applied_by' => $user->id, 'applied_at' => now(), 'pricing_locked_at' => $lockedRequest->case_planning_version > 0 ? null : now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null,
+                ...$calculation->billingSnapshot(),
+                'discount_reason' => $type === 'none' ? null : $attributes['discount_reason'], 'internal_note' => $attributes['internal_note'] ?? null,
+                'applied_by' => $user->id, 'applied_at' => now(), 'pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null,
             ]);
             $billing->charges()->delete();
             $billing->charges()->createMany($charges->all());
-            $billing->history()->create(['request_id' => $lockedRequest->id, 'changed_by' => $user->id, 'action' => $lockedRequest->case_planning_version > 0 ? 'saved' : 'frozen', 'pricing_snapshot' => $this->requestBillingSnapshot($billing->fresh('charges')), 'reason' => null]);
-            $lockedRequest->update(['amount_due' => $grandTotal, 'fee_updated_by' => $user->id, 'fee_updated_at' => now()]);
+            $billing->history()->create(['request_id' => $lockedRequest->id, 'changed_by' => $user->id, 'action' => 'frozen', 'pricing_snapshot' => $this->requestBillingSnapshot($billing->fresh('charges')), 'reason' => null]);
+            $lockedRequest->update(['amount_due' => $calculation->grandTotal, 'payment_status' => $calculation->paymentStatus, 'fee_updated_by' => $user->id, 'fee_updated_at' => now()]);
 
             if ($lockedRequest->status === 'under_review') {
                 if (! $lockedRequest->file_number) {
@@ -267,7 +272,10 @@ class RequestWorkflowService
                 }
                 $lockedRequest->update(['status' => 'approved', 'case_approved_at' => now(), 'case_approved_by' => $user->id, 'last_status_changed_at' => now()]);
                 $this->history($lockedRequest, 'under_review', 'approved', 'Request pricing approved.', true, $user->id);
-                $lockedRequest->update(['status' => 'payment_pending', 'payment_status' => 'pending', 'last_status_changed_at' => now()]);
+            }
+
+            if ($calculation->paymentRequired && $lockedRequest->status === 'approved') {
+                $lockedRequest->update(['status' => 'payment_pending', 'last_status_changed_at' => now()]);
                 $this->history($lockedRequest, 'approved', 'payment_pending', 'Payment summary generated.', true, $user->id);
             }
         });
@@ -308,16 +316,17 @@ class RequestWorkflowService
                 throw ValidationException::withMessages(['payment' => 'Payment can only be recorded after approval and file-number assignment.']);
             }
 
-            $acceptedServiceFee = (float) $lockedRequest->requestServices()
-                ->where('status', 'approved')
-                ->get()
-                ->sum(fn (RequestService $service): float => $service->billingProfessionalFee());
-            $payableAmount = (float) ($lockedRequest->billing?->grand_total ?? $lockedRequest->amount_due);
-            if ($acceptedServiceFee > 0 && $payableAmount <= 0) {
-                throw ValidationException::withMessages([
-                    'payment' => 'Payment cannot be recorded because the frozen billing Grand Total is zero while an accepted service has a professional fee. Approve and freeze the request billing again.',
-                ]);
+            $billingState = $this->billingStateResolver->resolve($lockedRequest);
+            if (! $billingState->legacy && ! $billingState->pricingLocked) {
+                throw ValidationException::withMessages(['payment' => 'Approve and freeze request billing before recording payment.']);
             }
+            if ($billingState->lifecycle === 'invalid_frozen') {
+                throw ValidationException::withMessages(['payment' => 'Payment cannot be recorded because the frozen billing Grand Total is zero while an accepted service has a professional fee. Approve and freeze the request billing again.']);
+            }
+            if (! $billingState->paymentRequired) {
+                throw ValidationException::withMessages(['payment' => 'This frozen billing snapshot does not require payment.']);
+            }
+            $payableAmount = (float) $billingState->grandTotal;
 
             if (! in_array($attributes['payment_status'], ['pending', 'received', 'failed', 'refunded'], true)) {
                 throw ValidationException::withMessages(['payment_status' => 'The selected payment status is invalid.']);
@@ -329,24 +338,39 @@ class RequestWorkflowService
             }
 
             $paymentStatus = $attributes['payment_status'];
+            $prospectivePaid = $billingState->confirmedPaidAmount;
+            if ($paymentStatus === 'received') {
+                $prospectivePaid += (float) $attributes['amount'];
+            } elseif ($paymentStatus === 'refunded') {
+                $prospectivePaid = max(0, $prospectivePaid - (float) $attributes['amount']);
+            }
+            if ($paymentStatus === 'received' && $prospectivePaid > $payableAmount) {
+                throw ValidationException::withMessages(['amount' => 'Confirmed payments cannot exceed the frozen billing Grand Total.']);
+            }
+
             $lockedRequest->payments()->create([...$attributes, 'received_by' => $user->id]);
             $received = (float) $lockedRequest->payments()->where('payment_status', 'received')->sum('amount');
             $refunded = (float) $lockedRequest->payments()->where('payment_status', 'refunded')->sum('amount');
-            $changes = ['amount_paid' => max(0, $received - $refunded), 'payment_status' => $paymentStatus];
+            $netPaid = max(0, $received - $refunded);
+            $derivedPayment = $this->billingCalculator->paymentState($payableAmount, $netPaid);
+            $storedPaymentStatus = $derivedPayment->status === 'paid' ? 'received' : $derivedPayment->status;
+            $changes = ['amount_paid' => $netPaid, 'payment_status' => $storedPaymentStatus];
 
             if ($paymentStatus === 'pending' && $lockedRequest->status === 'approved') {
                 $changes += ['status' => 'payment_pending', 'last_status_changed_at' => now()];
                 $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
             }
-            if ($paymentStatus === 'received' && in_array($lockedRequest->status, ['approved', 'payment_pending'], true)) {
+            if ($derivedPayment->status === 'paid') {
                 $lockedRequest->requestServices()->where('status', 'approved')->update(['pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null]);
                 $lockedRequest->billing()->update(['pricing_locked_at' => now(), 'pricing_unlocked_at' => null, 'pricing_unlocked_by' => null]);
-                if ($lockedRequest->status === 'approved') {
-                    $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
+                if (in_array($lockedRequest->status, ['approved', 'payment_pending'], true)) {
+                    if ($lockedRequest->status === 'approved') {
+                        $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
+                    }
+                    $targetStatus = $lockedRequest->usesChecklistWorkflow() ? 'payment_pending' : 'payment_received';
+                    $changes += ['status' => $targetStatus, 'last_status_changed_at' => now()];
+                    $this->history($lockedRequest, 'payment_pending', $targetStatus, 'Payment received.', true, $user->id);
                 }
-                $targetStatus = $lockedRequest->usesChecklistWorkflow() ? 'payment_pending' : 'payment_received';
-                $changes += ['status' => $targetStatus, 'last_status_changed_at' => now()];
-                $this->history($lockedRequest, 'payment_pending', $targetStatus, 'Payment received.', true, $user->id);
             }
 
             $lockedRequest->update($changes);

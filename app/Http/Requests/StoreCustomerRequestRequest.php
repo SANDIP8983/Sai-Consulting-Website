@@ -2,10 +2,11 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 use App\Models\Service;
 use App\Support\PublicDocumentPolicy;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\Rule;
 
 class StoreCustomerRequestRequest extends FormRequest
 {
@@ -42,7 +43,7 @@ class StoreCustomerRequestRequest extends FormRequest
             'details' => ['nullable', 'string', 'max:2000'],
             'documents' => ['nullable', 'array', 'max:10'],
             'documents.*' => ['required', 'file', 'mimes:'.implode(',', $types), 'max:'.$maximumSize, function (string $attribute, mixed $value, \Closure $fail): void {
-                if ($this->availabilityColumn() !== 'available_online' || ! $value instanceof \Illuminate\Http\UploadedFile) {
+                if ($this->availabilityColumn() !== 'available_online' || ! $value instanceof UploadedFile) {
                     return;
                 }
                 if (! PublicDocumentPolicy::isSafe($value->getClientOriginalName())) {

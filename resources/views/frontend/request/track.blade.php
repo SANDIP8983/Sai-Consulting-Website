@@ -15,7 +15,7 @@
         'delivered' => ['પહોંચાડેલ', 'Delivered'], 'closed' => ['બંધ', 'Closed'], 'archived' => ['આર્કાઇવ', 'Archived'],
     ];
     $statusColors = ['received'=>'primary','under_review'=>'info','need_documents'=>'warning','approved'=>'success','rejected'=>'danger','payment_pending'=>'warning','payment_received'=>'success','in_progress'=>'info','draft_in_progress'=>'info','ready_for_verification'=>'info','customer_approved'=>'info','ready_for_registration'=>'info','completed'=>'success','dispatched'=>'secondary','delivered'=>'success','closed'=>'dark','archived'=>'dark'];
-    $paymentLabels = ['not_required'=>['જરૂરી નથી','Not Required'],'pending'=>['બાકી','Pending'],'received'=>['મળી','Received'],'partial'=>['આંશિક ચુકવણી','Partially Paid'],'failed'=>['નિષ્ફળ','Failed'],'refunded'=>['પરત','Refunded']];
+    $paymentLabels = ['billing_pending'=>['બિલિંગ બાકી','Billing Pending Approval'],'not_required'=>['જરૂરી નથી','Not Required'],'pending'=>['બાકી','Payment Pending'],'paid'=>['ચૂકવેલ','Paid'],'received'=>['ચૂકવેલ','Paid'],'partial'=>['આંશિક ચુકવણી','Partially Paid'],'failed'=>['નિષ્ફળ','Failed'],'refunded'=>['પરત','Refunded']];
 @endphp
 
 <section class="tracking-page-hero py-5">
@@ -62,7 +62,7 @@
                 <div class="col-sm-6 tracking-summary-item"><i class="bi bi-hash"></i><span><small>Reference Number</small><strong>{{ $customerRequest->reference_no }}</strong></span></div>
                 @if($customerRequest->file_number)<div class="col-sm-6 tracking-summary-item"><i class="bi bi-folder-check"></i><span><small>File Number</small><strong>{{ $customerRequest->file_number }}</strong></span></div>@endif
                 <div class="col-sm-6 tracking-summary-item"><i class="bi bi-calendar-plus"></i><span><small>Submitted Date</small><strong>{{ $customerRequest->created_at->format('d M Y') }}</strong></span></div>
-                <div class="col-sm-6 tracking-summary-item"><i class="bi bi-credit-card"></i><span><small>ચુકવણી · Payment Status</small><strong>{{ $paymentLabels[$customerRequest->payment_status][0] ?? str($customerRequest->payment_status)->headline() }} <em>{{ $paymentLabels[$customerRequest->payment_status][1] ?? '' }}</em></strong></span></div>
+                <div class="col-sm-6 tracking-summary-item"><i class="bi bi-credit-card"></i><span><small>ચુકવણી · Payment Status</small><strong>{{ $paymentLabels[$customerRequest->public_payment_status][0] ?? str($customerRequest->public_payment_status)->headline() }} <em>{{ $paymentLabels[$customerRequest->public_payment_status][1] ?? '' }}</em></strong></span></div>
                 @if($customerRequest->estimated_completion_date)<div class="col-sm-6 tracking-summary-item"><i class="bi bi-calendar-check"></i><span><small>Estimated Completion</small><strong>{{ $customerRequest->estimated_completion_date->format('d M Y') }}</strong></span></div>@endif
                 <div class="col-sm-6 tracking-summary-item"><i class="bi bi-clock-history"></i><span><small>Last Updated</small><strong>{{ ($customerRequest->last_status_changed_at ?? $customerRequest->updated_at)->format('d M Y') }}</strong></span></div>
             </div></div>
@@ -75,7 +75,7 @@
 
             <div class="premium-card p-4 mt-4"><h3 class="h5 mb-3">Selected Services</h3><div class="row g-3">
                 @forelse($customerRequest->requestServices as $selectedService)
-                    <div class="col-md-6"><div class="border rounded-3 p-3 h-100"><strong>{{ $selectedService->service_name_gu_snapshot ?: $selectedService->service?->name_gu }}</strong><div class="text-muted">{{ $selectedService->service_name_en_snapshot ?: $selectedService->service?->name_en }}</div>@if($selectedService->status === 'rejected' && $selectedService->customer_decision_message)<p class="small mt-2 mb-0">{{ $selectedService->customer_decision_message }}</p>@endif</div></div>
+                    <div class="col-md-6"><div class="border rounded-3 p-3 h-100"><strong>{{ $selectedService->service_name_gu_snapshot ?: $selectedService->service?->name_gu }}</strong><div class="text-muted">{{ $selectedService->service_name_en_snapshot ?: $selectedService->service?->name_en }}</div>@if($selectedService->status === 'approved')<div class="mt-2"><small class="text-muted">Professional Fee</small><div class="fw-semibold">₹{{ number_format($selectedService->billingProfessionalFee(), 2) }}</div></div>@elseif($selectedService->customer_decision_message)<p class="small mt-2 mb-0">{{ $selectedService->customer_decision_message }}</p>@endif</div></div>
                 @empty<div class="col-12">{{ $customerRequest->service?->name_en }}</div>@endforelse
             </div></div>
 
