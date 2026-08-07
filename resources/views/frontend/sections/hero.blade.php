@@ -6,19 +6,12 @@
         <div class="row align-items-center min-vh-hero g-5">
             <div class="col-lg-7 py-lg-5">
                 <span class="eyebrow hero-eyebrow"><span></span> Trusted Documentation Partner</span>
-                <p class="hero-brand-name mt-4 mb-2">{{ $homepage['businessName'] }}</p>
-                <h1 id="hero-title" class="hero-title">Documentation and <span>Property Consulting</span></h1>
-                <p class="hero-copy mt-4">Professional guidance for property documentation with a secure, transparent and trackable service experience.</p>
-                <p class="hero-copy-gu">વિશ્વાસપાત્ર દસ્તાવેજ ડ્રાફ્ટિંગ અને મિલકત દસ્તાવેજ માર્ગદર્શન.</p>
+                <h1 id="hero-title" class="hero-title hero-title-gu mt-4"><span class="hero-title-line">તમારો વિશ્વસનીય</span><span class="hero-title-line">દસ્તાવેજીકરણ સાથી</span></h1>
+                <p class="hero-copy hero-copy-gu mt-4">મિલકત સંબંધિત દસ્તાવેજો, ટાઇટલ ચેકિંગ અને દસ્તાવેજીકરણ સેવાઓ માટે વિશ્વસનીય સહયોગી.</p>
                 <div class="d-flex flex-wrap gap-3 mt-4 hero-actions">
-                    <a href="{{ route('request.create') }}" class="btn btn-primary btn-lg rounded-pill px-4">Request Service <span aria-hidden="true">→</span></a>
-                    <a href="{{ route('request.track') }}" class="btn btn-secondary-action btn-lg rounded-pill px-4"><x-public-icon name="search" size="19" /> Track Request</a>
+                    <a href="{{ route('request.create') }}" class="btn btn-primary btn-lg rounded-pill px-4">ઓનલાઇન અરજી કરો <span aria-hidden="true">→</span></a>
+                    <a href="{{ route('request.track') }}" class="btn btn-secondary-action btn-lg rounded-pill px-4"><x-public-icon name="search" size="19" /> અરજી ટ્રેક કરો</a>
                 </div>
-                <ul class="hero-assurances list-unstyled mt-5 mb-0" aria-label="Service assurances">
-                    <li><x-public-icon name="shield" size="19" /> Secure handling</li>
-                    <li><x-public-icon name="check" size="19" /> Transparent process</li>
-                    <li><x-public-icon name="clock" size="19" /> Timely updates</li>
-                </ul>
             </div>
             <div class="col-lg-5">
                 <div class="hero-visual" aria-label="Professional property documentation service">

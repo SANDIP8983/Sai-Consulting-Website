@@ -5,11 +5,11 @@
 
 @section('content')
     @include('frontend.sections.hero')
-    @include('frontend.sections.trust-highlights')
+    @include('frontend.sections.statistics')
     @include('frontend.sections.services')
     @include('frontend.sections.process')
     @include('frontend.sections.why-choose')
-    @include('frontend.sections.statistics')
+    @include('frontend.sections.required-documents-cta')
     @include('frontend.sections.tracking-cta')
     @include('frontend.sections.about')
     @include('frontend.sections.office-information')

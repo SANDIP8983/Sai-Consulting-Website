@@ -11,25 +11,40 @@ use Illuminate\Support\Collection;
 
 class HomepageService
 {
+    private const FEATURED_SERVICE_SLUGS = [
+        'sale-deed',
+        'relinquishment-deed',
+        'partition-deed',
+        'banakhat-agreement-to-sell',
+        'property-title-verification',
+        'power-of-attorney',
+    ];
+
     /** @return array<string, mixed> */
     public function data(): array
     {
+        $activeServicesCount = Service::query()
+            ->where('is_active', true)
+            ->where('available_online', true)
+            ->count();
+
         $services = Service::query()
             ->where('is_active', true)
             ->where('available_online', true)
+            ->whereIn('slug', self::FEATURED_SERVICE_SLUGS)
             ->withCount(['activeRequiredDocuments as required_documents_count'])
-            ->orderBy('sort_order')
-            ->orderBy('name_en')
-            ->get();
+            ->get()
+            ->sortBy(fn (Service $service): int => array_search($service->slug, self::FEATURED_SERVICE_SLUGS, true))
+            ->values();
 
         return [
             ...$this->publicSiteData(),
             'services' => $services,
             'statistics' => [
-                ['value' => 20, 'suffix' => '+', 'label_gu' => 'વર્ષનો અનુભવ', 'label_en' => 'Years Experience'],
-                ['value' => config('homepage.statistics.documents_prepared'), 'suffix' => '+', 'label_gu' => 'તૈયાર દસ્તાવેજો', 'label_en' => 'Documents Prepared'],
-                ['value' => config('homepage.statistics.happy_clients'), 'suffix' => '+', 'label_gu' => 'સંતુષ્ટ ગ્રાહકો', 'label_en' => 'Happy Clients'],
-                ['value' => $services->count(), 'suffix' => '+', 'label_gu' => 'વ્યાવસાયિક સેવાઓ', 'label_en' => 'Professional Services'],
+                ['value' => config('homepage.statistics.documents_prepared'), 'suffix' => '+', 'label_gu' => 'તૈયાર કરેલ દસ્તાવેજો'],
+                ['value' => config('homepage.statistics.happy_clients'), 'suffix' => '+', 'label_gu' => 'સંતુષ્ટ ગ્રાહકો'],
+                ['value' => 20, 'suffix' => '+ વર્ષ', 'label_gu' => 'અનુભવ'],
+                ['value' => $activeServicesCount, 'suffix' => '+', 'label_gu' => 'સેવાઓ'],
             ],
         ];
     }
