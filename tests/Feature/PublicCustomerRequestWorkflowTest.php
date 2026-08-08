@@ -31,7 +31,8 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $this->get(route('request.success'))
             ->assertOk()
             ->assertSee($request->reference_no)
-            ->assertSee('Approximately 7 day(s)');
+            ->assertSee('Approximately 7 working day(s)')
+            ->assertSee('દર્શાવેલ સમય જરૂરી માહિતી અને દસ્તાવેજો ઉપલબ્ધ થયા પછીનો અંદાજિત કાર્ય સમય છે.');
         $this->assertNull($request->file_number);
     }
 
