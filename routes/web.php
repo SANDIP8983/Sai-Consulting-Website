@@ -38,6 +38,7 @@ Route::get('/request', [CustomerRequestController::class, 'create'])
     ->name('request.create');
 
 Route::post('/request', [CustomerRequestController::class, 'store'])
+    ->middleware('throttle:public-request-submission')
     ->name('request.store');
 
 Route::get('/request/success', [CustomerRequestController::class, 'success'])

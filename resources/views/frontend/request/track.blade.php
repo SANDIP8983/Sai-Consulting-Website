@@ -39,23 +39,28 @@
 
     @isset($customerRequest)
         @php
+            $publicStatus = $customerRequest->public_status;
+            $isRejected = $publicStatus === 'rejected';
             $progress = (int) $customerRequest->public_progress_percentage;
             $pendingDocuments = collect($customerRequest->public_pending_documents);
             $publicDispatchStatuses = ['completed', 'dispatched', 'delivered', 'closed', 'archived'];
             $pdfTypes = [
                 \App\Enums\PdfDocumentType::RequestAcknowledgement,
-                \App\Enums\PdfDocumentType::PaymentSummary,
                 \App\Enums\PdfDocumentType::CaseSummary,
             ];
+            if (! $isRejected) $pdfTypes[] = \App\Enums\PdfDocumentType::PaymentSummary;
             if ($customerRequest->dispatches->isNotEmpty()) $pdfTypes[] = \App\Enums\PdfDocumentType::DispatchSlip;
+            $publicStatusHistory = $isRejected
+                ? $customerRequest->statusHistory->where('to_status', 'rejected')
+                : $customerRequest->statusHistory;
         @endphp
         <section class="tracking-result" aria-labelledby="tracking-result-title">
             <div class="tracking-result-header">
                 <div><span>Verified Request</span><h2 id="tracking-result-title">{{ $customerRequest->name }}</h2><p>{{ $customerRequest->reference_no }}@if($customerRequest->file_number)<small>File: {{ $customerRequest->file_number }}</small>@endif</p></div>
-                <span class="tracking-status-badge text-bg-{{ $statusColors[$customerRequest->status] ?? 'secondary' }}"><i class="bi bi-circle-fill"></i><strong>{{ $statusLabels[$customerRequest->status][0] ?? str($customerRequest->status)->headline() }}</strong><small>{{ $statusLabels[$customerRequest->status][1] ?? '' }}</small></span>
+                <span class="tracking-status-badge text-bg-{{ $statusColors[$publicStatus] ?? 'secondary' }}"><i class="bi bi-circle-fill"></i><strong>{{ $statusLabels[$publicStatus][0] ?? str($publicStatus)->headline() }}</strong><small>{{ $statusLabels[$publicStatus][1] ?? '' }}</small></span>
             </div>
 
-            @if($customerRequest->status === 'rejected')<div class="alert alert-danger mt-4" role="status"><strong>This request was not approved.</strong> Please review the customer-visible remarks below or contact Sai Consulting for guidance.</div>@endif
+            @if($isRejected)<div class="alert alert-danger mt-4" role="status"><strong>This request was not approved.</strong> Please review the customer-visible remarks below or contact Sai Consulting for guidance.</div>@endif
             @if($customerRequest->status === 'archived')<div class="alert alert-secondary mt-4" role="status"><strong>This request has been archived.</strong> Its customer-visible history remains available below.</div>@endif
 
             <div class="tracking-summary premium-card mt-4"><div class="row g-0">
@@ -67,11 +72,11 @@
                 <div class="col-sm-6 tracking-summary-item"><i class="bi bi-clock-history"></i><span><small>Last Updated</small><strong>{{ ($customerRequest->last_status_changed_at ?? $customerRequest->updated_at)->format('d M Y') }}</strong></span></div>
             </div></div>
 
-            <div class="premium-card p-4 mt-4">
+            @unless($isRejected)<div class="premium-card p-4 mt-4">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3"><div><h3 class="h5 mb-1">Processing Progress</h3><p class="text-muted mb-0">Calculated from current processing records.</p></div><strong class="fs-4">{{ $progress }}%</strong></div>
                 <div class="progress mt-3" role="progressbar" aria-label="Processing progress" aria-valuenow="{{ $progress }}" aria-valuemin="0" aria-valuemax="100" style="height:10px"><div class="progress-bar" style="width:{{ $progress }}%"></div></div>
                 @foreach($customerRequest->public_work_remarks as $remark)<div class="tracking-document-note mt-3"><i class="bi bi-chat-left-text"></i> {{ $remark }}</div>@endforeach
-            </div>
+            </div>@endunless
 
             <div class="premium-card p-4 mt-4"><h3 class="h5 mb-3">Selected Services</h3><div class="row g-3">
                 @forelse($customerRequest->requestServices as $selectedService)
@@ -83,29 +88,29 @@
                 <div class="premium-card p-4 mt-4"><h3 class="h5 mb-3">Property Details</h3><div class="row g-3"><div class="col-md-6"><small class="text-muted">Village / Taluka / District</small><div class="fw-semibold">{{ collect([$customerRequest->property_village, $customerRequest->property_taluka, $customerRequest->property_district])->filter()->implode(', ') }}</div></div>@if($customerRequest->survey_numbers)<div class="col-md-3"><small class="text-muted">Survey / Block Number(s)</small><div>{{ $customerRequest->survey_numbers }}</div></div>@endif @if($customerRequest->khata_number)<div class="col-md-3"><small class="text-muted">Khata Number</small><div>{{ $customerRequest->khata_number }}</div></div>@endif</div></div>
             @endif
 
-            @include('frontend.request.partials.finalized-payment-summary')
+            @unless($isRejected)@include('frontend.request.partials.finalized-payment-summary')@endunless
 
             <div class="row g-4 mt-1"><div class="col-lg-8">
                 <div class="tracking-timeline-card premium-card mb-4"><div class="tracking-card-title"><span class="icon-box"><i class="bi bi-signpost-split"></i></span><div><h3>ગ્રાહક અપડેટ્સ</h3><p>Customer-visible Remarks</p></div></div><div class="public-status-timeline">
-                    @forelse($customerRequest->statusHistory->sortBy('created_at') as $history)<article class="public-timeline-item"><span class="timeline-dot text-bg-{{ $statusColors[$history->to_status] ?? 'secondary' }}"><i class="bi bi-check2"></i></span><div><div class="d-flex flex-wrap justify-content-between gap-2"><h4>{{ $statusLabels[$history->to_status][0] ?? str($history->to_status)->headline() }} <small>{{ $statusLabels[$history->to_status][1] ?? '' }}</small></h4><time>{{ $history->created_at->format('d M Y, g:i A') }}</time></div>@if($history->remarks)<p>{{ $history->remarks }}</p>@endif</div></article>
-                    @empty<article class="public-timeline-item"><span class="timeline-dot text-bg-primary"><i class="bi bi-check2"></i></span><div><h4>{{ $statusLabels[$customerRequest->status][1] ?? str($customerRequest->status)->headline() }}</h4><time>{{ $customerRequest->created_at->format('d M Y, g:i A') }}</time></div></article>@endforelse
+                    @forelse($publicStatusHistory->sortBy('created_at') as $history)<article class="public-timeline-item"><span class="timeline-dot text-bg-{{ $statusColors[$history->to_status] ?? 'secondary' }}"><i class="bi bi-check2"></i></span><div><div class="d-flex flex-wrap justify-content-between gap-2"><h4>{{ $statusLabels[$history->to_status][0] ?? str($history->to_status)->headline() }} <small>{{ $statusLabels[$history->to_status][1] ?? '' }}</small></h4><time>{{ $history->created_at->format('d M Y, g:i A') }}</time></div>@if($history->remarks)<p>{{ $history->remarks }}</p>@endif</div></article>
+                    @empty<article class="public-timeline-item"><span class="timeline-dot text-bg-primary"><i class="bi bi-check2"></i></span><div><h4>{{ $statusLabels[$publicStatus][1] ?? str($publicStatus)->headline() }}</h4><time>{{ $customerRequest->created_at->format('d M Y, g:i A') }}</time></div></article>@endforelse
                 </div>
-                @foreach($customerRequest->processingHistory as $history)@if($history->remarks)<div class="tracking-document-note mt-2"><i class="bi bi-chat-left-text"></i> {{ $history->remarks }}</div>@endif @endforeach
+                @unless($isRejected)@foreach($customerRequest->processingHistory as $history)@if($history->remarks)<div class="tracking-document-note mt-2"><i class="bi bi-chat-left-text"></i> {{ $history->remarks }}</div>@endif @endforeach @endunless
                 @if($customerRequest->completion_customer_remark)<div class="alert alert-success mt-3 mb-0">{{ $customerRequest->completion_customer_remark }}</div>@endif
                 @if($customerRequest->closure_customer_remark)<div class="alert alert-secondary mt-3 mb-0">{{ $customerRequest->closure_customer_remark }}</div>@endif
                 </div>
 
                 <div class="premium-card p-4"><h3 class="h5">Customer-safe PDFs</h3><p class="small text-muted">Links are available only in this verified tracking session.</p><div class="d-grid d-sm-flex flex-wrap gap-2">@foreach($pdfTypes as $pdfType)<a class="btn btn-outline-primary" href="{{ route('request.track.pdf', [$customerRequest, $pdfType->value]) }}"><i class="bi bi-file-earmark-pdf me-1"></i>{{ $pdfType->title() }}</a>@endforeach</div></div>
             </div><aside class="col-lg-4">
-                @include('frontend.request.partials.payment-details')
-                @unless($customerRequest->usesChecklistWorkflow())@include('frontend.request.partials.processing-details')@endunless
+                @unless($isRejected)@include('frontend.request.partials.payment-details')
+                @unless($customerRequest->usesChecklistWorkflow())@include('frontend.request.partials.processing-details')@endunless @endunless
 
                 <div class="tracking-side-card premium-card mb-4"><div class="tracking-card-title"><span class="icon-box"><i class="bi bi-files"></i></span><div><h3>બાકી જરૂરી દસ્તાવેજો</h3><p>Required Pending Documents</p></div></div>
                     @if($pendingDocuments->isNotEmpty())<ul class="tracking-document-list">@foreach($pendingDocuments as $document)<li><i class="bi bi-file-earmark-excel"></i><span><strong>{{ $document['name_gu'] ?? $document['name_en'] ?? 'Required document' }}</strong>@if(!empty($document['name_en']))<small>{{ $document['name_en'] }}</small>@endif</span></li>@endforeach</ul><div class="tracking-document-note"><i class="bi bi-info-circle"></i> Submit documents only through an approved Sai Consulting channel.</div>
                     @else<div class="alert alert-success mb-0"><i class="bi bi-check-circle me-1"></i>No required documents are currently pending.</div>@endif
                 </div>
 
-                @if(in_array($customerRequest->status, $publicDispatchStatuses, true))@include('frontend.request.partials.dispatch-details')@endif
+                @if(in_array($publicStatus, $publicDispatchStatuses, true))@include('frontend.request.partials.dispatch-details')@endif
                 @if($whatsappUrl)<div class="tracking-help-card premium-card"><span class="icon-box"><i class="bi bi-whatsapp"></i></span><h3>મદદની જરૂર છે?</h3><p>Need help understanding your request status?</p><a href="{{ $whatsappUrl }}" target="_blank" rel="noopener" class="btn btn-whatsapp-outline rounded-pill w-100 justify-content-center">WhatsApp Help</a></div>@endif
             </aside></div>
         </section>

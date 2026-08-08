@@ -280,10 +280,98 @@ class PublicCustomerRequestWorkflowTest extends TestCase
     {
         $request = $this->createTrackedRequest();
         $request->update(['status' => 'rejected']);
-        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('This request was not approved.');
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+            ->assertOk()
+            ->assertSee('નામંજૂર')
+            ->assertSee('Rejected')
+            ->assertSee('This request was not approved.')
+            ->assertDontSee('Processing Progress')
+            ->assertDontSee('Payment Pending');
 
         $request->update(['status' => 'archived']);
         $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('This request has been archived.');
+    }
+
+    public function test_initial_and_approved_customer_statuses_remain_unchanged(): void
+    {
+        $request = $this->createTrackedRequest();
+        $request->update(['status' => 'received']);
+
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+            ->assertOk()
+            ->assertSee('Received')
+            ->assertDontSee('This request was not approved.');
+
+        $request->update(['status' => 'approved']);
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+            ->assertOk()
+            ->assertSee('Approved')
+            ->assertSee('Processing Progress')
+            ->assertDontSee('This request was not approved.');
+    }
+
+    public function test_all_rejected_service_decisions_override_stale_active_tracking_state(): void
+    {
+        $request = $this->createTrackedRequest();
+        $request->requestServices()->create([
+            'service_id' => $request->service_id,
+            'service_name_en_snapshot' => 'Title Search',
+            'professional_fee' => 1000,
+            'status' => 'rejected',
+            'decision_notes' => 'INTERNAL REJECTION NOTE',
+            'internal_note' => 'PRIVATE ADMIN NOTE',
+            'customer_decision_message' => 'Please contact us about another suitable service.',
+        ]);
+        $request->processing()->create(['processing_stage' => 'ready_for_registration']);
+        $request->processingHistory()->create([
+            'to_stage' => 'ready_for_registration',
+            'remarks' => 'STALE PUBLIC PROCESSING UPDATE',
+            'is_visible_to_customer' => true,
+        ]);
+        $request->statusHistory()->create([
+            'from_status' => 'received',
+            'to_status' => 'under_review',
+            'remarks' => 'STALE ACTIVE STATUS UPDATE',
+            'is_visible_to_customer' => true,
+        ]);
+
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+            ->assertOk()
+            ->assertSee('નામંજૂર')
+            ->assertSee('Rejected')
+            ->assertSee('Please contact us about another suitable service.')
+            ->assertDontSee('Processing Progress')
+            ->assertDontSee('Payment Pending')
+            ->assertDontSee('Under Review')
+            ->assertDontSee('STALE PUBLIC PROCESSING UPDATE')
+            ->assertDontSee('STALE ACTIVE STATUS UPDATE')
+            ->assertDontSee('INTERNAL REJECTION NOTE')
+            ->assertDontSee('PRIVATE ADMIN NOTE');
+    }
+
+    public function test_completed_and_dispatched_customer_statuses_remain_authoritative(): void
+    {
+        $service = $this->createService();
+
+        foreach (['completed' => 'Completed', 'dispatched' => 'Dispatched'] as $status => $label) {
+            $request = CustomerRequest::query()->create([
+                'reference_no' => 'SC/2026/'.fake()->unique()->numerify('######'),
+                'service_id' => $service->id,
+                'name' => 'Lifecycle Customer',
+                'mobile' => '9999999999',
+                'status' => $status,
+            ]);
+            $request->requestServices()->create([
+                'service_id' => $request->service_id,
+                'professional_fee' => 1000,
+                'status' => 'approved',
+            ]);
+
+            $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+                ->assertOk()
+                ->assertSee($label)
+                ->assertDontSee('This request was not approved.');
+        }
     }
 
     private function createService(): Service
@@ -312,9 +400,14 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             'survey_numbers' => '12/1, Block 15',
             'khata_number' => 'KH-100',
             'details' => 'Please review the land record.',
-            'documents' => [UploadedFile::fake()->create('property-card.pdf', 100, 'application/pdf')],
+            'documents' => [UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())],
             'declaration' => '1',
         ];
+    }
+
+    private function pdfContent(): string
+    {
+        return "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF";
     }
 
     private function createTrackedRequest(): CustomerRequest

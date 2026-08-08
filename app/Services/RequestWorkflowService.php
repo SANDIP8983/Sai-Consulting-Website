@@ -7,11 +7,13 @@ use App\Models\RequestBilling;
 use App\Models\RequestService;
 use App\Models\Service;
 use App\Models\User;
+use App\Support\PublicDocumentPolicy;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class RequestWorkflowService
@@ -112,13 +114,22 @@ class RequestWorkflowService
                     $this->history($request, null, 'received', 'Your request has been received.', true, $user?->id);
 
                     $uploadedHashes = [];
+                    $publicRestrictions = $origin === 'online'
+                        ? PublicDocumentPolicy::restrictionsForServices($orderedServices)
+                        : null;
                     foreach ($files as $file) {
                         $hash = hash_file('sha256', $file->getRealPath());
                         if (in_array($hash, $uploadedHashes, true)) {
                             throw ValidationException::withMessages(['documents' => 'The same document cannot be uploaded more than once.']);
                         }
                         $uploadedHashes[] = $hash;
-                        $path = $file->store("customer-requests/{$request->id}", 'local');
+                        if ($publicRestrictions) {
+                            PublicDocumentPolicy::assertAcceptable($file, $publicRestrictions);
+                            $storedName = Str::uuid().'.'.PublicDocumentPolicy::storageExtension($file);
+                            $path = $file->storeAs("customer-requests/{$request->id}", $storedName, 'local');
+                        } else {
+                            $path = $file->store("customer-requests/{$request->id}", 'local');
+                        }
 
                         if ($path === false) {
                             throw new \RuntimeException('A document could not be stored.');
@@ -126,7 +137,9 @@ class RequestWorkflowService
 
                         $storedPaths[] = $path;
                         $request->documents()->create([
-                            'file_name' => $file->getClientOriginalName(),
+                            'file_name' => $publicRestrictions
+                                ? PublicDocumentPolicy::safeDisplayName($file)
+                                : $file->getClientOriginalName(),
                             'file_path' => $path,
                             'file_type' => $file->getMimeType(),
                             'file_size' => $file->getSize(),

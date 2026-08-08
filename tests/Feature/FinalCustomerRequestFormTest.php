@@ -41,8 +41,8 @@ class FinalCustomerRequestFormTest extends TestCase
         $service = $this->service('title-search', 100, 18, 3);
         $payload = $this->payload([$service->id]);
         $payload['documents'] = [
-            UploadedFile::fake()->createWithContent('one.pdf', 'same-content'),
-            UploadedFile::fake()->createWithContent('two.pdf', 'same-content'),
+            UploadedFile::fake()->createWithContent('one.pdf', $this->pdfContent()),
+            UploadedFile::fake()->createWithContent('two.pdf', $this->pdfContent()),
         ];
 
         $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents');
@@ -62,5 +62,10 @@ class FinalCustomerRequestFormTest extends TestCase
     private function payload(array $serviceIds): array
     {
         return ['service_ids' => $serviceIds, 'name' => 'Production Customer', 'mobile' => '9999999999', 'whatsapp' => '9888888888', 'property_village' => 'Chanasma', 'property_taluka' => 'Chanasma', 'property_district' => 'Patan', 'declaration' => '1'];
+    }
+
+    private function pdfContent(): string
+    {
+        return "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF";
     }
 }

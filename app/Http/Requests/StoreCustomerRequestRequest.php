@@ -6,6 +6,7 @@ use App\Models\Service;
 use App\Support\PublicDocumentPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class StoreCustomerRequestRequest extends FormRequest
@@ -19,8 +20,12 @@ class StoreCustomerRequestRequest extends FormRequest
     {
         $services = Service::query()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
         $requiresProperty = $services->contains('requires_property_documents', true);
-        $types = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: ['pdf', 'jpg', 'jpeg', 'png'];
-        $maximumSize = $services->flatMap->activeRequiredDocuments->max('max_upload_size_kb') ?: 10240;
+        $publicRestrictions = PublicDocumentPolicy::restrictionsForServices($services);
+        $configuredTypes = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: PublicDocumentPolicy::ALLOWED_EXTENSIONS;
+        $configuredMaximumSize = $services->flatMap->activeRequiredDocuments->max('max_upload_size_kb') ?: PublicDocumentPolicy::MAX_SIZE_KILOBYTES;
+        $fileRules = $this->availabilityColumn() === 'available_online'
+            ? ['mimetypes:'.implode(',', PublicDocumentPolicy::ALLOWED_MIME_TYPES), 'max:'.$publicRestrictions['max_kilobytes']]
+            : ['mimes:'.implode(',', $configuredTypes), 'max:'.$configuredMaximumSize];
 
         return [
             'service_id' => ['required', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true))],
@@ -42,12 +47,18 @@ class StoreCustomerRequestRequest extends FormRequest
             'revenue_village' => ['nullable', 'string', 'max:150'],
             'details' => ['nullable', 'string', 'max:2000'],
             'documents' => ['nullable', 'array', 'max:10'],
-            'documents.*' => ['required', 'file', 'mimes:'.implode(',', $types), 'max:'.$maximumSize, function (string $attribute, mixed $value, \Closure $fail): void {
+            'documents.*' => ['required', 'file', ...$fileRules, function (string $attribute, mixed $value, \Closure $fail) use ($publicRestrictions): void {
                 if ($this->availabilityColumn() !== 'available_online' || ! $value instanceof UploadedFile) {
                     return;
                 }
-                if (! PublicDocumentPolicy::isSafe($value->getClientOriginalName())) {
-                    $fail('Personal identity, address, financial, and KYC documents must not be uploaded on the public website.');
+
+                if ($violation = PublicDocumentPolicy::violation($value, $publicRestrictions)) {
+                    Log::warning('Public document upload rejected.', [
+                        'reason' => $violation,
+                        'filename_fingerprint' => hash('sha256', strtolower($value->getClientOriginalName())),
+                        'request_ip_fingerprint' => hash('sha256', (string) $this->ip()),
+                    ]);
+                    $fail('This document cannot be accepted. Upload only PDF, JPG, JPEG, or PNG property documents up to 10 MB. Do not upload identity, address, financial, or KYC documents.');
                 }
             }],
             'declaration' => ['required', 'accepted'],
@@ -74,7 +85,7 @@ class StoreCustomerRequestRequest extends FormRequest
             'mobile.digits' => 'Mobile number must contain exactly 10 digits. / મોબાઇલ નંબર બરાબર 10 અંકનો હોવો જોઈએ.',
             'documents.required' => 'Please upload at least one document. / ઓછામાં ઓછો એક દસ્તાવેજ અપલોડ કરો.',
             'documents.max' => 'You may upload a maximum of 10 files. / વધુમાં વધુ 10 ફાઇલ અપલોડ કરી શકો.',
-            'documents.*.mimes' => 'Only PDF, JPG, JPEG and PNG files are allowed. / માત્ર PDF, JPG, JPEG અને PNG ફાઇલ માન્ય છે.',
+            'documents.*.mimetypes' => 'Only valid PDF, JPG, JPEG and PNG files are allowed. / માત્ર માન્ય PDF, JPG, JPEG અને PNG ફાઇલ માન્ય છે.',
             'documents.*.max' => 'Each file may be no larger than 10 MB. / દરેક ફાઇલ મહત્તમ 10 MB હોવી જોઈએ.',
             'declaration.accepted' => 'You must accept the declaration. / કૃપા કરીને ઘોષણા સ્વીકારો.',
         ];

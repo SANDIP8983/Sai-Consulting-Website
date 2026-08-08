@@ -71,11 +71,36 @@ class PublicRequestTrackingService
         $request->setAttribute('public_progress_percentage', $progress);
         $request->setAttribute('public_pending_documents', $pendingDocuments);
         $request->setAttribute('public_work_remarks', $workScopes->pluck('customer_remark')->filter()->unique()->values());
+        $request->setAttribute('public_status', $this->customerStatus($request));
         $billingState = $this->billingStateResolver->resolve($request);
         $request->setAttribute('public_billing_state', $billingState);
-        $request->setAttribute('public_payment_status', $billingState->paymentStatus);
+        $request->setAttribute(
+            'public_payment_status',
+            $request->public_status === 'rejected' ? 'not_required' : $billingState->paymentStatus,
+        );
 
         return $request;
+    }
+
+    /**
+     * Resolve the authoritative customer-facing request status.
+     *
+     * Older records can retain an active parent status after every service was
+     * declined. Rejection must win over stale payment or processing records,
+     * while completed lifecycle states remain authoritative.
+     */
+    private function customerStatus(CustomerRequest $request): string
+    {
+        if ($request->status === 'rejected') {
+            return 'rejected';
+        }
+
+        if ($request->requestServices->isNotEmpty()
+            && $request->requestServices->every(fn ($service) => $service->status === 'rejected')) {
+            return 'rejected';
+        }
+
+        return $request->status;
     }
 
     private function statusProgress(string $status): int
