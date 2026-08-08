@@ -106,7 +106,7 @@ class RequestWorkflowService
                             'government_charges' => 0,
                             'government_charges_snapshot' => [],
                             'estimated_days' => $selectedService->estimated_days,
-                            'required_documents_snapshot' => $selectedService->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'is_mandatory', 'sort_order'])->values()->all(),
+                            'required_documents_snapshot' => $selectedService->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'requirement_type', 'is_mandatory', 'sort_order'])->values()->all(),
                             'status' => 'received',
                         ]);
                     }

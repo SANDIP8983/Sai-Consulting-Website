@@ -13,7 +13,7 @@
                 <h2 class="accordion-header" id="serviceDocumentsHeading{{ $service->id }}"><button class="accordion-button {{ $index ? 'collapsed' : '' }}" type="button" data-bs-toggle="collapse" data-bs-target="#serviceDocuments{{ $service->id }}" aria-expanded="{{ $index === 0 ? 'true' : 'false' }}" aria-controls="serviceDocuments{{ $service->id }}"><span><strong>{{ $service->name_gu }}</strong><small>{{ $service->name_en }}</small></span></button></h2>
                 <div id="serviceDocuments{{ $service->id }}" class="accordion-collapse collapse {{ $index === 0 ? 'show' : '' }}" aria-labelledby="serviceDocumentsHeading{{ $service->id }}" data-bs-parent="#serviceDocumentsAccordion"><div class="accordion-body">
                     @if($service->activeRequiredDocuments->isNotEmpty())
-                        <ul class="required-document-grid service-document-list list-unstyled mb-0">@foreach($service->activeRequiredDocuments as $document)<li class="required-document"><span aria-hidden="true"><i class="bi bi-file-earmark-check"></i></span><div><strong>{{ $document->name_gu }}</strong><small>{{ $document->name_en }} <span class="badge {{ $document->is_mandatory ? 'text-bg-danger' : 'text-bg-secondary' }}">{{ $document->is_mandatory ? 'Required' : 'Optional' }}</span></small></div></li>@endforeach</ul>
+                        @include('frontend.partials.required-document-groups', ['documents' => $service->activeRequiredDocuments])
                     @else
                         <p class="information-empty mb-0">આ સેવા માટે દસ્તાવેજોની યાદી હાલમાં ઉપલબ્ધ નથી.</p>
                     @endif

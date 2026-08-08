@@ -11,11 +11,11 @@ class CommonRequiredDocument extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['name_en', 'name_gu', 'normalized_name', 'allowed_file_types', 'max_upload_size_kb', 'is_active', 'is_common'];
+    protected $fillable = ['code', 'name_en', 'name_gu', 'normalized_name', 'allowed_file_types', 'max_upload_size_kb', 'is_active', 'is_common', 'display_order'];
 
     protected function casts(): array
     {
-        return ['allowed_file_types' => 'array', 'max_upload_size_kb' => 'integer', 'is_active' => 'boolean', 'is_common' => 'boolean'];
+        return ['allowed_file_types' => 'array', 'max_upload_size_kb' => 'integer', 'is_active' => 'boolean', 'is_common' => 'boolean', 'display_order' => 'integer'];
     }
 
     public function serviceConfigurations(): HasMany
@@ -29,6 +29,9 @@ class CommonRequiredDocument extends Model
         static::updated(function (CommonRequiredDocument $document): void {
             if ($document->wasChanged(['is_active', 'is_common'])) {
                 self::synchronize($document);
+            }
+            if ($document->wasChanged(['name_en', 'name_gu'])) {
+                $document->serviceConfigurations()->update(['name_en' => $document->name_en, 'name_gu' => $document->name_gu]);
             }
         });
     }

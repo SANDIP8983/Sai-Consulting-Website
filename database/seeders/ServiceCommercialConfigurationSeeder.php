@@ -27,6 +27,12 @@ class ServiceCommercialConfigurationSeeder extends Seeder
         'other' => ['fee' => 1499, 'days' => 5, 'scopes' => []],
     ];
 
+    /** @return array<int, string> */
+    public static function serviceSlugs(): array
+    {
+        return array_keys(self::SERVICES);
+    }
+
     /** @var array<string, array{name_en: string, name_gu: string, aliases: array<int, string>}> */
     private const SCOPES = [
         'initial-review' => ['name_en' => 'Initial Document / Information Review', 'name_gu' => 'દસ્તાવેજો / માહિતીની પ્રાથમિક ચકાસણી', 'aliases' => ['document review']],

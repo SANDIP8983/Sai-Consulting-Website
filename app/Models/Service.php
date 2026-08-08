@@ -108,6 +108,9 @@ class Service extends Model
     {
         $query = $this->hasMany(ServiceRequiredDocument::class)
             ->where('is_active', true)
+            ->where('requirement_type', '!=', 'not_applicable')
+            ->where(fn ($query) => $query->whereNull('common_required_document_id')
+                ->orWhereHas('commonDocument', fn ($master) => $master->where('is_active', true)))
             ->orderByDesc('is_mandatory')
             ->orderBy('sort_order')
             ->orderBy('id');

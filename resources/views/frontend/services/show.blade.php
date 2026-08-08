@@ -38,17 +38,7 @@
             <span class="detail-kicker">Required Documents</span>
             <h2 id="required-documents-title">જરૂરી દસ્તાવેજો</h2>
             @if($documents->isNotEmpty())
-                <ul class="required-document-grid service-document-list list-unstyled mb-0">
-                    @foreach($documents as $document)
-                        <li class="required-document {{ $document->is_mandatory ? 'document-required' : 'document-optional' }}">
-                            <span aria-hidden="true"><i class="bi {{ $document->is_mandatory ? 'bi-file-earmark-check' : 'bi-file-earmark-plus' }}"></i></span>
-                            <div>
-                                <strong>{{ $document->name_gu }}</strong>
-                                <small>{{ $document->name_en }} <span class="badge {{ $document->is_mandatory ? 'text-bg-danger' : 'text-bg-secondary' }}">{{ $document->is_mandatory ? 'Required' : 'Optional' }}</span></small>
-                            </div>
-                        </li>
-                    @endforeach
-                </ul>
+                @include('frontend.partials.required-document-groups', ['documents' => $documents])
             @else
                 <div class="service-documents-empty"><x-public-icon name="document" size="24" /><p class="mb-0">આ સેવા માટે જરૂરી દસ્તાવેજોની યાદી હાલમાં ઉપલબ્ધ નથી. અરજી પછી જરૂરી માહિતી આપવામાં આવશે.</p></div>
             @endif

@@ -79,10 +79,13 @@ class ServiceRequiredDocumentManagementService
 
     private function attributes(array $attributes): array
     {
+        $type = $attributes['requirement_type'] ?? ((bool) $attributes['is_mandatory'] ? 'required' : 'optional');
+
         return [
             ...Arr::only($attributes, ['service_id', 'name_gu', 'name_en', 'sort_order']),
-            'is_mandatory' => (bool) $attributes['is_mandatory'],
-            'is_active' => (bool) $attributes['is_active'],
+            'requirement_type' => $type,
+            'is_mandatory' => $type === 'required',
+            'is_active' => $type !== 'not_applicable' && (bool) $attributes['is_active'],
         ];
     }
 

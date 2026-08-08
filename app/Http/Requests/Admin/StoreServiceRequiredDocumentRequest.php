@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\ServiceRequiredDocument;
 use App\Support\PublicDocumentPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,6 +25,7 @@ class StoreServiceRequiredDocumentRequest extends FormRequest
                 }
             }],
             'is_mandatory' => ['required', 'boolean'],
+            'requirement_type' => ['sometimes', Rule::in(ServiceRequiredDocument::REQUIREMENT_TYPES)],
             'sort_order' => ['required', 'integer', 'min:0'],
             'is_active' => ['required', 'boolean'],
         ];

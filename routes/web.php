@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\Auth\LoginController;
+use App\Http\Controllers\Admin\CommonRequiredDocumentController;
 use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequestController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\RequestDispatchController;
@@ -150,9 +151,15 @@ Route::middleware('auth')->prefix('admin/required-documents')->name('admin.requi
     Route::get('/create', 'create')->name('create');
     Route::post('/', 'store')->name('store');
     Route::patch('/service/{service}/reorder', 'reorder')->name('reorder');
+    Route::put('/service/{service}/mappings', 'updateMappings')->name('mappings.update');
     Route::get('/{requiredDocument}/edit', 'edit')->name('edit');
     Route::put('/{requiredDocument}', 'update')->name('update');
     Route::delete('/{requiredDocument}', 'destroy')->name('destroy');
+});
+Route::middleware('auth')->prefix('admin/required-document-master')->name('admin.required-document-master.')->controller(CommonRequiredDocumentController::class)->group(function () {
+    Route::post('/', 'store')->name('store');
+    Route::get('/{masterDocument}/edit', 'edit')->name('edit');
+    Route::put('/{masterDocument}', 'update')->name('update');
 });
 
 Route::middleware('auth')
