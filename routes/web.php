@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\CustomerRequestController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PublicInformationController;
 use App\Http\Controllers\PublicRequestPdfController;
 use App\Http\Controllers\PublicServiceController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,17 @@ Route::get('/', HomeController::class)->name('home');
 
 Route::get('/services', [PublicServiceController::class, 'index'])->name('services.index');
 Route::get('/services/{slug}', [PublicServiceController::class, 'show'])->name('services.show');
+
+Route::controller(PublicInformationController::class)->group(function () {
+    Route::get('/required-documents', 'requiredDocuments')->name('required-documents');
+    Route::get('/about', 'about')->name('about');
+    Route::get('/faq', 'faq')->name('faq');
+    Route::get('/contact', 'contact')->name('contact');
+    Route::get('/privacy-policy', 'privacyPolicy')->name('privacy-policy');
+    Route::get('/terms', 'terms')->name('terms');
+    Route::get('/refund-policy', 'refundPolicy')->name('refund-policy');
+    Route::get('/disclaimer', 'disclaimer')->name('disclaimer');
+});
 
 Route::get('/request', [CustomerRequestController::class, 'create'])
     ->name('request.create');

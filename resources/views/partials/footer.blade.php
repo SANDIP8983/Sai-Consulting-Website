@@ -10,7 +10,7 @@
                 <p class="footer-summary mt-4">મિલકત સંબંધિત દસ્તાવેજીકરણ અને માર્ગદર્શન માટે ગ્રાહક-કેન્દ્રિત સેવા.</p>
             </div>
             <div class="col-6 col-sm-3 {{ $hasPublicOfficeInfo ? 'col-lg-2' : 'col-lg-3' }}"><h2>Quick Links</h2><ul>
-                <li><a href="{{ route('home') }}">Home</a></li><li><a href="{{ route('services.index') }}">Services</a></li><li><a href="{{ route('services.index') }}">Required Documents</a></li><li><a href="{{ route('home') }}#about">About Us</a></li><li><a href="{{ route('home') }}#faq">FAQ</a></li><li><a href="{{ route('home') }}#contact">Contact</a></li>
+                <li><a href="{{ route('home') }}">Home</a></li><li><a href="{{ route('services.index') }}">Services</a></li><li><a href="{{ route('required-documents') }}">Required Documents</a></li><li><a href="{{ route('about') }}">About Us</a></li><li><a href="{{ route('faq') }}">FAQ</a></li><li><a href="{{ route('contact') }}">Contact</a></li>
             </ul></div>
             <div class="col-6 col-sm-3 {{ $hasPublicOfficeInfo ? 'col-lg-2' : 'col-lg-4' }}"><h2>Requests</h2><ul><li><a href="{{ route('request.create') }}">Apply Online</a></li><li><a href="{{ route('request.track') }}">Track Request</a></li></ul></div>
             @if($hasPublicOfficeInfo)<div class="col-lg-5"><h2>સંપર્ક / ઓફિસ માહિતી</h2>
@@ -21,6 +21,7 @@
             </div>@endif
         </div>
         <div class="footer-disclaimer"><x-public-icon name="shield" size="20" /><span>Sai Consulting provides documentation and advisory services but does not practice as an advocate.</span></div>
+        <nav class="footer-legal-links" aria-label="Legal"><a href="{{ route('privacy-policy') }}">Privacy Policy</a><a href="{{ route('terms') }}">Terms &amp; Conditions</a><a href="{{ route('refund-policy') }}">Refund Policy</a><a href="{{ route('disclaimer') }}">Disclaimer</a></nav>
         <div class="footer-bottom"><span>© {{ date('Y') }} {{ $site['businessName'] }}. All rights reserved.</span><span>Trusted Documentation Partner</span></div>
     </div>
 </footer>

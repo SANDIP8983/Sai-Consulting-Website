@@ -11,11 +11,11 @@
                 <ul class="navbar-nav ms-auto align-items-xl-center gap-xl-1">
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('home') ? 'active' : '' }}" href="{{ route('home') }}">Home</a></li>
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('services.*') ? 'active' : '' }}" href="{{ route('services.index') }}">Services</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('services.index') }}">Required Documents</a></li>
+                    <li class="nav-item"><a class="nav-link {{ request()->routeIs('required-documents') ? 'active' : '' }}" href="{{ route('required-documents') }}">Required Documents</a></li>
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('request.track*') ? 'active' : '' }}" href="{{ route('request.track') }}">Track Request</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#about">About Us</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#faq">FAQ</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('home') }}#contact">Contact</a></li>
+                    <li class="nav-item"><a class="nav-link {{ request()->routeIs('about') ? 'active' : '' }}" href="{{ route('about') }}">About Us</a></li>
+                    <li class="nav-item"><a class="nav-link {{ request()->routeIs('faq') ? 'active' : '' }}" href="{{ route('faq') }}">FAQ</a></li>
+                    <li class="nav-item"><a class="nav-link {{ request()->routeIs('contact') ? 'active' : '' }}" href="{{ route('contact') }}">Contact</a></li>
                 </ul>
                 <a href="{{ route('request.create') }}" class="btn btn-primary rounded-pill px-4 ms-xl-3 mt-3 mt-xl-0 header-cta">ઓનલાઇન અરજી કરો</a>
             </div>

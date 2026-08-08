@@ -4,7 +4,7 @@
             <span class="eyebrow"><span></span> સામાન્ય પ્રશ્નો</span>
             <h2 id="faq-title" class="mt-3">વારંવાર પૂછાતા પ્રશ્નો</h2>
             <p class="text-secondary">ઓનલાઇન અરજી અને દસ્તાવેજો વિશે ઉપયોગી માહિતી.</p>
-            <a href="{{ route('home') }}#faq" class="btn btn-outline-primary rounded-pill px-4">બધા પ્રશ્નો જુઓ</a>
+            <a href="{{ route('faq') }}" class="btn btn-outline-primary rounded-pill px-4">બધા પ્રશ્નો જુઓ</a>
         </div>
         <div class="col-lg-8"><div class="accordion premium-accordion" id="faqAccordion">
             @foreach([
