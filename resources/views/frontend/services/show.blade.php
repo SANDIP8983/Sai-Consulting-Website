@@ -1,7 +1,8 @@
 @extends('layouts.app')
 
-@section('title', $service->name_gu.' | '.$service->name_en.' | Sai Consulting')
+@section('title', $service->name_gu.' | Sai Consulting')
 @section('description', \Illuminate\Support\Str::limit($aboutService, 155))
+@section('canonical', \App\Support\Seo::route('services.show', $service->slug))
 
 @section('content')
 <section class="service-detail-hero" aria-labelledby="service-title">

@@ -1,7 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'Services | Sai Consulting')
+@section('title', 'સેવાઓ | Sai Consulting')
 @section('description', 'Sai Consulting ની સક્રિય દસ્તાવેજ ડ્રાફ્ટિંગ, મિલકત દસ્તાવેજ અને કન્સલ્ટિંગ સેવાઓ શોધો.')
+@section('canonical', \App\Support\Seo::route('services.index'))
 
 @section('content')
 <section class="service-page-hero"><div class="container py-5"><nav aria-label="breadcrumb"><ol class="breadcrumb service-breadcrumb"><li class="breadcrumb-item"><a href="{{ route('home') }}">Home</a></li><li class="breadcrumb-item active" aria-current="page">Services</li></ol></nav><div class="row align-items-end g-4"><div class="col-lg-7"><span class="eyebrow"><span></span> અમારી સેવાઓ</span><h1>દસ્તાવેજ અને કન્સલ્ટિંગ સેવાઓ</h1><p>Browse every active service, review requirements, and apply through the secure public request workflow.</p></div><div class="col-lg-5"><form method="GET" action="{{ route('services.index') }}" class="service-search" role="search"><label for="service-search" class="visually-hidden">Search services</label><i class="bi bi-search" aria-hidden="true"></i><input id="service-search" name="q" value="{{ $search }}" class="form-control" placeholder="Search Gujarati or English services"><button class="btn btn-primary" type="submit">Search</button></form></div></div></div></section>

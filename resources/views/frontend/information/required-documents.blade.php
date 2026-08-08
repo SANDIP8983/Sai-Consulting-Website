@@ -1,7 +1,7 @@
 @extends('layouts.app')
-@section('title', 'Sai Consulting જરૂરી દસ્તાવેજો | Required Documents')
+@section('title', 'જરૂરી દસ્તાવેજો | Sai Consulting')
 @section('description', 'Sai Consultingની સક્રિય સેવાઓ માટે હાલમાં ગોઠવાયેલા જરૂરી અને વૈકલ્પિક Property Documents જુઓ.')
-@section('canonical', route('required-documents'))
+@section('canonical', \App\Support\Seo::route('required-documents'))
 @section('content')
 <x-public-page-heading title-gu="જરૂરી દસ્તાવેજો" title-en="Required Documents" intro="અરજી કરતા પહેલાં તમારી સેવા માટે જરૂરી Property Documents તપાસો." />
 <section class="section-space information-page-body"><div class="container information-content-wide">

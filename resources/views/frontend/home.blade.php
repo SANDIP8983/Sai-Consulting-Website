@@ -1,7 +1,23 @@
 @extends('layouts.app')
 
-@section('title', 'Sai Consulting | દસ્તાવેજ ડ્રાફ્ટિંગ અને કન્સલ્ટિંગ')
+@section('title', 'Sai Consulting | દસ્તાવેજીકરણ અને મિલકત માર્ગદર્શન')
 @section('description', 'Sai Consulting દ્વારા વિશ્વાસપાત્ર દસ્તાવેજ ડ્રાફ્ટિંગ, મિલકત દસ્તાવેજ માર્ગદર્શન, ઓનલાઇન વિનંતી અને સુરક્ષિત ટ્રેકિંગ સેવા.')
+@section('canonical', \App\Support\Seo::route('home'))
+
+@push('structured-data')
+@php
+    $organization = array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'Organization',
+        'name' => 'Sai Consulting',
+        'url' => \App\Support\Seo::route('home'),
+        'logo' => $homepage['primaryLogoUrl'] ? \App\Support\Seo::route('branding.asset', 'primary-logo') : null,
+        'email' => $homepage['email'] ?: null,
+        'address' => $homepage['address'] ? ['@type' => 'PostalAddress', 'streetAddress' => $homepage['address']] : null,
+    ], fn ($value) => $value !== null && $value !== '');
+@endphp
+<script type="application/ld+json">{!! json_encode($organization, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+@endpush
 
 @section('content')
     @include('frontend.sections.hero')

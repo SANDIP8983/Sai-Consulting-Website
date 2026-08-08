@@ -1,7 +1,7 @@
 @extends('layouts.app')
-@section('title', 'Sai Consulting વિશે | About Sai Consulting')
+@section('title', 'અમારા વિશે | Sai Consulting')
 @section('description', 'Sai Consultingની દસ્તાવેજીકરણ સેવા, અનુભવ, મૂલ્યો અને વ્યાવસાયિક કાર્યક્ષેત્ર વિશે જાણો.')
-@section('canonical', route('about'))
+@section('canonical', \App\Support\Seo::route('about'))
 @section('content')
 <x-public-page-heading title-gu="અમારા વિશે" title-en="About Sai Consulting" />
 <section class="section-space information-page-body"><div class="container information-content">

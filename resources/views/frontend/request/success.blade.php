@@ -1,5 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Request Submitted Successfully | Sai Consulting')
+@section('description', 'Sai Consulting request acknowledgement.')
+@section('robots', 'noindex, nofollow, noarchive')
 @section('content')
 @php($submission = session('submitted_request'))
 <section class="py-5 bg-light"><div class="container"><div class="row justify-content-center"><div class="col-lg-9"><div class="premium-card overflow-hidden">

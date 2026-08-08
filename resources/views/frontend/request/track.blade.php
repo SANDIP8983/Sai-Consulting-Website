@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section('title', 'વિનંતીની સ્થિતિ તપાસો | Track Request | Sai Consulting')
 @section('description', 'તમારા રેફરન્સ નંબર અને નોંધાયેલા મોબાઇલ નંબરથી Sai Consulting વિનંતીની સ્થિતિ સુરક્ષિત રીતે તપાસો.')
+@section('robots', 'noindex, nofollow, noarchive')
 
 @section('content')
 @php

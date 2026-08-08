@@ -1,7 +1,7 @@
 @extends('layouts.app')
-@section('title', 'Sai Consulting સંપર્ક | Contact Us')
+@section('title', 'સંપર્ક કરો | Sai Consulting')
 @section('description', 'Sai Consultingનો configured WhatsApp, Email, office address અને office timing દ્વારા સંપર્ક કરો.')
-@section('canonical', route('contact'))
+@section('canonical', \App\Support\Seo::route('contact'))
 @section('content')
 <x-public-page-heading title-gu="સંપર્ક કરો" title-en="Contact Us" intro="જો તમને દસ્તાવેજો, મિલકતનું ટાઇટલ ચેકિંગ અથવા અમારી સેવાઓ વિશે વધુ માહિતી જોઈએ, તો નીચે દર્શાવેલ માધ્યમથી અમારો સંપર્ક કરી શકો છો." />
 <section class="section-space information-page-body"><div class="container information-content-wide">

@@ -55,6 +55,6 @@ class PdfGenerationService
     {
         $document = $this->forRequest($type, $request);
 
-        return response($this->render($document), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="'.$document->filename().'"', 'Cache-Control' => 'private, no-store, max-age=0', 'X-Content-Type-Options' => 'nosniff']);
+        return response($this->render($document), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="'.$document->filename().'"', 'Cache-Control' => 'private, no-store, max-age=0', 'X-Content-Type-Options' => 'nosniff', 'X-Robots-Tag' => 'noindex, nofollow, noarchive']);
     }
 }

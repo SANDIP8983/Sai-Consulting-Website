@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'Admin') | {{ config('app.name') }}</title>
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
     .admin-sidebar { width: 17rem; }

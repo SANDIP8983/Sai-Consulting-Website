@@ -1,7 +1,7 @@
 @extends('layouts.app')
-@section('title', 'Sai Consulting '.$legalPage['title_en'].' | '.$legalPage['title_gu'])
+@section('title', $legalPage['title_gu'].' | Sai Consulting')
 @section('description', $legalPage['meta'])
-@section('canonical', url()->current())
+@section('canonical', \App\Support\Seo::route($routeName))
 @section('content')
 <x-public-page-heading :title-gu="$legalPage['title_gu']" :title-en="$legalPage['title_en']" />
 <section class="section-space information-page-body"><div class="container legal-content">

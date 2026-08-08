@@ -1,7 +1,7 @@
 @extends('layouts.app')
-@section('title', 'Sai Consulting FAQ | વારંવાર પૂછાતા પ્રશ્નો')
+@section('title', 'વારંવાર પૂછાતા પ્રશ્નો | Sai Consulting')
 @section('description', 'Sai Consultingની સેવાઓ, અરજી, દસ્તાવેજો, billing, payment અને tracking વિશે સામાન્ય પ્રશ્નોના જવાબ.')
-@section('canonical', route('faq'))
+@section('canonical', \App\Support\Seo::route('faq'))
 @section('content')
 <x-public-page-heading title-gu="વારંવાર પૂછાતા પ્રશ્નો" title-en="FAQ" />
 @php($faqs = [

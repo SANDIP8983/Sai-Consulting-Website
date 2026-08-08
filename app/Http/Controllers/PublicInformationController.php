@@ -69,6 +69,7 @@ class PublicInformationController extends Controller
         return view('frontend.information.legal', [
             'legalPage' => config("public-information-pages.legal.{$page}"),
             'pageData' => $homepage->publicSiteData(),
+            'routeName' => $page,
         ]);
     }
 }

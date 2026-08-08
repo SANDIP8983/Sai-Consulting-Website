@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Online Service Request | Sai Consulting')
+@section('robots', 'noindex, follow, noarchive')
 @section('content')
 @php($selectedIds = array_map('intval', old('service_ids', array_filter([old('service_id'), request('service')]))))
 <section class="py-5 text-white" style="background:linear-gradient(135deg,#082f6b,#0b5ed7)"><div class="container"><span class="eyebrow"><span></span>Secure Production Request</span><h1 class="fw-bold">સેવા માટે ઓનલાઇન અરજી</h1><p>Select services, review charges, and send available property documents.</p></div></section>
