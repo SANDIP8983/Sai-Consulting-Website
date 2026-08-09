@@ -56,4 +56,25 @@ class MigrationDependencyTest extends TestCase
         $this->assertSame(1, $before);
         $this->assertSame($before, $after);
     }
+
+    public function test_schema_index_names_fit_the_mysql_identifier_limit(): void
+    {
+        foreach (Schema::getTables() as $table) {
+            foreach (Schema::getIndexes($table['name']) as $index) {
+                $this->assertLessThanOrEqual(
+                    64,
+                    strlen($index['name']),
+                    "Index [{$index['name']}] exceeds MySQL's 64-character identifier limit."
+                );
+            }
+        }
+    }
+
+    public function test_long_work_scope_foreign_key_uses_an_explicit_mysql_safe_name(): void
+    {
+        $migration = file_get_contents(database_path('migrations/2026_08_02_120000_add_processing_checklist_audit_fields.php'));
+
+        $this->assertStringContainsString("indexName: 'req_scope_history_scope_fk'", $migration);
+        $this->assertLessThanOrEqual(64, strlen('req_scope_history_scope_fk'));
+    }
 }

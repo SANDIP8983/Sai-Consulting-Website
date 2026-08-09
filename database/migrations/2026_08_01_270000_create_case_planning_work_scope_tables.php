@@ -40,7 +40,7 @@ return new class extends Migration
             $t->foreignId('selected_by')->nullable()->constrained('users')->nullOnDelete();
             $t->timestamp('completed_at')->nullable();
             $t->timestamps();
-            $t->unique(['request_service_id', 'work_scope_item_id']);
+            $t->unique(['request_service_id', 'work_scope_item_id'], 'req_service_scope_item_unique');
         });
         Schema::table('request_services', function (Blueprint $t): void {
             $t->timestamp('decided_at')->nullable()->after('decided_by');

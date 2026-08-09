@@ -16,7 +16,9 @@ return new class extends Migration
         });
         Schema::create('request_service_work_scope_histories', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('request_service_work_scope_id')->constrained('request_service_work_scopes')->cascadeOnDelete();
+            $table->foreignId('request_service_work_scope_id')
+                ->constrained('request_service_work_scopes', indexName: 'req_scope_history_scope_fk')
+                ->cascadeOnDelete();
             $table->foreignId('request_id')->constrained('requests')->cascadeOnDelete();
             $table->string('action', 40);
             $table->string('from_status', 30)->nullable();
