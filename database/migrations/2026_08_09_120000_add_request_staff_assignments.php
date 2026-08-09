@@ -31,6 +31,7 @@ return new class extends Migration
         Schema::dropIfExists('request_assignment_histories');
 
         Schema::table('requests', function (Blueprint $table): void {
+            $table->dropIndex(['assigned_at']);
             $table->dropConstrainedForeignId('assigned_user_id');
             $table->dropConstrainedForeignId('assigned_by');
             $table->dropColumn('assigned_at');

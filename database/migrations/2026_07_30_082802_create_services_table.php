@@ -32,6 +32,20 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (Schema::hasTable('requests')) {
+            $foreignKey = collect(Schema::getForeignKeys('requests'))->first(
+                fn (array $key): bool => $key['columns'] === ['service_id']
+                    && $key['foreign_table'] === 'services'
+                    && $key['foreign_columns'] === ['id']
+            );
+
+            if ($foreignKey !== null) {
+                Schema::table('requests', function (Blueprint $table) use ($foreignKey): void {
+                    $table->dropForeign($foreignKey['name'] ?: ['service_id']);
+                });
+            }
+        }
+
         Schema::dropIfExists('services');
     }
 };

@@ -17,10 +17,9 @@ return new class extends Migration
 
             $table->string('reference_no')->unique();
 
-            $table->foreignId('service_id')
-                ->constrained('services')
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
+            // The services table is created by a later historical migration.
+            // Its foreign key is added after both tables exist.
+            $table->foreignId('service_id')->index();
 
             $table->string('name');
             $table->string('mobile', 15);
