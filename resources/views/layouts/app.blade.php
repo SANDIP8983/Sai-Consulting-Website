@@ -36,9 +36,11 @@
 
 <body>
 
+    <a class="visually-hidden-focusable skip-link" href="#main-content">Skip to main content</a>
+
     @include('partials.header')
 
-    <main>
+    <main id="main-content" tabindex="-1">
         @yield('content')
     </main>
 

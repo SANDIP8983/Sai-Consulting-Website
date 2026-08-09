@@ -13,14 +13,32 @@
     .admin-sidebar .nav-link.active { color: #fff; background-color: var(--bs-primary); }
     .admin-sidebar .settings-toggle { color: rgba(255, 255, 255, .72); }
     .admin-sidebar .settings-toggle:hover, .admin-sidebar .settings-toggle:focus { color: #fff; }
+    .admin-shell-content, .admin-main { min-width: 0; }
+    .admin-main .card, .admin-main .row > * { min-width: 0; }
+    .admin-main .table-responsive { border-radius: inherit; overscroll-behavior-inline: contain; }
+    .admin-main .table-responsive:focus-visible { outline: 3px solid rgba(13, 110, 253, .45); outline-offset: 2px; }
+    .admin-main :where(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid rgba(13, 110, 253, .45); outline-offset: 2px; box-shadow: none; }
+    .admin-skip-link { z-index: 2000; }
 
     @media (min-width: 992px) {
         .admin-sidebar { min-height: 100vh; position: sticky; top: 0; }
+    }
+    @media (max-width: 991.98px) {
+        .admin-sidebar { width: 100%; max-height: calc(100vh - 3.5rem); overflow-y: auto; }
+        .admin-toolbar { gap: .5rem; flex-wrap: nowrap; }
+        .admin-toolbar .navbar-text { min-width: 0; overflow-wrap: anywhere; }
+        .admin-user-menu { max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .admin-main { padding: 1rem !important; }
+        .admin-main .btn { min-height: 44px; }
+        .admin-main .btn-sm { min-height: 40px; }
+        .admin-main .form-check-input { width: 1.25rem; height: 1.25rem; }
+        .admin-main .form-check-label { padding-block: .15rem; }
     }
     </style>
     @stack('styles')
 </head>
 <body class="bg-light">
+    <a class="visually-hidden-focusable position-fixed top-0 start-0 m-2 p-2 bg-white rounded admin-skip-link" href="#admin-main-content">Skip to main content</a>
     @auth
         <div class="d-lg-flex min-vh-100">
             <aside id="adminSidebar" class="admin-sidebar collapse d-lg-flex flex-column flex-shrink-0 bg-dark text-white">
@@ -68,15 +86,15 @@
                 </div>
             </aside>
 
-            <div class="d-flex flex-column flex-grow-1 min-vh-100">
+            <div class="admin-shell-content d-flex flex-column flex-grow-1 min-vh-100">
                 <header class="navbar bg-white border-bottom shadow-sm sticky-top">
-                    <div class="container-fluid">
-                        <button class="btn btn-outline-secondary d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#adminSidebar" aria-controls="adminSidebar" aria-expanded="false">
+                    <div class="container-fluid admin-toolbar">
+                        <button class="btn btn-outline-secondary d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#adminSidebar" aria-controls="adminSidebar" aria-expanded="false" aria-label="Open admin navigation">
                             Menu
                         </button>
                         <span class="navbar-text fw-semibold ms-2">@yield('title', 'Admin')</span>
                         <div class="dropdown ms-auto">
-                            <button class="btn btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <button class="btn btn-light border dropdown-toggle admin-user-menu" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open account menu for {{ auth()->user()->name }}">
                                 {{ auth()->user()->name }}
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
@@ -94,7 +112,7 @@
                     </div>
                 </header>
 
-                <main class="flex-grow-1 p-3 p-lg-4">
+                <main id="admin-main-content" class="admin-main flex-grow-1 p-3 p-lg-4" tabindex="-1">
                     <nav aria-label="breadcrumb" class="mb-4">
                         <ol class="breadcrumb mb-0">
                             <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Admin</a></li>
@@ -115,7 +133,7 @@
             </div>
         </div>
     @else
-        <main>@yield('content')</main>
+        <main id="admin-main-content" tabindex="-1">@yield('content')</main>
     @endauth
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
