@@ -42,7 +42,7 @@ class ManualPaymentManagementTest extends TestCase
         $request->refresh();
         $this->assertSame('1250.00', $request->amount_due);
         $this->assertSame($admin->id, $request->fee_updated_by);
-        $this->assertSame('payment_received', $request->status);
+        $this->assertSame('awaiting_staff_assignment', $request->status);
         $this->assertSame('received', $request->payment_status);
         $this->assertDatabaseCount('request_payments', 2);
     }

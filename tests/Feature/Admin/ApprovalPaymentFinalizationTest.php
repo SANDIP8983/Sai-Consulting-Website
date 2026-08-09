@@ -193,7 +193,10 @@ class ApprovalPaymentFinalizationTest extends TestCase
 
         $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), [...$payment, 'amount' => 2486])->assertSessionHasNoErrors();
         $this->assertSame('received', $request->fresh()->payment_status);
-        $this->assertSame('payment_received', $request->fresh()->status);
+        $this->assertSame('awaiting_staff_assignment', $request->fresh()->status);
+        $this->assertDatabaseHas('request_status_histories', ['request_id' => $request->id, 'to_status' => 'payment_received', 'remarks' => 'Payment received.']);
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()
+            ->assertSee('Payment Received')->assertSee('ચુકવણી મળી')->assertSee('Awaiting Staff Assignment')->assertSee('સ્ટાફ ફાળવણી બાકી');
         $this->assertTrue($request->fresh()->billing->isLocked());
     }
 
@@ -237,11 +240,61 @@ class ApprovalPaymentFinalizationTest extends TestCase
         $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('Payment Pending');
     }
 
+    public function test_one_two_and_three_approved_services_are_aggregated_and_payable_once(): void
+    {
+        $admin = User::factory()->create();
+        foreach ([1, 2, 3] as $count) {
+            $services = collect(range(1, $count))->map(fn ($index) => $this->service("Aggregate {$count}-{$index}", $index * 1000));
+            $request = CustomerRequest::query()->create(['reference_no' => "SC/2026/AGG{$count}", 'service_id' => $services->first()->id, 'name' => 'Aggregate Customer', 'mobile' => '9999999999', 'status' => 'received', 'payment_status' => 'not_required']);
+            $items = $services->map(fn ($service) => $request->requestServices()->create(['service_id' => $service->id, 'service_name_en_snapshot' => $service->name_en, 'professional_fee' => $service->service_fee, 'gst_rate' => 18, 'status' => 'under_review']))->all();
+            $this->approveAll($admin, $request, $items);
+
+            $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload(['discount_type' => 'none', 'discount_value' => 0, 'discount_reason' => null, 'government_charges' => []]))->assertSessionHasNoErrors();
+            $expectedProfessional = (float) $services->sum('service_fee');
+            $expectedTotal = round($expectedProfessional * 1.18, 2);
+            $this->assertSame('payment_pending', $request->fresh()->status);
+            $this->assertSame($expectedProfessional, (float) $request->fresh()->billing->net_professional_fee);
+            $this->assertSame(round($expectedProfessional * .18, 2), (float) $request->fresh()->billing->gst_amount);
+            $this->assertSame($expectedTotal, (float) $request->fresh()->billing->grand_total);
+            $this->actingAs($admin)->get(route('admin.requests.show', $request))->assertOk()->assertSee('Save Payment Record');
+
+            $payment = ['amount' => $expectedTotal, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => now()->format('Y-m-d H:i:s')];
+            $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), $payment)->assertSessionHasNoErrors();
+            $this->assertSame('awaiting_staff_assignment', $request->fresh()->status);
+            $this->assertSame(1, $request->payments()->count());
+            $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), $payment)->assertSessionHasErrors('amount');
+            $this->assertSame(1, $request->payments()->count());
+        }
+    }
+
+    public function test_pending_rejected_and_all_rejected_service_decisions_keep_payment_rules_explicit(): void
+    {
+        $admin = User::factory()->create();
+        [$pendingRequest, $pendingItems] = $this->requestWithServices();
+        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$pendingRequest, $pendingItems[0]]), ['decision' => 'approved'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $pendingRequest), $this->billingPayload())->assertSessionHasErrors('pricing');
+        $this->assertDatabaseMissing('request_billings', ['request_id' => $pendingRequest->id]);
+
+        [$mixedRequest, $mixedItems] = $this->requestWithServices();
+        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$mixedRequest, $mixedItems[0]]), ['decision' => 'approved'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$mixedRequest, $mixedItems[1]]), ['decision' => 'rejected'])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $mixedRequest), $this->billingPayload(['discount_type' => 'none', 'discount_value' => 0, 'discount_reason' => null, 'government_charges' => []]))->assertSessionHasNoErrors();
+        $this->assertSame(1000.0, (float) $mixedRequest->fresh()->billing->net_professional_fee);
+        $this->assertSame(1180.0, (float) $mixedRequest->fresh()->billing->grand_total);
+
+        [$rejectedRequest, $rejectedItems] = $this->requestWithServices();
+        foreach ($rejectedItems as $item) {
+            $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$rejectedRequest, $item]), ['decision' => 'rejected'])->assertSessionHasNoErrors();
+        }
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $rejectedRequest), $this->billingPayload())->assertSessionHasErrors('pricing');
+        $this->assertDatabaseMissing('request_billings', ['request_id' => $rejectedRequest->id]);
+    }
+
     private function requestWithServices(): array
     {
         $first = $this->service('First Service', 1000);
         $second = $this->service('Second Service', 2000);
-        $request = CustomerRequest::query()->create(['reference_no' => 'SC/2026/900001', 'service_id' => $first->id, 'name' => 'Approval Customer', 'mobile' => '9999999999', 'status' => 'under_review', 'payment_status' => 'not_required', 'amount_due' => 0, 'last_status_changed_at' => now()]);
+        $request = CustomerRequest::query()->create(['reference_no' => 'SC/2026/'.fake()->unique()->numerify('######'), 'service_id' => $first->id, 'name' => 'Approval Customer', 'mobile' => '9999999999', 'status' => 'under_review', 'payment_status' => 'not_required', 'amount_due' => 0, 'last_status_changed_at' => now()]);
         $items = collect([$first, $second])->map(fn ($service) => $request->requestServices()->create(['service_id' => $service->id, 'service_name_en_snapshot' => $service->name_en, 'professional_fee' => $service->service_fee, 'gst_rate' => $service->gst_rate, 'government_charges' => 0, 'status' => 'under_review']))->all();
 
         return [$request, $items];
@@ -256,11 +309,13 @@ class ApprovalPaymentFinalizationTest extends TestCase
 
     private function billingPayload(array $overrides = []): array
     {
-        return array_replace_recursive(['discount_type' => 'percentage', 'discount_value' => 10, 'discount_reason' => 'regular_customer', 'internal_note' => null, 'gst_rate' => 18, 'government_charges' => [['name' => 'Stamp Duty', 'amount' => 200, 'note' => 'As applicable', 'display_order' => 0], ['name' => 'Registration Fee', 'amount' => 100, 'display_order' => 1]]], $overrides);
+        return array_replace(['discount_type' => 'percentage', 'discount_value' => 10, 'discount_reason' => 'regular_customer', 'internal_note' => null, 'gst_rate' => 18, 'government_charges' => [['name' => 'Stamp Duty', 'amount' => 200, 'note' => 'As applicable', 'display_order' => 0], ['name' => 'Registration Fee', 'amount' => 100, 'display_order' => 1]]], $overrides);
     }
 
     private function service(string $name, float $fee): Service
     {
-        return Service::query()->create(['name_en' => $name, 'name_gu' => $name, 'slug' => str($name)->slug().'-'.fake()->unique()->numberBetween(1, 99999), 'service_fee' => $fee, 'gst_rate' => 18, 'estimated_days' => 5, 'is_active' => true]);
+        $suffix = fake()->unique()->numerify('######');
+
+        return Service::query()->create(['name_en' => $name.' '.$suffix, 'name_gu' => $name.' '.$suffix, 'slug' => str($name)->slug().'-'.$suffix, 'service_fee' => $fee, 'gst_rate' => 18, 'estimated_days' => 5, 'is_active' => true]);
     }
 }

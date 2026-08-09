@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\NotificationMilestone;
 use App\Models\Holiday;
 use App\Models\OfficeTiming;
 use App\Models\Setting;
@@ -73,6 +74,31 @@ class SettingsService
     public function updateContactSettings(array $values): void
     {
         $this->updateGroup('contact', $values);
+    }
+
+    public function customerNotificationSettings(): array
+    {
+        $stored = Setting::query()->where('setting_group', 'customer_notifications')->pluck('setting_value', 'setting_key');
+
+        return collect(NotificationMilestone::cases())->mapWithKeys(fn ($milestone) => [$milestone->value => collect(['email', 'whatsapp'])->mapWithKeys(function ($channel) use ($milestone, $stored) {
+            $value = $stored->get("notifications.{$milestone->value}.{$channel}");
+
+            return [$channel => $value === null ? $milestone->defaults()[$channel] : filter_var($value, FILTER_VALIDATE_BOOL)];
+        })->all()])->all();
+    }
+
+    public function updateCustomerNotificationSettings(array $milestones): void
+    {
+        DB::transaction(function () use ($milestones): void {
+            foreach (NotificationMilestone::cases() as $milestone) {
+                foreach (['email', 'whatsapp'] as $channel) {
+                    Setting::query()->updateOrCreate(
+                        ['setting_key' => "notifications.{$milestone->value}.{$channel}"],
+                        ['setting_value' => $milestones[$milestone->value][$channel] ? '1' : '0', 'value_type' => 'boolean', 'setting_group' => 'customer_notifications', 'is_public' => false],
+                    );
+                }
+            }
+        });
     }
 
     /**

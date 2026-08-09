@@ -162,7 +162,7 @@ class RequestWorkflowServiceTest extends TestCase
             'notes' => 'Received.',
         ], User::factory()->create());
 
-        $this->assertSame('payment_received', $request->fresh()->status);
+        $this->assertSame('awaiting_staff_assignment', $request->fresh()->status);
         $this->assertDatabaseHas('request_payments', [
             'request_id' => $request->id,
             'amount' => 250,

@@ -14,6 +14,7 @@ class AdminUserSeederTest extends TestCase
 
     public function test_admin_seeder_is_idempotent(): void
     {
+        config(['admin.mobile' => '9876543205']);
         $this->seed(AdminUserSeeder::class);
         $admin = User::query()->sole();
         $originalHash = $admin->password;
@@ -26,18 +27,26 @@ class AdminUserSeederTest extends TestCase
         $this->assertTrue(Hash::check(config('admin.password'), $admin->fresh()->password));
     }
 
-    public function test_admin_seeder_renames_the_legacy_account_and_sets_the_configured_password(): void
+    public function test_admin_seeder_promotes_legacy_account_without_replacing_contact_or_password(): void
     {
         $legacy = User::factory()->create([
             'name' => 'Test User',
             'email' => config('admin.legacy_email'),
         ]);
+        $originalEmail = $legacy->email;
+        $originalMobile = $legacy->mobile;
+        $originalHash = $legacy->password;
+        config(['admin.mobile' => '9876543206']);
+
         $this->seed(AdminUserSeeder::class);
 
         $admin = User::query()->sole();
         $this->assertSame('Admin', $admin->name);
-        $this->assertSame(config('admin.email'), $admin->email);
-        $this->assertTrue(Hash::check(config('admin.password'), $admin->password));
-        $this->assertDatabaseMissing('users', ['email' => config('admin.legacy_email')]);
+        $this->assertSame('admin', $admin->username);
+        $this->assertSame('super_admin', $admin->role);
+        $this->assertTrue($admin->is_active);
+        $this->assertSame($originalEmail, $admin->email);
+        $this->assertSame($originalMobile, $admin->mobile);
+        $this->assertSame($originalHash, $admin->password);
     }
 }

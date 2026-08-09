@@ -3,7 +3,7 @@
         <div class="d-flex flex-wrap align-items-center gap-2">
             <strong>{{ $customerRequest->reference_no }}</strong>
             <span class="text-muted">{{ $customerRequest->file_number ?: 'File not assigned' }}</span>
-            @include('admin.requests.partials.status-badge',['status'=>$customerRequest->status])
+            @include('admin.requests.partials.status-badge',['status'=>$customerRequest->lifecycleStatus()])
             @include('admin.requests.partials.payment-badge',['status'=>$billingState->paymentStatus])
             <span class="badge text-bg-light border">{{ $processingSummary['percentage'] }}% processed</span>
         </div>

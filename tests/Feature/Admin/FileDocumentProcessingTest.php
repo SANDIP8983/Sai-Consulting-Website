@@ -159,8 +159,9 @@ class FileDocumentProcessingTest extends TestCase
 
     private function request(array $attributes = []): CustomerRequest
     {
+        $assignee = User::factory()->create(['role' => 'staff']);
         $service = Service::query()->create(['name_en' => 'Processing Service', 'name_gu' => 'Processing Service', 'slug' => 'processing-service', 'is_active' => true, 'sort_order' => 1, 'uses_drafting_workflow' => true, 'requires_registration' => true]);
-        $request = CustomerRequest::query()->create(['reference_no' => 'SC/2026/000001', 'service_id' => $service->id, 'name' => 'Customer', 'mobile' => '9999999999', 'status' => 'under_review', 'payment_status' => 'not_required', ...$attributes]);
+        $request = CustomerRequest::query()->create(['reference_no' => 'SC/2026/000001', 'assigned_user_id' => $assignee->id, 'assigned_by' => $assignee->id, 'assigned_at' => now(), 'service_id' => $service->id, 'name' => 'Customer', 'mobile' => '9999999999', 'status' => 'under_review', 'payment_status' => 'not_required', ...$attributes]);
         if ($request->payment_status === 'received') {
             $request->billing()->create(['total_original_professional_fee' => 1000, 'discount_type' => 'none', 'discount_value' => 0, 'discount_amount' => 0, 'net_professional_fee' => 1000, 'gst_rate' => 0, 'gst_amount' => 0, 'government_charges_total' => 0, 'grand_total' => 1000, 'pricing_locked_at' => now()]);
             $request->payments()->create(['amount' => 1000, 'payment_status' => 'received', 'payment_method' => 'upi', 'received_at' => now()]);

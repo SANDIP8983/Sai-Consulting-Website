@@ -110,6 +110,7 @@ class PublicRequestTrackingService
             'under_review', 'need_documents' => 20,
             'approved', 'payment_pending' => 35,
             'payment_received' => 45,
+            'awaiting_staff_assignment' => 50,
             'in_progress', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration' => 65,
             'completed' => 85,
             'dispatched' => 90,

@@ -1,0 +1,10 @@
+@extends('layouts.admin')
+@section('title', 'Users / Staff')
+@section('content')
+<div class="d-flex justify-content-between align-items-center mb-4"><div><h1 class="h2 mb-1">Users / Staff Management</h1><p class="text-muted mb-0">Manage secure admin and staff login accounts.</p></div><a class="btn btn-primary" href="{{ route('admin.users.create') }}">Add User</a></div>
+@if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+@error('delete')<div class="alert alert-danger">{{ $message }}</div>@enderror
+<div class="card shadow-sm"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th></th></tr></thead><tbody>
+@foreach($users as $user)<tr><td>{{ $user->name }}</td><td><code>{{ $user->username }}</code></td><td>{{ $user->email ?: '—' }}</td><td>{{ config("permissions.labels.{$user->role}") }}</td><td><span class="badge {{ $user->is_active ? 'text-bg-success' : 'text-bg-secondary' }}">{{ $user->is_active ? 'Active' : 'Inactive' }}</span></td><td>{{ $user->last_login_at?->format('d M Y, g:i A') ?: 'Never' }}</td><td class="text-end"><div class="d-inline-flex gap-2"><a class="btn btn-sm btn-outline-primary" href="{{ route('admin.users.edit', $user) }}">Edit</a>@if($deletableUserIds->contains($user->id))<form method="POST" action="{{ route('admin.users.destroy', $user) }}" onsubmit="return confirm('This user has no linked historical records and will be permanently deleted. Continue?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Permanent Delete</button></form>@endif</div></td></tr>@endforeach
+</tbody></table></div></div><div class="mt-3">{{ $users->links() }}</div>
+@endsection

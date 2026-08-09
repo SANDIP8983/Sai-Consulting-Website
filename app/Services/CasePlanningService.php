@@ -16,6 +16,7 @@ class CasePlanningService
     public function __construct(
         private readonly FileNumberService $fileNumbers,
         private readonly RequestBillingStateResolver $billingStateResolver,
+        private readonly RequestDecisionNormalizer $decisionNormalizer,
     ) {}
 
     public function save(CustomerRequest $request, array $services, User $user): void
@@ -46,11 +47,13 @@ class CasePlanningService
                 $row->approvalHistory()->create(['request_id' => $locked->id, 'approved_by' => $user->id, 'pricing_snapshot' => ['decision' => $decision, 'work_scope_ids' => $scopeIds, 'custom_work_item' => $custom ?: null], 'action' => 'decision', 'note' => $note ?: null]);
             }
             $from = $locked->status;
+            $locked->unsetRelation('requestServices');
+            $this->decisionNormalizer->normalize($locked, $user);
             $changes = ['case_planning_version' => CustomerRequest::CURRENT_CASE_PLANNING_VERSION];
-            if ($from === 'received') {
+            if ($from === 'received' && $locked->status !== 'rejected') {
                 $changes += ['status' => 'under_review', 'last_status_changed_at' => now()];
             }$locked->update($changes);
-            if ($from === 'received') {
+            if ($from === 'received' && $locked->status !== 'rejected') {
                 $locked->statusHistory()->create(['from_status' => 'received', 'to_status' => 'under_review', 'remarks' => 'Case planning started.', 'is_visible_to_customer' => true, 'changed_by' => $user->id]);
             }
         });

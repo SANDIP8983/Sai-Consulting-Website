@@ -24,7 +24,7 @@ class AdminAuthenticationTest extends TestCase
         ]);
 
         $this->post(route('login.store'), [
-            'email' => $user->email,
+            'login' => $user->username,
             'password' => 'password',
         ])->assertRedirect(route('admin.dashboard'));
 

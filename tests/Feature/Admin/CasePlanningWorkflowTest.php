@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\CustomerRequest;
+use App\Models\RequestServiceWorkScope;
 use App\Models\Service;
 use App\Models\User;
 use App\Models\WorkScopeItem;
@@ -77,15 +78,81 @@ class CasePlanningWorkflowTest extends TestCase
         $this->assertSame($file, $request->fresh()->file_number);
     }
 
-    public function test_all_rejected_case_has_no_file_number(): void
+    public function test_one_two_and_three_rejected_services_normalize_parent_without_billing(): void
     {
         $admin = User::factory()->create();
-        [$request,$first,$second] = $this->case(2);
-        $payload = ['services' => [$first->id => ['decision' => 'rejected', 'decision_notes' => 'Not accepted'], $second->id => ['decision' => 'rejected', 'decision_notes' => 'Not accepted']]];
-        $this->actingAs($admin)->patch(route('admin.requests.case-planning.save', $request), $payload)->assertSessionHasNoErrors();
-        $this->actingAs($admin)->patch(route('admin.requests.case-planning.reject', $request))->assertSessionHasNoErrors();
+        foreach ([1, 2, 3] as $count) {
+            $case = $this->case($count);
+            $request = array_shift($case);
+            $services = $case;
+            $payload = ['services' => collect($services)->mapWithKeys(fn ($service) => [$service->id => ['decision' => 'rejected', 'decision_notes' => 'Not accepted', 'customer_decision_message' => 'This service was not accepted.']])->all()];
+            $this->actingAs($admin)->patch(route('admin.requests.case-planning.save', $request), $payload)->assertSessionHasNoErrors();
+
+            $request->refresh();
+            $this->assertSame('rejected', $request->status);
+            $this->assertSame('not_required', $request->payment_status);
+            $this->assertSame(0.0, (float) $request->amount_due);
+            $this->assertNull($request->file_number);
+            $this->assertDatabaseHas('request_status_histories', ['request_id' => $request->id, 'from_status' => 'under_review', 'to_status' => 'rejected', 'is_visible_to_customer' => true]);
+            $this->assertDatabaseMissing('request_billings', ['request_id' => $request->id]);
+        }
+    }
+
+    public function test_individual_service_decision_endpoint_normalizes_the_last_rejection(): void
+    {
+        $admin = User::factory()->create();
+        [$request, $service] = $this->case();
+
+        $this->actingAs($admin)->patch(route('admin.requests.services.decision', [$request, $service]), [
+            'decision' => 'rejected',
+            'decision_notes' => 'Not accepted',
+        ])->assertSessionHasNoErrors();
+
         $this->assertSame('rejected', $request->fresh()->status);
-        $this->assertNull($request->fresh()->file_number);
+        $this->assertSame('not_required', $request->fresh()->payment_status);
+        $this->assertDatabaseHas('request_status_histories', ['request_id' => $request->id, 'to_status' => 'rejected']);
+    }
+
+    public function test_approved_and_rejected_services_keep_parent_payable_for_only_approved_service(): void
+    {
+        $admin = User::factory()->create();
+        [$request, $approved, $rejected] = $this->case(2);
+        $scope = WorkScopeItem::where('name_en', 'Drafting')->sole();
+        $this->actingAs($admin)->patch(route('admin.requests.case-planning.save', $request), ['services' => [
+            $approved->id => ['decision' => 'approved', 'work_scope_ids' => [$scope->id]],
+            $rejected->id => ['decision' => 'rejected', 'decision_notes' => 'Excluded'],
+        ]])->assertSessionHasNoErrors();
+
+        $this->assertNotSame('rejected', $request->fresh()->status);
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload())->assertSessionHasNoErrors();
+        $this->assertSame(1000.0, (float) $request->fresh()->billing->total_original_professional_fee);
+        $this->assertSame(1180.0, (float) $request->fresh()->billing->grand_total);
+        $this->assertSame('rejected', $rejected->fresh()->status);
+        $this->assertSame(0, $rejected->workScopes()->count());
+    }
+
+    public function test_existing_all_rejected_parent_is_presented_consistently_and_actions_are_denied(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin']);
+        $staff = User::factory()->create(['role' => 'staff']);
+        [$request, $service] = $this->case();
+        $service->update(['status' => 'rejected', 'rejected_at' => now(), 'decided_at' => now(), 'decision_notes' => 'Preserved rejection reason', 'customer_decision_message' => 'Request cannot be accepted.']);
+        $scopeItem = WorkScopeItem::where('name_en', 'Drafting')->sole();
+        $scope = RequestServiceWorkScope::query()->create(['request_service_id' => $service->id, 'work_scope_item_id' => $scopeItem->id, 'name_en_snapshot' => $scopeItem->name_en, 'status' => 'pending']);
+
+        $this->actingAs($admin)->get(route('admin.requests.index'))->assertOk()
+            ->assertSee($request->reference_no)->assertSee('રદ કરેલ / Rejected')->assertDontSee('Billing Pending');
+        $this->actingAs($admin)->get(route('admin.requests.show', $request))->assertOk()
+            ->assertSee('રદ કરેલ / Rejected')->assertSee('Not Required')->assertDontSee('Save Payment Record')->assertDontSee('Assign Staff / Reassign Staff');
+        $this->actingAs($admin)->put(route('admin.requests.assignment.update', $request), ['assigned_user_id' => $staff->id])->assertSessionHasErrors('assigned_user_id');
+        $this->actingAs($admin)->patch(route('admin.requests.processing.work-items.update', [$request, $scope]), ['status' => 'in_progress'])->assertSessionHasErrors('case');
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), $this->billingPayload())->assertSessionHasErrors('pricing');
+
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()
+            ->assertSee('રદ કરેલ')->assertSee('Rejected')->assertDontSee('Payment Pending')->assertDontSee('Billing Pending')->assertSee('Request cannot be accepted.');
+        $this->assertSame('under_review', $request->fresh()->status);
+        $this->assertSame('rejected', $request->lifecycleStatus());
+        $this->assertSame('Preserved rejection reason', $service->fresh()->decision_notes);
     }
 
     public function test_payment_confirmed_case_protects_planning_and_internal_notes_are_private(): void
@@ -115,6 +182,8 @@ class CasePlanningWorkflowTest extends TestCase
             ]],
         ])->assertSessionHasNoErrors();
         $request->update(['file_number' => 'SC/2026/F000001', 'case_approved_at' => now(), 'case_approved_by' => $admin->id]);
+        $assignee = User::factory()->create(['role' => 'staff']);
+        $request->update(['assigned_user_id' => $assignee->id, 'assigned_by' => $admin->id, 'assigned_at' => now()]);
         $service->service->update(['requires_payment_before_processing' => false]);
 
         $this->actingAs($admin)->patch(route('admin.requests.processing.complete', $request), ['completion_date' => now()->toDateString()])

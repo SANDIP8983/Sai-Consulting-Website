@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\NotificationMilestone;
 use App\Models\CustomerRequest;
 use App\Models\RequestServiceWorkScope;
 use App\Models\User;
+use App\Services\Notifications\CustomerNotificationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +16,11 @@ class ProcessingChecklistService
 {
     public const RESOLVED = ['completed', 'not_required', 'cancelled'];
 
-    public function __construct(private readonly RequestBillingStateResolver $billingStateResolver) {}
+    public function __construct(
+        private readonly RequestBillingStateResolver $billingStateResolver,
+        private readonly RequestAssignmentService $assignments,
+        private readonly CustomerNotificationService $notifications,
+    ) {}
 
     public function eligibility(CustomerRequest $request): array
     {
@@ -37,6 +43,9 @@ class ProcessingChecklistService
         if ($paymentPending) {
             $reasons[] = 'Payment Pending: payment must be confirmed before processing can start.';
         }
+        if (! $this->assignments->hasValidAssignment($request)) {
+            $reasons[] = 'Assign this request to an active Admin or Staff user before processing can start.';
+        }
 
         return ['eligible' => $reasons === [], 'payment_pending' => $paymentPending, 'requires_payment' => $requiresPayment, 'reasons' => $reasons];
     }
@@ -45,7 +54,7 @@ class ProcessingChecklistService
     {
         DB::transaction(function () use ($request, $scope, $attributes, $user): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
-            $this->assertProcessable($locked);
+            $this->assertProcessable($locked, $user);
             $item = $this->ownedScope($locked, $scope->id);
             $to = $attributes['status'];
             $from = $item->status;
@@ -69,7 +78,7 @@ class ProcessingChecklistService
     {
         DB::transaction(function () use ($request, $scope, $reason, $user): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
-            $this->assertProcessable($locked);
+            $this->assertProcessable($locked, $user);
             $item = $this->ownedScope($locked, $scope->id);
             if ($item->status !== 'completed') {
                 throw ValidationException::withMessages(['status' => 'Only completed work items can be reopened.']);
@@ -82,7 +91,7 @@ class ProcessingChecklistService
     {
         DB::transaction(function () use ($request, $attributes, $user): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
-            $this->assertProcessable($locked);
+            $this->assertProcessable($locked, $user);
             $query = RequestServiceWorkScope::query()->whereHas('requestService', fn ($q) => $q->where('request_id', $locked->id)->where('status', 'approved'))->whereIn('id', $attributes['work_scope_ids']);
             $items = $query->lockForUpdate()->get();
             if ($items->isEmpty()) {
@@ -119,6 +128,7 @@ class ProcessingChecklistService
     {
         DB::transaction(function () use ($request, $attributes, $user): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
+            $this->assignments->assertCanProcess($locked, $user);
             $eligibility = $this->eligibility($locked);
             if (! $eligibility['eligible']) {
                 throw ValidationException::withMessages(['case' => implode(' ', $eligibility['reasons'])]);
@@ -135,6 +145,7 @@ class ProcessingChecklistService
             $locked->update(['status' => 'completed', 'completed_at' => $completedAt, 'completion_customer_remark' => $attributes['customer_remark'] ?? null, 'completion_internal_note' => $attributes['internal_note'] ?? null, 'last_status_changed_at' => now()]);
             $locked->statusHistory()->create(['from_status' => $from, 'to_status' => 'completed', 'remarks' => $attributes['customer_remark'] ?? 'Case processing completed.', 'is_visible_to_customer' => true, 'changed_by' => $user->id]);
             $locked->caseActionHistory()->create(['action' => 'completed', 'from_status' => $from, 'to_status' => 'completed', 'internal_note' => $attributes['internal_note'] ?? null, 'customer_remark' => $attributes['customer_remark'] ?? null, 'performed_by' => $user->id]);
+            $this->notifications->afterCommit($locked, NotificationMilestone::Completed, 'request_status', $locked->id);
         });
     }
 
@@ -142,6 +153,7 @@ class ProcessingChecklistService
     {
         DB::transaction(function () use ($request, $reason, $user): void {
             $locked = CustomerRequest::query()->lockForUpdate()->findOrFail($request->id);
+            $this->assignments->assertCanProcess($locked, $user);
             if ($locked->status !== 'completed') {
                 throw ValidationException::withMessages(['case' => 'Only a Completed case can be reopened. Closed cases cannot be reopened.']);
             }
@@ -151,8 +163,12 @@ class ProcessingChecklistService
         });
     }
 
-    private function assertProcessable(CustomerRequest $request): void
+    private function assertProcessable(CustomerRequest $request, User $user): void
     {
+        if ($request->shouldDeriveRejectedLifecycle() || $request->status === 'rejected') {
+            throw ValidationException::withMessages(['case' => 'Rejected requests cannot be processed.']);
+        }
+        $this->assignments->assertCanProcess($request, $user);
         if (in_array($request->status, ['completed', 'dispatched', 'delivered', 'closed', 'archived'], true)) {
             throw ValidationException::withMessages(['case' => 'Processing is locked for this case.']);
         }
@@ -181,6 +197,7 @@ class ProcessingChecklistService
             $old = $request->status;
             $request->update(['status' => 'in_progress', 'last_status_changed_at' => now()]);
             $request->statusHistory()->create(['from_status' => $old, 'to_status' => 'in_progress', 'remarks' => 'Processing started.', 'is_visible_to_customer' => true, 'changed_by' => $user->id]);
+            $this->notifications->afterCommit($request, NotificationMilestone::ProcessingStarted, 'request_status', $request->id);
         }
     }
 

@@ -19,6 +19,26 @@ final class RequestBillingStateResolver
         $refunded = (float) $request->payments->where('payment_status', 'refunded')->sum('amount');
         $confirmedPaid = round(max(0, $received - $refunded), 2);
 
+        if ($request->shouldDeriveRejectedLifecycle()) {
+            return new RequestBillingState(
+                lifecycle: 'not_payable',
+                hasFrozenBilling: false,
+                legacy: false,
+                professionalFee: null,
+                discountAmount: null,
+                netProfessionalFee: null,
+                gstRate: null,
+                gstAmount: null,
+                governmentChargesTotal: null,
+                grandTotal: 0,
+                confirmedPaidAmount: $confirmedPaid,
+                balanceDue: 0,
+                paymentRequired: false,
+                paymentStatus: 'not_required',
+                pricingLocked: false,
+            );
+        }
+
         if ($billing) {
             $payment = $this->calculator->paymentState((float) $billing->grand_total, $confirmedPaid);
             $hasHistoricalSavedSnapshot = $billing->history->contains('action', 'saved');

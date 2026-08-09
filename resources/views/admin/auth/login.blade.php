@@ -13,9 +13,9 @@
                 <form method="POST" action="{{ route('login.store') }}">
                     @csrf
                     <div class="mb-3">
-                        <label for="email" class="form-label">Email Address</label>
-                        <input id="email" name="email" type="email" value="{{ old('email') }}" class="form-control @error('email') is-invalid @enderror" autocomplete="email" required autofocus>
-                        @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <label for="login" class="form-label">Username</label>
+                        <input id="login" name="login" value="{{ old('login') }}" class="form-control @error('login') is-invalid @enderror" autocomplete="username" required autofocus>
+                        @error('login')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>

@@ -14,6 +14,7 @@ use App\Http\Requests\Admin\StoreOfflineCustomerRequestRequest;
 use App\Http\Requests\Admin\StoreRequestRemarkRequest;
 use App\Http\Requests\Admin\TransitionCustomerRequestRequest;
 use App\Http\Requests\Admin\UnlockRequestBillingRequest;
+use App\Http\Requests\Admin\UpdateCustomerContactRequest;
 use App\Http\Requests\Admin\UpdateRequestEstimateRequest;
 use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
 use App\Http\Requests\Admin\UpdateRequestServiceFeeRequest;
@@ -27,6 +28,7 @@ use App\Models\WorkScopeItem;
 use App\Services\AdminRequestManagementService;
 use App\Services\AdminRequestPresentationService;
 use App\Services\CasePlanningService;
+use App\Services\CustomerContactService;
 use App\Services\DispatchManagementService;
 use App\Services\FileDocumentProcessingService;
 use App\Services\ProcessingChecklistService;
@@ -82,7 +84,8 @@ class CustomerRequestController extends Controller
             'customerRequest' => $customerRequest,
             'transitions' => $transitions,
             'processingTransitions' => $customerRequest->processing ? app(FileDocumentProcessingService::class)->transitions($customerRequest->processing) : [],
-            'fileInChargeUsers' => User::query()->orderBy('name')->get(['id', 'name']),
+            'fileInChargeUsers' => User::query()->where('is_active', true)->whereIn('role', ['admin', 'staff'])->orderBy('name')->get(['id', 'name']),
+            'assignableUsers' => User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'role', 'is_active'])->filter(fn (User $user): bool => $user->hasPermission('processing.manage')),
             'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->orderBy('name_en')->get(),
             'availableServices' => Service::query()->where('is_active', true)->whereNotIn('id', $customerRequest->requestServices->pluck('service_id'))->orderBy('name_en')->get(['id', 'name_en', 'name_gu', 'service_fee', 'gst_rate', 'estimated_days']),
             'processingEligibility' => $this->checklist->eligibility($customerRequest),
@@ -168,6 +171,13 @@ class CustomerRequestController extends Controller
         }
 
         return back()->with('success', 'Work-scope progress updated.');
+    }
+
+    public function updateContact(UpdateCustomerContactRequest $request, CustomerRequest $customerRequest, CustomerContactService $contacts): RedirectResponse
+    {
+        $contacts->update($customerRequest, $request->validated(), $request->user());
+
+        return back()->with('success', 'Customer contact information updated successfully.');
     }
 
     public function finalizeBilling(FinalizeRequestBillingRequest $request, CustomerRequest $customerRequest): RedirectResponse

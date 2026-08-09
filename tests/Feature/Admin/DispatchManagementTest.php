@@ -163,7 +163,18 @@ class DispatchManagementTest extends TestCase
         $admin = User::factory()->create();
         $request = $this->request();
         $this->actingAs($admin)->post(route('admin.requests.dispatches.store', $request), $this->payload(['tracking_url' => 'https://tracking.example/ABC', 'customer_remark' => 'Customer-safe update']))->assertSessionHasNoErrors();
-        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('Dispatch &amp; Delivery', false)->assertSee('TRACK-1001')->assertSee('Trusted Courier')->assertSee('https://tracking.example/ABC')->assertSee('Customer-safe update');
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertSee('Dispatch &amp; Delivery', false)->assertSee('Dispatch Method')->assertSee('Courier / Postal / Carrier')->assertSee('Tracking / Consignment No.')->assertSee('TRACK-1001')->assertSee('Trusted Courier')->assertSee('https://tracking.example/ABC')->assertSee('Customer-safe update');
+    }
+
+    public function test_hand_delivery_omits_blank_carrier_and_tracking_rows(): void
+    {
+        $admin = User::factory()->create();
+        $request = $this->request();
+        $this->actingAs($admin)->post(route('admin.requests.dispatches.store', $request), $this->payload(['dispatch_method' => 'hand_delivery', 'carrier_name' => null, 'tracking_number' => null, 'delivery_address' => null]))->assertSessionHasNoErrors();
+
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()
+            ->assertSee('Hand Delivery')->assertSee('Hand-over Date')
+            ->assertDontSee('Courier / Postal / Carrier')->assertDontSee('Tracking / Consignment No.');
     }
 
     public function test_legacy_dispatch_record_remains_readable(): void

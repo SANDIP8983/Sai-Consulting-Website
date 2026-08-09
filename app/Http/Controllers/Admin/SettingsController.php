@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\NotificationMilestone;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreHolidayRequest;
 use App\Http\Requests\Admin\UpdateCompanyBrandingRequest;
 use App\Http\Requests\Admin\UpdateContactSettingsRequest;
+use App\Http\Requests\Admin\UpdateCustomerNotificationSettingsRequest;
 use App\Http\Requests\Admin\UpdateHolidayRequest;
 use App\Http\Requests\Admin\UpdateOfficeSettingsRequest;
 use App\Http\Requests\Admin\UpdateOfficeTimingsRequest;
@@ -78,6 +80,18 @@ class SettingsController extends Controller
         $this->settingsService->updateContactSettings($request->validated());
 
         return to_route('admin.settings.contact')->with('success', 'Contact settings updated successfully.');
+    }
+
+    public function customerNotifications(): View
+    {
+        return view('admin.settings.customer-notifications', ['settings' => $this->settingsService->customerNotificationSettings(), 'milestones' => NotificationMilestone::cases()]);
+    }
+
+    public function updateCustomerNotifications(UpdateCustomerNotificationSettingsRequest $request): RedirectResponse
+    {
+        $this->settingsService->updateCustomerNotificationSettings($request->validated('milestones'));
+
+        return to_route('admin.settings.customer-notifications')->with('success', 'Customer notification settings updated successfully.');
     }
 
     public function officeTimings(): View

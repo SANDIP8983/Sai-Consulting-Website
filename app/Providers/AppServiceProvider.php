@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Contracts\WhatsAppChannelInterface;
+use App\Models\User;
 use App\Services\HomepageService;
+use App\Services\Notifications\DisabledWhatsAppChannel;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -16,7 +20,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(WhatsAppChannelInterface::class, DisabledWhatsAppChannel::class);
     }
 
     /**
@@ -24,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        foreach (config('permissions.keys') as $permission) {
+            Gate::define($permission, fn (User $user): bool => $user->is_active && $user->hasPermission($permission));
+        }
+
         RateLimiter::for('public-request-submission', function (Request $request): Limit {
             $privacySafeKey = hash('sha256', (string) $request->ip());
 

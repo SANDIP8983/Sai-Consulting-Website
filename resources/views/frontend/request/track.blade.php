@@ -8,14 +8,16 @@
     $statusLabels = [
         'received' => ['વિનંતી મળી', 'Received'], 'under_review' => ['ચકાસણી હેઠળ', 'Under Review'],
         'need_documents' => ['વધુ દસ્તાવેજો જરૂરી', 'Need Documents'], 'approved' => ['મંજૂર', 'Approved'],
-        'rejected' => ['નામંજૂર', 'Rejected'], 'payment_pending' => ['ચુકવણી બાકી', 'Payment Pending'],
+        'rejected' => ['રદ કરેલ', 'Rejected'], 'payment_pending' => ['ચુકવણી બાકી', 'Payment Pending'],
         'payment_received' => ['ચુકવણી મળી', 'Payment Received'], 'in_progress' => ['પ્રક્રિયામાં', 'In Progress'],
         'draft_in_progress' => ['પ્રક્રિયામાં', 'In Progress'], 'ready_for_verification' => ['પ્રક્રિયામાં', 'In Progress'],
         'customer_approved' => ['પ્રક્રિયામાં', 'In Progress'], 'ready_for_registration' => ['પ્રક્રિયામાં', 'In Progress'],
         'completed' => ['પૂર્ણ', 'Completed'], 'dispatched' => ['મોકલી આપેલ', 'Dispatched'],
         'delivered' => ['પહોંચાડેલ', 'Delivered'], 'closed' => ['બંધ', 'Closed'], 'archived' => ['આર્કાઇવ', 'Archived'],
     ];
+    $statusLabels['awaiting_staff_assignment'] = ['સ્ટાફ ફાળવણી બાકી', 'Awaiting Staff Assignment'];
     $statusColors = ['received'=>'primary','under_review'=>'info','need_documents'=>'warning','approved'=>'success','rejected'=>'danger','payment_pending'=>'warning','payment_received'=>'success','in_progress'=>'info','draft_in_progress'=>'info','ready_for_verification'=>'info','customer_approved'=>'info','ready_for_registration'=>'info','completed'=>'success','dispatched'=>'secondary','delivered'=>'success','closed'=>'dark','archived'=>'dark'];
+    $statusColors['awaiting_staff_assignment'] = 'warning';
     $paymentLabels = ['billing_pending'=>['બિલિંગ બાકી','Billing Pending Approval'],'not_required'=>['જરૂરી નથી','Not Required'],'pending'=>['બાકી','Payment Pending'],'paid'=>['ચૂકવેલ','Paid'],'received'=>['ચૂકવેલ','Paid'],'partial'=>['આંશિક ચુકવણી','Partially Paid'],'failed'=>['નિષ્ફળ','Failed'],'refunded'=>['પરત','Refunded']];
 @endphp
 

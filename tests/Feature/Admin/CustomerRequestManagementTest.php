@@ -117,7 +117,7 @@ class CustomerRequestManagementTest extends TestCase
 
         $request->refresh();
         $this->assertSame('2026-08-15', $request->estimated_completion_date->toDateString());
-        $this->assertSame('payment_received', $request->status);
+        $this->assertSame('awaiting_staff_assignment', $request->status);
         $this->assertSame('received', $request->payment_status);
         $this->assertDatabaseHas('request_payments', ['request_id' => $request->id, 'amount' => 500]);
         $this->assertDatabaseHas('request_status_histories', ['request_id' => $request->id, 'to_status' => 'payment_received']);

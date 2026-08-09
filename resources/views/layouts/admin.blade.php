@@ -36,11 +36,13 @@
                         <a class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}">Dashboard</a>
 
                         <div class="pt-3 pb-1 text-uppercase small fw-semibold text-white-50">Management</div>
-                        <a class="nav-link {{ request()->routeIs('admin.requests.*') ? 'active' : '' }}" href="{{ route('admin.requests.index') }}">Requests</a>
-                        <a class="nav-link {{ request()->routeIs('admin.services.*') ? 'active' : '' }}" href="{{ route('admin.services.index') }}">Services</a>
-                        <a class="nav-link {{ request()->routeIs('admin.required-documents.*') ? 'active' : '' }}" href="{{ route('admin.required-documents.index') }}">Required Documents</a>
+                        @can('requests.view')<a class="nav-link {{ request()->routeIs('admin.requests.*') ? 'active' : '' }}" href="{{ route('admin.requests.index') }}">Requests</a>@endcan
+                        @can('services.manage')<a class="nav-link {{ request()->routeIs('admin.services.*') ? 'active' : '' }}" href="{{ route('admin.services.index') }}">Services</a>@endcan
+                        @can('documents.manage')<a class="nav-link {{ request()->routeIs('admin.required-documents.*') ? 'active' : '' }}" href="{{ route('admin.required-documents.index') }}">Required Documents</a>@endcan
+                        @can('users.manage')<a class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}">Users / Staff</a>@endcan
+                        @can('notifications.view')<a class="nav-link {{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}" href="{{ route('admin.notifications.index') }}">Notification Log</a>@endcan
 
-                        <div class="pt-3 pb-1 text-uppercase small fw-semibold text-white-50">Configuration</div>
+                        @can('settings.manage')<div class="pt-3 pb-1 text-uppercase small fw-semibold text-white-50">Configuration</div>
                         <button class="settings-toggle nav-link border-0 bg-transparent text-start w-100 d-flex justify-content-between align-items-center {{ request()->routeIs('admin.settings.*') ? '' : 'collapsed' }}" type="button" data-bs-toggle="collapse" data-bs-target="#settingsMenu" aria-expanded="{{ request()->routeIs('admin.settings.*') ? 'true' : 'false' }}" aria-controls="settingsMenu">
                             <span>Settings</span>
                             <span aria-hidden="true">⌄</span>
@@ -53,8 +55,10 @@
                                 <a class="nav-link {{ request()->routeIs('admin.settings.contact*') ? 'active' : '' }}" href="{{ route('admin.settings.contact') }}">Contact</a>
                                 <a class="nav-link {{ request()->routeIs('admin.settings.office-timings*') ? 'active' : '' }}" href="{{ route('admin.settings.office-timings') }}">Office Timings</a>
                                 <a class="nav-link {{ request()->routeIs('admin.settings.holidays*') ? 'active' : '' }}" href="{{ route('admin.settings.holidays') }}">Holidays</a>
+                                @can('notifications.manage')<a class="nav-link {{ request()->routeIs('admin.settings.customer-notifications*') ? 'active' : '' }}" href="{{ route('admin.settings.customer-notifications') }}">Customer Notifications</a>@endcan
                             </div>
                         </div>
+                        @endcan
                     </nav>
                 </div>
 
@@ -76,7 +80,8 @@
                                 {{ auth()->user()->name }}
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                <li><span class="dropdown-item-text small text-muted">{{ auth()->user()->email }}</span></li>
+                                <li><span class="dropdown-item-text small text-muted">{{ auth()->user()->username }}@if(auth()->user()->email)<br>{{ auth()->user()->email }}@endif</span></li>
+                                <li><a class="dropdown-item" href="{{ route('admin.profile.edit') }}">My Profile</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <form method="POST" action="{{ route('admin.logout') }}">

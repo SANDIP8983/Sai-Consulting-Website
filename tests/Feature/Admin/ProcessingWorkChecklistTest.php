@@ -107,8 +107,9 @@ class ProcessingWorkChecklistTest extends TestCase
     private function planned(bool $requiresPayment, bool $paid): array
     {
         $admin = User::factory()->create();
+        $assignee = User::factory()->create(['role' => 'staff']);
         $service = $this->service($requiresPayment);
-        $request = CustomerRequest::create(['reference_no' => 'SC/2026/'.fake()->unique()->numerify('######'), 'file_number' => 'SC/2026/F'.fake()->unique()->numerify('######'), 'case_planning_version' => 1, 'case_approved_at' => now(), 'case_approved_by' => $admin->id, 'service_id' => $service->id, 'name' => 'Customer', 'mobile' => '9999999999', 'status' => $requiresPayment && ! $paid ? 'payment_pending' : 'approved', 'payment_status' => $paid ? 'received' : ($requiresPayment ? 'pending' : 'not_required')]);
+        $request = CustomerRequest::create(['reference_no' => 'SC/2026/'.fake()->unique()->numerify('######'), 'file_number' => 'SC/2026/F'.fake()->unique()->numerify('######'), 'case_planning_version' => 1, 'case_approved_at' => now(), 'case_approved_by' => $admin->id, 'assigned_user_id' => $assignee->id, 'assigned_by' => $admin->id, 'assigned_at' => now(), 'service_id' => $service->id, 'name' => 'Customer', 'mobile' => '9999999999', 'status' => $requiresPayment && ! $paid ? 'payment_pending' : 'awaiting_staff_assignment', 'payment_status' => $paid ? 'received' : ($requiresPayment ? 'pending' : 'not_required')]);
         $requestService = $request->requestServices()->create(['service_id' => $service->id, 'service_name_en_snapshot' => $service->name_en, 'service_name_gu_snapshot' => $service->name_gu, 'professional_fee' => 1000, 'status' => 'approved']);
         if ($paid) {
             $request->billing()->create(['total_original_professional_fee' => 1000, 'discount_type' => 'none', 'discount_value' => 0, 'discount_amount' => 0, 'net_professional_fee' => 1000, 'gst_rate' => 0, 'gst_amount' => 0, 'government_charges_total' => 0, 'grand_total' => 1000, 'pricing_locked_at' => now()]);

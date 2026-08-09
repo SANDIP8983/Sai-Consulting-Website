@@ -1,6 +1,7 @@
 @php
-    $paymentEligibleStatuses = ['approved','payment_pending','payment_received','draft_in_progress','ready_for_verification','customer_approved','ready_for_registration','dispatched','completed','archived'];
-    $paymentEligible = $customerRequest->file_number && in_array($customerRequest->status, $paymentEligibleStatuses, true) && $billingState->canRecordPayment();
+    $paymentEligibleStatuses = ['approved','payment_pending','payment_received','awaiting_staff_assignment','draft_in_progress','ready_for_verification','customer_approved','ready_for_registration','dispatched','completed','archived'];
+    $frozenReviewLifecycle = in_array($customerRequest->status,['received','under_review','need_documents'],true) && $billingState->hasFrozenBilling && $billingState->pricingLocked;
+    $paymentEligible = $customerRequest->file_number && (in_array($customerRequest->status, $paymentEligibleStatuses, true) || $frozenReviewLifecycle) && $billingState->canRecordPayment();
     $payableAmount = $billingState->grandTotal;
     $methods = $customerRequest->isOffline() ? ['upi','bank_transfer','cheque','cash','other'] : ['upi','bank_transfer','other'];
 @endphp

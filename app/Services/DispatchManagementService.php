@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\NotificationMilestone;
 use App\Models\CustomerRequest;
 use App\Models\RequestDispatch;
 use App\Models\RequestDispatchProof;
 use App\Models\User;
+use App\Services\Notifications\CustomerNotificationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -13,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 class DispatchManagementService
 {
-    public function __construct(private readonly RequestBillingStateResolver $billingStateResolver) {}
+    public function __construct(private readonly RequestBillingStateResolver $billingStateResolver, private readonly CustomerNotificationService $notifications) {}
 
     public const METHODS = ['whatsapp', 'email', 'office_collection', 'hand_delivery', 'courier', 'speed_post', 'rpad', 'other'];
 
@@ -229,6 +231,7 @@ class DispatchManagementService
             $locked->update(['status' => 'closed', 'closed_at' => $attributes['closure_date'], 'closure_customer_remark' => $attributes['customer_remark'] ?? null, 'closure_internal_note' => $attributes['internal_note'] ?? null, 'closed_by' => $user->id, 'last_status_changed_at' => now()]);
             $locked->statusHistory()->create(['from_status' => $from, 'to_status' => 'closed', 'remarks' => $attributes['customer_remark'] ?? 'Case closed after confirmed delivery.', 'is_visible_to_customer' => true, 'changed_by' => $user->id]);
             $locked->caseActionHistory()->create(['action' => 'closed', 'from_status' => $from, 'to_status' => 'closed', 'internal_note' => $attributes['internal_note'] ?? null, 'customer_remark' => $attributes['customer_remark'] ?? null, 'performed_by' => $user->id]);
+            $this->notifications->afterCommit($locked, NotificationMilestone::DeliveredClosed, 'request_status', $locked->id);
         });
     }
 
@@ -322,6 +325,12 @@ class DispatchManagementService
         $from = $request->status;
         $request->update(['status' => $to, 'last_status_changed_at' => now()]);
         $request->statusHistory()->create(['from_status' => $from, 'to_status' => $to, 'remarks' => $remark, 'is_visible_to_customer' => $visible, 'changed_by' => $user->id]);
+        if ($to === 'dispatched') {
+            $this->notifications->afterCommit($request, NotificationMilestone::Dispatched, 'request_status', $request->id);
+        }
+        if ($to === 'delivered') {
+            $this->notifications->afterCommit($request, NotificationMilestone::DeliveredClosed, 'request_status', $request->id);
+        }
     }
 
     private function storeProof(CustomerRequest $request, RequestDispatch $dispatch, UploadedFile $proof, string $type, User $user, ?string &$storedPath): RequestDispatchProof

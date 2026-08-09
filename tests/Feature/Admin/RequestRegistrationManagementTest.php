@@ -51,8 +51,9 @@ class RequestRegistrationManagementTest extends TestCase
 
     private function request(bool $registration = true): CustomerRequest
     {
+        $assignee = User::factory()->create(['role' => 'staff']);
         $service = Service::query()->create(['name_en' => 'Registration Service', 'name_gu' => 'Registration Service', 'slug' => 'registration-service-'.($registration ? 'yes' : 'no'), 'is_active' => true, 'sort_order' => 1, 'requires_token_booking' => $registration, 'requires_registration' => $registration, 'requires_certified_copy' => $registration]);
 
-        return CustomerRequest::query()->create(['reference_no' => 'SC/2026/000700', 'file_number' => 'SC/2026/F000700', 'service_id' => $service->id, 'name' => 'Customer', 'mobile' => '9999999999', 'status' => 'payment_received', 'payment_status' => 'received']);
+        return CustomerRequest::query()->create(['reference_no' => 'SC/2026/000700', 'file_number' => 'SC/2026/F000700', 'assigned_user_id' => $assignee->id, 'assigned_by' => $assignee->id, 'assigned_at' => now(), 'service_id' => $service->id, 'name' => 'Customer', 'mobile' => '9999999999', 'status' => 'payment_received', 'payment_status' => 'received']);
     }
 }

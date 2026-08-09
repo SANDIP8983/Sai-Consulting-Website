@@ -13,6 +13,7 @@ class AdminRequestManagementService
     public function paginate(array $filters): LengthAwarePaginator
     {
         return CustomerRequest::query()
+            ->when(request()->user()?->role === 'staff', fn ($query) => $query->where('assigned_user_id', request()->user()->id))
             ->with(['service:id,name_en,name_gu', 'requestServices.service:id,name_en,name_gu', 'requestServices.workScopes', 'billing', 'payments', 'dispatches'])
             ->when($filters['q'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('reference_no', 'like', "%{$term}%")->orWhere('file_number', 'like', "%{$term}%")->orWhere('name', 'like', "%{$term}%")->orWhere('mobile', 'like', "%{$term}%")->orWhere('property_village', 'like', "%{$term}%")->orWhere('village', 'like', "%{$term}%")->orWhere('survey_numbers', 'like', "%{$term}%")->orWhere('khata_number', 'like', "%{$term}%")->orWhereHas('requestServices.service', fn ($service) => $service->where('name_en', 'like', "%{$term}%")->orWhere('name_gu', 'like', "%{$term}%"))))
             ->when($filters['village'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('property_village', 'like', "%{$v}%")->orWhere('village', 'like', "%{$v}%")->orWhere('revenue_village', 'like', "%{$v}%")))
@@ -87,6 +88,10 @@ class AdminRequestManagementService
             'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at'),
             'dispatches' => fn ($q) => $q->with(['performedBy:id,name', 'updatedBy:id,name', 'proofs', 'history.changedBy:id,name'])->latest('dispatch_date'),
             'processing.fileInCharge:id,name',
+            'assignedUser:id,name,role,is_active',
+            'assignedBy:id,name',
+            'assignmentHistory' => fn ($q) => $q->with(['previousAssignee:id,name', 'assignee:id,name', 'assignedBy:id,name'])->latest('assigned_at'),
+            'contactChangeHistory' => fn ($q) => $q->with('changedBy:id,name')->latest('changed_at'),
             'processingHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'caseActionHistory' => fn ($q) => $q->with('performedBy:id,name')->latest(),
         ]);

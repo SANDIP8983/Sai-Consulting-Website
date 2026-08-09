@@ -39,14 +39,14 @@ class CustomerRequest extends Model
         'khata_number',
         'tp_number', 'final_plot_number', 'revenue_village',
         'details',
-        'status',
+        'status', 'assigned_user_id', 'assigned_by', 'assigned_at',
         'case_approved_at', 'case_approved_by',
         'payment_status', 'amount_due', 'fee_updated_by', 'fee_updated_at', 'amount_paid', 'estimated_completion_date', 'completed_at', 'completion_customer_remark', 'completion_internal_note', 'closed_at', 'closure_customer_remark', 'closure_internal_note', 'closed_by', 'last_status_changed_at',
     ];
 
     protected function casts(): array
     {
-        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'completed_at' => 'datetime', 'closed_at' => 'datetime', 'last_status_changed_at' => 'datetime', 'case_approved_at' => 'datetime', 'case_planning_version' => 'integer'];
+        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'completed_at' => 'datetime', 'closed_at' => 'datetime', 'last_status_changed_at' => 'datetime', 'case_approved_at' => 'datetime', 'assigned_at' => 'datetime', 'case_planning_version' => 'integer'];
     }
 
     /**
@@ -113,6 +113,26 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestCaseActionHistory::class, 'request_id');
     }
 
+    public function assignedUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function assignedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function assignmentHistory(): HasMany
+    {
+        return $this->hasMany(RequestAssignmentHistory::class, 'request_id')->latest('assigned_at');
+    }
+
+    public function contactChangeHistory(): HasMany
+    {
+        return $this->hasMany(RequestContactChangeHistory::class, 'request_id')->latest('changed_at');
+    }
+
     public function closedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'closed_by');
@@ -121,6 +141,28 @@ class CustomerRequest extends Model
     public function usesChecklistWorkflow(): bool
     {
         return $this->case_planning_version >= self::CURRENT_CASE_PLANNING_VERSION;
+    }
+
+    public function allSelectedServicesRejected(): bool
+    {
+        if ($this->relationLoaded('requestServices')) {
+            return $this->requestServices->isNotEmpty()
+                && $this->requestServices->every(fn ($service): bool => $service->status === 'rejected');
+        }
+
+        return $this->requestServices()->exists()
+            && ! $this->requestServices()->where('status', '!=', 'rejected')->exists();
+    }
+
+    public function lifecycleStatus(): string
+    {
+        return $this->shouldDeriveRejectedLifecycle() ? 'rejected' : $this->status;
+    }
+
+    public function shouldDeriveRejectedLifecycle(): bool
+    {
+        return in_array($this->status, ['received', 'under_review', 'need_documents', 'approved', 'payment_pending', 'rejected'], true)
+            && $this->allSelectedServicesRejected();
     }
 
     public function feeUpdatedBy(): BelongsTo

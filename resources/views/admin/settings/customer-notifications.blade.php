@@ -1,0 +1,7 @@
+@extends('layouts.admin')
+@section('title','Customer Notifications')
+@section('content')
+@include('admin.settings._navigation')
+@if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+<div class="card border-0 shadow-sm"><div class="card-body"><h1 class="h3">Customer Notifications</h1><p class="text-muted">Channels apply prospectively. WhatsApp remains safely disabled until an approved provider is configured.</p><form method="POST" action="{{ route('admin.settings.customer-notifications.update') }}">@csrf @method('PUT')<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Milestone</th><th>Email</th><th>WhatsApp</th></tr></thead><tbody>@foreach($milestones as $milestone)<tr><th>{{ $milestone->label() }}</th>@foreach(['email','whatsapp'] as $channel)<td><input type="hidden" name="milestones[{{ $milestone->value }}][{{ $channel }}]" value="0"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="milestones[{{ $milestone->value }}][{{ $channel }}]" value="1" @checked($settings[$milestone->value][$channel]) aria-label="{{ $milestone->label() }} {{ $channel }}"></div></td>@endforeach</tr>@endforeach</tbody></table></div><button class="btn btn-primary">Save Notification Settings</button></form></div></div>
+@endsection

@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\NotificationMilestone;
 use App\Models\CustomerRequest;
 use App\Models\RequestProcessingDetail;
 use App\Models\User;
+use App\Services\Notifications\CustomerNotificationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -15,6 +17,8 @@ class FileDocumentProcessingService
     public function __construct(
         private readonly RequestWorkflowService $workflow,
         private readonly RequestBillingStateResolver $billingStateResolver,
+        private readonly RequestAssignmentService $assignments,
+        private readonly CustomerNotificationService $notifications,
     ) {}
 
     public const STAGES = ['file_opened', 'documents_under_review', 'documents_incomplete', 'drafting_started', 'draft_ready', 'customer_verification_pending', 'correction_required', 'final_draft_ready', 'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch', 'dispatched', 'completed'];
@@ -65,6 +69,7 @@ class FileDocumentProcessingService
 
     public function open(CustomerRequest $request, array $attributes, User $user): RequestProcessingDetail
     {
+        $this->assignments->assertCanProcess($request, $user);
         $this->assertLegacyWorkflow($request);
 
         return DB::transaction(function () use ($request, $attributes, $user): RequestProcessingDetail {
@@ -94,6 +99,7 @@ class FileDocumentProcessingService
 
     public function transition(CustomerRequest $request, string $to, array $attributes, User $user): RequestProcessingDetail
     {
+        $this->assignments->assertCanProcess($request, $user);
         $this->assertLegacyWorkflow($request);
 
         return DB::transaction(function () use ($request, $to, $attributes, $user): RequestProcessingDetail {
@@ -106,6 +112,18 @@ class FileDocumentProcessingService
             $processing->update(['processing_stage' => $to, ...$this->automaticDates($to, $attributes)]);
             $request->processingHistory()->create(['from_stage' => $from, 'to_stage' => $to, 'remarks' => $attributes['remarks'] ?? null, 'is_visible_to_customer' => (bool) ($attributes['is_visible_to_customer'] ?? false), 'changed_by' => $user->id]);
             $this->syncRequestStatus($request->fresh(), $to, $user);
+            if (in_array($to, ['drafting_started', 'token_booking_pending', 'registration_pending', 'ready_for_dispatch'], true)) {
+                $this->notifications->afterCommit($request, NotificationMilestone::ProcessingStarted, 'processing_stage', $processing->id);
+            }
+            if ($to === 'draft_ready') {
+                $this->notifications->afterCommit($request, NotificationMilestone::DraftReady, 'processing_stage', $processing->id);
+            }
+            if ($to === 'final_draft_ready') {
+                $this->notifications->afterCommit($request, NotificationMilestone::FinalDraftReady, 'processing_stage', $processing->id);
+            }
+            if ($to === 'completed') {
+                $this->notifications->afterCommit($request, NotificationMilestone::Completed, 'processing_stage', $processing->id);
+            }
 
             return $processing->refresh();
         });
@@ -133,6 +151,7 @@ class FileDocumentProcessingService
 
     public function storeRegisteredScan(CustomerRequest $request, UploadedFile $file, User $user): RequestProcessingDetail
     {
+        $this->assignments->assertCanProcess($request, $user);
         $this->assertLegacyWorkflow($request);
         $path = $file->store("customer-requests/{$request->id}", 'local');
         if ($path === false) {
@@ -155,6 +174,7 @@ class FileDocumentProcessingService
 
     public function markDispatched(CustomerRequest $request, User $user): void
     {
+        $this->assignments->assertCanProcess($request, $user);
         $processing = RequestProcessingDetail::query()->where('request_id', $request->id)->lockForUpdate()->firstOrFail();
         if ($processing->processing_stage !== 'ready_for_dispatch' || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists()) {
             throw ValidationException::withMessages(['dispatch' => 'Processing must be ready for dispatch and have a dispatched record.']);
@@ -165,6 +185,7 @@ class FileDocumentProcessingService
 
     private function updateInformation(CustomerRequest $request, array $attributes, User $user, string $auditRemark, ?string $customerRemarkKey = null): RequestProcessingDetail
     {
+        $this->assignments->assertCanProcess($request, $user);
         $this->assertLegacyWorkflow($request);
 
         return DB::transaction(function () use ($request, $attributes, $user, $auditRemark, $customerRemarkKey): RequestProcessingDetail {

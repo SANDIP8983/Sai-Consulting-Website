@@ -18,7 +18,7 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'login' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
             'remember' => ['nullable', 'boolean'],
         ];
@@ -31,11 +31,13 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $login = str($this->string('login'))->trim()->lower()->toString();
+
+        if (! Auth::attempt(['username' => $login, 'password' => $this->string('password')->toString(), 'is_active' => true], $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => 'The provided credentials do not match our records.',
+                'login' => 'The provided credentials do not match our records.',
             ]);
         }
 
@@ -51,12 +53,12 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => "Too many login attempts. Please try again in {$seconds} seconds.",
+            'login' => "Too many login attempts. Please try again in {$seconds} seconds.",
         ]);
     }
 
     private function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        return Str::transliterate(Str::lower($this->string('login')).'|'.$this->ip());
     }
 }

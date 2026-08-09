@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Enums\NotificationMilestone;
 use App\Models\CustomerRequest;
 use App\Models\RequestBilling;
 use App\Models\RequestService;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\Notifications\CustomerNotificationService;
 use App\Support\PublicDocumentPolicy;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -18,9 +20,9 @@ use Illuminate\Validation\ValidationException;
 
 class RequestWorkflowService
 {
-    public const STATUSES = ['received', 'under_review', 'need_documents', 'approved', 'rejected', 'payment_pending', 'payment_received', 'in_progress', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'completed', 'dispatched', 'delivered', 'closed', 'archived'];
+    public const STATUSES = ['received', 'under_review', 'need_documents', 'approved', 'rejected', 'payment_pending', 'payment_received', 'awaiting_staff_assignment', 'in_progress', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'completed', 'dispatched', 'delivered', 'closed', 'archived'];
 
-    private const TRANSITIONS = ['received' => ['under_review'], 'under_review' => ['need_documents', 'approved', 'rejected'], 'need_documents' => ['under_review'], 'approved' => ['payment_pending', 'in_progress', 'draft_in_progress', 'ready_for_registration', 'completed'], 'rejected' => ['archived'], 'payment_pending' => ['payment_received', 'in_progress'], 'payment_received' => ['in_progress', 'draft_in_progress', 'ready_for_registration'], 'in_progress' => ['completed'], 'draft_in_progress' => ['ready_for_verification'], 'ready_for_verification' => ['customer_approved', 'ready_for_registration'], 'customer_approved' => ['ready_for_registration'], 'ready_for_registration' => ['dispatched', 'completed'], 'completed' => ['dispatched'], 'dispatched' => ['completed', 'delivered'], 'delivered' => ['closed'], 'closed' => [], 'archived' => []];
+    private const TRANSITIONS = ['received' => ['under_review'], 'under_review' => ['need_documents', 'approved', 'rejected'], 'need_documents' => ['under_review'], 'approved' => ['payment_pending', 'awaiting_staff_assignment', 'in_progress', 'draft_in_progress', 'ready_for_registration', 'completed'], 'rejected' => ['archived'], 'payment_pending' => ['payment_received'], 'payment_received' => ['awaiting_staff_assignment', 'in_progress', 'draft_in_progress', 'ready_for_registration'], 'awaiting_staff_assignment' => ['in_progress', 'draft_in_progress', 'ready_for_registration'], 'in_progress' => ['completed'], 'draft_in_progress' => ['ready_for_verification'], 'ready_for_verification' => ['customer_approved', 'ready_for_registration'], 'customer_approved' => ['ready_for_registration'], 'ready_for_registration' => ['dispatched', 'completed'], 'completed' => ['dispatched'], 'dispatched' => ['completed', 'delivered'], 'delivered' => ['closed'], 'closed' => [], 'archived' => []];
 
     public function __construct(
         private readonly ReferenceNumberService $referenceNumbers,
@@ -28,6 +30,8 @@ class RequestWorkflowService
         private readonly RequestBillingCalculator $billingCalculator,
         private readonly RequestBillingStateResolver $billingStateResolver,
         private readonly RequestChecklistInitializer $checklistInitializer,
+        private readonly RequestDecisionNormalizer $decisionNormalizer,
+        private readonly CustomerNotificationService $notifications,
     ) {}
 
     public function transitions(CustomerRequest $request): array
@@ -112,6 +116,7 @@ class RequestWorkflowService
                     }
 
                     $this->history($request, null, 'received', 'Your request has been received.', true, $user?->id);
+                    $this->notifications->afterCommit($request, NotificationMilestone::RequestReceived, 'request', $request->id);
 
                     $uploadedHashes = [];
                     $publicRestrictions = $origin === 'online'
@@ -222,7 +227,8 @@ class RequestWorkflowService
             } elseif ($decision === 'rejected' && $lockedRequest->usesChecklistWorkflow()) {
                 $lockedService->workScopes()->delete();
             }
-
+            $lockedRequest->unsetRelation('requestServices');
+            $this->decisionNormalizer->normalize($lockedRequest, $user);
         });
     }
 
@@ -279,6 +285,12 @@ class RequestWorkflowService
             $billing->history()->create(['request_id' => $lockedRequest->id, 'changed_by' => $user->id, 'action' => 'frozen', 'pricing_snapshot' => $this->requestBillingSnapshot($billing->fresh('charges')), 'reason' => null]);
             $lockedRequest->update(['amount_due' => $calculation->grandTotal, 'payment_status' => $calculation->paymentStatus, 'fee_updated_by' => $user->id, 'fee_updated_at' => now()]);
 
+            if (in_array($lockedRequest->status, ['received', 'need_documents'], true)) {
+                $from = $lockedRequest->status;
+                $lockedRequest->update(['status' => 'under_review', 'last_status_changed_at' => now()]);
+                $this->history($lockedRequest, $from, 'under_review', 'Request moved to final review.', true, $user->id);
+            }
+
             if ($lockedRequest->status === 'under_review') {
                 if (! $lockedRequest->file_number) {
                     $this->fileNumbers->assign($lockedRequest);
@@ -290,6 +302,13 @@ class RequestWorkflowService
             if ($calculation->paymentRequired && $lockedRequest->status === 'approved') {
                 $lockedRequest->update(['status' => 'payment_pending', 'last_status_changed_at' => now()]);
                 $this->history($lockedRequest, 'approved', 'payment_pending', 'Payment summary generated.', true, $user->id);
+            } elseif (! $calculation->paymentRequired && $lockedRequest->status === 'approved') {
+                $lockedRequest->update(['status' => 'awaiting_staff_assignment', 'last_status_changed_at' => now()]);
+                $this->history($lockedRequest, 'approved', 'awaiting_staff_assignment', 'Awaiting staff assignment.', true, $user->id);
+            }
+            $this->notifications->afterCommit($lockedRequest, NotificationMilestone::Accepted, 'billing', $billing->id);
+            if ($calculation->paymentRequired) {
+                $this->notifications->afterCommit($lockedRequest, NotificationMilestone::PaymentPending, 'billing', $billing->id);
             }
         });
     }
@@ -324,8 +343,9 @@ class RequestWorkflowService
     {
         DB::transaction(function () use ($request, $attributes, $user): void {
             $lockedRequest = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
-            $eligibleStatuses = ['approved', 'payment_pending', 'payment_received', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
-            if (! $lockedRequest->file_number || ! in_array($lockedRequest->status, $eligibleStatuses, true)) {
+            $eligibleStatuses = ['approved', 'payment_pending', 'payment_received', 'awaiting_staff_assignment', 'draft_in_progress', 'ready_for_verification', 'customer_approved', 'ready_for_registration', 'dispatched', 'completed', 'archived'];
+            $frozenReviewLifecycle = in_array($lockedRequest->status, ['received', 'under_review', 'need_documents'], true) && $lockedRequest->billing?->isLocked();
+            if (! $lockedRequest->file_number || (! in_array($lockedRequest->status, $eligibleStatuses, true) && ! $frozenReviewLifecycle)) {
                 throw ValidationException::withMessages(['payment' => 'Payment can only be recorded after approval and file-number assignment.']);
             }
 
@@ -338,6 +358,15 @@ class RequestWorkflowService
             }
             if (! $billingState->paymentRequired) {
                 throw ValidationException::withMessages(['payment' => 'This frozen billing snapshot does not require payment.']);
+            }
+            if ($frozenReviewLifecycle) {
+                $from = $lockedRequest->status;
+                if ($from !== 'under_review') {
+                    $this->history($lockedRequest, $from, 'under_review', 'Request moved to final review.', true, $user->id);
+                }
+                $this->history($lockedRequest, 'under_review', 'approved', 'Request pricing approved.', true, $user->id);
+                $this->history($lockedRequest, 'approved', 'payment_pending', 'Payment summary generated.', true, $user->id);
+                $lockedRequest->update(['status' => 'payment_pending', 'case_approved_at' => $lockedRequest->case_approved_at ?? now(), 'case_approved_by' => $lockedRequest->case_approved_by ?? $user->id, 'last_status_changed_at' => now()]);
             }
             $payableAmount = (float) $billingState->grandTotal;
 
@@ -380,10 +409,12 @@ class RequestWorkflowService
                     if ($lockedRequest->status === 'approved') {
                         $this->history($lockedRequest, 'approved', 'payment_pending', null, false, $user->id);
                     }
-                    $targetStatus = $lockedRequest->usesChecklistWorkflow() ? 'payment_pending' : 'payment_received';
-                    $changes += ['status' => $targetStatus, 'last_status_changed_at' => now()];
-                    $this->history($lockedRequest, 'payment_pending', $targetStatus, 'Payment received.', true, $user->id);
+                    $changes['status'] = 'awaiting_staff_assignment';
+                    $changes['last_status_changed_at'] = now();
+                    $this->history($lockedRequest, 'payment_pending', 'payment_received', 'Payment received.', true, $user->id);
+                    $this->history($lockedRequest, 'payment_received', 'awaiting_staff_assignment', 'Awaiting staff assignment.', true, $user->id);
                 }
+                $this->notifications->afterCommit($lockedRequest, NotificationMilestone::PaymentReceived, 'payment', $lockedRequest->payments()->latest('id')->value('id'));
             }
 
             $lockedRequest->update($changes);

@@ -283,7 +283,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $request->update(['status' => 'rejected']);
         $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
             ->assertOk()
-            ->assertSee('નામંજૂર')
+            ->assertSee('રદ કરેલ')
             ->assertSee('Rejected')
             ->assertSee('This request was not approved.')
             ->assertDontSee('Processing Progress')
@@ -338,7 +338,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
 
         $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
             ->assertOk()
-            ->assertSee('નામંજૂર')
+            ->assertSee('રદ કરેલ')
             ->assertSee('Rejected')
             ->assertSee('Please contact us about another suitable service.')
             ->assertDontSee('Processing Progress')
