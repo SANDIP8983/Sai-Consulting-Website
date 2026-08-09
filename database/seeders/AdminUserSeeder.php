@@ -11,11 +11,10 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::query()->where('username', config('admin.username'))->first()
-            ?? User::query()->where('email', config('admin.email'))->first()
-            ?? User::query()->where('email', config('admin.legacy_email'))->first();
+        $admin = User::query()->where('username', config('admin.username'))->first();
 
         $configuredMobile = trim((string) config('admin.mobile'));
+        $configuredPassword = (string) config('admin.password');
         $mobileIsValid = static fn (?string $mobile): bool => preg_match('/\A[6-9][0-9]{9}\z/', (string) $mobile) === 1;
 
         if ($admin) {
@@ -43,6 +42,10 @@ class AdminUserSeeder extends Seeder
             throw new RuntimeException('ADMIN_MOBILE is required and must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9 before seeding the initial admin.');
         }
 
+        if (trim($configuredPassword) === '') {
+            throw new RuntimeException('ADMIN_PASSWORD is required before seeding the initial admin. Configure it securely in the deployment environment; no default password is provided.');
+        }
+
         User::query()->create([
             'name' => config('admin.name'),
             'username' => config('admin.username'),
@@ -50,7 +53,7 @@ class AdminUserSeeder extends Seeder
             'mobile' => $configuredMobile,
             'role' => 'super_admin',
             'is_active' => true,
-            'password' => Hash::make(config('admin.password')),
+            'password' => Hash::make($configuredPassword),
             'email_verified_at' => now(),
         ]);
     }

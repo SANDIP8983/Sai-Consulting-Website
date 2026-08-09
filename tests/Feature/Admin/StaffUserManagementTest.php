@@ -19,7 +19,7 @@ class StaffUserManagementTest extends TestCase
 
     public function test_existing_super_admin_and_username_only_staff_can_log_in(): void
     {
-        config(['admin.mobile' => '9876543201']);
+        config(['admin.mobile' => '9876543201', 'admin.password' => self::PASSWORD]);
         $this->seed(AdminUserSeeder::class);
         $admin = User::query()->sole();
         $this->assertTrue($admin->isSuperAdmin());
@@ -75,12 +75,13 @@ class StaffUserManagementTest extends TestCase
 
     public function test_fresh_admin_seed_with_valid_mobile_succeeds_and_email_remains_optional(): void
     {
-        config(['admin.mobile' => '9876543201']);
+        config(['admin.mobile' => '9876543201', 'admin.password' => self::PASSWORD, 'admin.email' => null]);
 
         $this->seed(AdminUserSeeder::class);
 
         $this->assertDatabaseHas('users', [
             'username' => 'admin',
+            'email' => null,
             'mobile' => '9876543201',
             'role' => 'super_admin',
             'is_active' => true,

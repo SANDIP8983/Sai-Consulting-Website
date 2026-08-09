@@ -12,9 +12,11 @@ class AdminUserSeederTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const INITIAL_PASSWORD = 'DeploymentOnly!42';
+
     public function test_admin_seeder_is_idempotent(): void
     {
-        config(['admin.mobile' => '9876543205']);
+        config(['admin.mobile' => '9876543205', 'admin.password' => self::INITIAL_PASSWORD, 'admin.email' => null]);
         $this->seed(AdminUserSeeder::class);
         $admin = User::query()->sole();
         $originalHash = $admin->password;
@@ -22,31 +24,41 @@ class AdminUserSeederTest extends TestCase
         $this->seed(AdminUserSeeder::class);
 
         $this->assertSame(1, User::query()->count());
-        $this->assertSame(config('admin.email'), $admin->fresh()->email);
+        $this->assertNull($admin->fresh()->email);
         $this->assertSame($originalHash, $admin->fresh()->password);
-        $this->assertTrue(Hash::check(config('admin.password'), $admin->fresh()->password));
+        $this->assertTrue(Hash::check(self::INITIAL_PASSWORD, $admin->fresh()->password));
     }
 
-    public function test_admin_seeder_promotes_legacy_account_without_replacing_contact_or_password(): void
+    public function test_fresh_admin_seed_requires_an_explicit_password(): void
     {
-        $legacy = User::factory()->create([
-            'name' => 'Test User',
-            'email' => config('admin.legacy_email'),
+        config(['admin.mobile' => '9876543206', 'admin.password' => null]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ADMIN_PASSWORD is required');
+
+        $this->seed(AdminUserSeeder::class);
+    }
+
+    public function test_explicit_configuration_creates_a_hashed_super_admin_without_email(): void
+    {
+        config([
+            'admin.name' => 'Production Administrator',
+            'admin.username' => 'admin',
+            'admin.mobile' => '9876543206',
+            'admin.email' => null,
+            'admin.password' => self::INITIAL_PASSWORD,
         ]);
-        $originalEmail = $legacy->email;
-        $originalMobile = $legacy->mobile;
-        $originalHash = $legacy->password;
-        config(['admin.mobile' => '9876543206']);
 
         $this->seed(AdminUserSeeder::class);
 
         $admin = User::query()->sole();
-        $this->assertSame('Admin', $admin->name);
+        $this->assertSame('Production Administrator', $admin->name);
         $this->assertSame('admin', $admin->username);
+        $this->assertSame('9876543206', $admin->mobile);
+        $this->assertNull($admin->email);
         $this->assertSame('super_admin', $admin->role);
         $this->assertTrue($admin->is_active);
-        $this->assertSame($originalEmail, $admin->email);
-        $this->assertSame($originalMobile, $admin->mobile);
-        $this->assertSame($originalHash, $admin->password);
+        $this->assertNotSame(self::INITIAL_PASSWORD, $admin->password);
+        $this->assertTrue(Hash::check(self::INITIAL_PASSWORD, $admin->password));
     }
 }
