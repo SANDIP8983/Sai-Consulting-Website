@@ -61,4 +61,28 @@ class AdminUserSeederTest extends TestCase
         $this->assertNotSame(self::INITIAL_PASSWORD, $admin->password);
         $this->assertTrue(Hash::check(self::INITIAL_PASSWORD, $admin->password));
     }
+
+    public function test_conflicting_super_admin_fails_without_creating_or_modifying_users(): void
+    {
+        $existing = User::factory()->create([
+            'username' => 'existing-owner',
+            'role' => 'super_admin',
+            'mobile' => '9876543207',
+        ]);
+        config([
+            'admin.username' => 'admin',
+            'admin.mobile' => '9876543206',
+            'admin.password' => self::INITIAL_PASSWORD,
+        ]);
+
+        try {
+            $this->seed(AdminUserSeeder::class);
+            $this->fail('Expected conflicting Super Admin bootstrap to fail safely.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('conflicting Super Admin', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('users', ['id' => $existing->id, 'username' => 'existing-owner', 'role' => 'super_admin']);
+    }
 }

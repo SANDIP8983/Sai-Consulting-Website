@@ -11,13 +11,6 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            AdminUserSeeder::class,
-            ServiceSeeder::class,
-            SubRegistrarTokenBookingServiceSeeder::class,
-            WorkScopeItemSeeder::class,
-            ServiceCommercialConfigurationSeeder::class,
-            CentralRequiredDocumentsSeeder::class,
-        ]);
+        $this->call(ProductionBootstrapSeeder::class);
     }
 }
