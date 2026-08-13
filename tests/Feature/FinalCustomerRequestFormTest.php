@@ -35,6 +35,36 @@ class FinalCustomerRequestFormTest extends TestCase
         $this->get(route('request.success'))->assertOk()->assertSee($request->reference_no)->assertSee('Sale Deed')->assertSee('Mutation');
     }
 
+    public function test_request_form_and_snapshot_use_the_same_effective_document_mappings(): void
+    {
+        $service = $this->service('mapped-documents', 1000, 18, 5);
+        $required = $service->requiredDocuments()->create(['name_en' => 'Required Record', 'name_gu' => 'Required Record', 'requirement_type' => 'required', 'is_mandatory' => true, 'is_active' => true, 'sort_order' => 1]);
+        $anyOne = $service->requiredDocuments()->create(['name_en' => 'Any One Record', 'name_gu' => 'Any One Record', 'requirement_type' => 'any_one_required', 'is_mandatory' => false, 'is_active' => true, 'sort_order' => 2]);
+        $optional = $service->requiredDocuments()->create(['name_en' => 'Optional Record', 'name_gu' => 'Optional Record', 'requirement_type' => 'optional', 'is_mandatory' => false, 'is_active' => true, 'sort_order' => 3]);
+
+        $this->get(route('request.create'))->assertOk()
+            ->assertSee('<dt>Required Documents</dt><dd>3</dd>', false)
+            ->assertSee('id="required-documents"', false)
+            ->assertSee('id="any-one-required-documents"', false)
+            ->assertSee('id="optional-documents"', false)
+            ->assertSee('Any One Required')
+            ->assertSee('any_one_required');
+
+        $this->post(route('request.store'), $this->payload([$service->id]))
+            ->assertRedirect(route('request.success'));
+
+        $snapshot = collect(CustomerRequest::query()->sole()->requestServices()->sole()->required_documents_snapshot);
+        $this->assertSame(
+            [
+                $required->id => 'required',
+                $anyOne->id => 'any_one_required',
+                $optional->id => 'optional',
+            ],
+            $snapshot->pluck('requirement_type', 'id')->all(),
+        );
+        $this->assertDatabaseCount('request_documents', 0);
+    }
+
     public function test_duplicate_files_and_duplicate_submission_are_rejected(): void
     {
         Storage::fake('local');
