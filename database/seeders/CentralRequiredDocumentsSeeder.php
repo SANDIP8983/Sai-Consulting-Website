@@ -37,9 +37,9 @@ class CentralRequiredDocumentsSeeder extends Seeder
     {
         DB::transaction(function (): void {
             $masters = [];
-            foreach (self::DOCUMENTS as $order => [$code, $nameEn, $nameGu, $aliases]) {
-                $master = CommonRequiredDocument::withTrashed()->where('code', $code)
-                    ->orWhereIn('normalized_name', $aliases)->first() ?? new CommonRequiredDocument;
+            $newMasterCodes = [];
+            foreach (self::DOCUMENTS as $order => [$code, $nameEn, $nameGu]) {
+                $master = CommonRequiredDocument::withTrashed()->where('code', $code)->first() ?? new CommonRequiredDocument;
                 if ($master->trashed()) {
                     $master->restore();
                 }
@@ -50,10 +50,13 @@ class CentralRequiredDocumentsSeeder extends Seeder
                     'max_upload_size_kb' => 10240, 'is_active' => true, 'is_common' => true,
                 ])->save();
                 $masters[$code] = $master;
+                if ($master->wasRecentlyCreated) {
+                    $newMasterCodes[] = $code;
+                }
             }
 
             Service::query()->whereIn('slug', ServiceCommercialConfigurationSeeder::serviceSlugs())->get()->each(
-                function (Service $service) use ($masters): void {
+                function (Service $service) use ($masters, $newMasterCodes): void {
                     foreach (self::DOCUMENTS as $order => [$code]) {
                         $master = $masters[$code];
                         $type = in_array($code, self::ANY_ONE, true) ? 'any_one_required' : 'optional';
@@ -64,12 +67,14 @@ class CentralRequiredDocumentsSeeder extends Seeder
                         if ($mapping->trashed()) {
                             $mapping->restore();
                         }
-                        $mapping->fill([
-                            'name_en' => $master->name_en, 'name_gu' => $master->name_gu,
-                            'requirement_type' => $type, 'is_mandatory' => false, 'is_active' => true,
-                            'sort_order' => $order + 1, 'allowed_file_types' => ['pdf', 'jpg', 'jpeg', 'png'],
-                            'max_upload_size_kb' => 10240,
-                        ])->save();
+                        if (! $mapping->exists || in_array($code, $newMasterCodes, true)) {
+                            $mapping->fill([
+                                'name_en' => $master->name_en, 'name_gu' => $master->name_gu,
+                                'requirement_type' => $type, 'is_mandatory' => false, 'is_active' => true,
+                                'sort_order' => $order + 1, 'allowed_file_types' => ['pdf', 'jpg', 'jpeg', 'png'],
+                                'max_upload_size_kb' => 10240,
+                            ])->save();
+                        }
                     }
                 },
             );

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\NotificationMilestone;
+use App\Models\CommonRequiredDocument;
 use App\Models\CustomerRequest;
 use App\Models\OfficeTiming;
 use App\Models\Service;
@@ -52,6 +53,8 @@ class ProductionBootstrapSeederTest extends TestCase
     public function test_fresh_production_bootstrap_contains_only_approved_master_data_and_is_idempotent(): void
     {
         $this->seed(ProductionBootstrapSeeder::class);
+        $configured = Service::query()->firstOrFail()->requiredDocuments()->firstOrFail();
+        $configured->update(['requirement_type' => 'required', 'is_mandatory' => true]);
         $this->seed(ProductionBootstrapSeeder::class);
 
         $this->assertDatabaseCount('users', 1);
@@ -60,6 +63,10 @@ class ProductionBootstrapSeederTest extends TestCase
         $this->assertSame(13, Service::query()->where('gst_rate', 18)->where('advance_percentage', 100)->count());
         $this->assertDatabaseCount('common_required_documents', 18);
         $this->assertDatabaseCount('service_required_documents', 234);
+        $this->assertSame(18, CommonRequiredDocument::query()->whereNotNull('code')->distinct()->count('code'));
+        $this->assertSame(0, CommonRequiredDocument::query()->whereNull('code')->count());
+        $this->assertSame('required', $configured->fresh()->requirement_type);
+        $this->assertTrue($configured->fresh()->is_mandatory);
         foreach (Service::query()->get() as $service) {
             $this->assertSame(18, $service->requiredDocuments()->count(), $service->slug.' document mappings');
         }

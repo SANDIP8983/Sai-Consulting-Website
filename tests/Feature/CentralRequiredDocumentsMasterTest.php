@@ -25,16 +25,26 @@ class CentralRequiredDocumentsMasterTest extends TestCase
 
     public function test_exact_master_and_all_service_defaults_are_idempotent(): void
     {
+        $configured = Service::query()->firstOrFail()->requiredDocuments()
+            ->whereHas('commonDocument', fn ($query) => $query->where('code', 'previous-deed'))
+            ->sole();
+        $configured->update(['requirement_type' => 'required', 'is_mandatory' => true]);
+
+        $this->seed(CentralRequiredDocumentsSeeder::class);
         $this->seed(CentralRequiredDocumentsSeeder::class);
         $this->assertDatabaseCount('common_required_documents', 18);
         $this->assertDatabaseCount('service_required_documents', 234);
         $this->assertSame(13, Service::query()->count());
+        $this->assertSame(18, CommonRequiredDocument::query()->whereNotNull('code')->distinct()->count('code'));
+        $this->assertSame(0, CommonRequiredDocument::query()->whereNull('code')->count());
+        $this->assertSame('required', $configured->fresh()->requirement_type);
+        $this->assertTrue($configured->fresh()->is_mandatory);
         $this->assertSame(1, CommonRequiredDocument::query()->where('code', 'hak-patrak-village-form-6')->count());
         $this->assertSame(0, CommonRequiredDocument::query()->where('code', 'village-form-6')->count());
 
         foreach (Service::query()->get() as $service) {
             $this->assertSame(3, $service->requiredDocuments()->where('requirement_type', 'any_one_required')->count());
-            $this->assertSame(15, $service->requiredDocuments()->where('requirement_type', 'optional')->count());
+            $this->assertSame($service->is($configured->service) ? 14 : 15, $service->requiredDocuments()->where('requirement_type', 'optional')->count());
         }
     }
 
