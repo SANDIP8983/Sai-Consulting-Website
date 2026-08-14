@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\AppointmentDateTime;
 use Illuminate\Database\Eloquent\Model;
 
 class AppointmentHistory extends Model
@@ -10,6 +11,6 @@ class AppointmentHistory extends Model
 
     protected function casts(): array
     {
-        return ['old_scheduled_at' => 'datetime', 'new_scheduled_at' => 'datetime'];
+        return ['old_scheduled_at' => AppointmentDateTime::class, 'new_scheduled_at' => AppointmentDateTime::class];
     }
 }

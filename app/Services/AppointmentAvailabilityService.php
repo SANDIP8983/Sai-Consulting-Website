@@ -28,7 +28,7 @@ class AppointmentAvailabilityService
         }
         $start = $day->setTimeFromTimeString($timing->opens_at);
         $close = $day->setTimeFromTimeString($timing->closes_at);
-        $busy = Appointment::query()->whereIn('status', AppointmentStatus::active())->when($excludingAppointmentId, fn ($q) => $q->whereKeyNot($excludingAppointmentId))->whereBetween('scheduled_at', [$day->utc(), $day->endOfDay()->utc()])->get();
+        $busy = Appointment::query()->whereIn('status', AppointmentStatus::active())->when($excludingAppointmentId, fn ($q) => $q->whereKeyNot($excludingAppointmentId))->whereBetween('scheduled_at', [$day, $day->endOfDay()])->get();
         $blocks = AppointmentBlock::query()->whereDate('block_date', $day->toDateString())->get();
         $slots = [];
         for ($at = $start; $at->addMinutes(self::SLOT_MINUTES)->lte($close); $at = $at->addMinutes(self::SLOT_MINUTES)) {
@@ -59,7 +59,7 @@ class AppointmentAvailabilityService
 
     private function overlapsAppointments($start, $end, Collection $items): bool
     {
-        return $items->contains(fn (Appointment $a) => $start->lt($a->scheduled_at->timezone(self::TIMEZONE)->addMinutes($a->duration_minutes)) && $end->gt($a->scheduled_at->timezone(self::TIMEZONE)));
+        return $items->contains(fn (Appointment $a) => $start->lt($a->scheduled_at->addMinutes($a->duration_minutes)) && $end->gt($a->scheduled_at));
     }
 
     private function overlapsBlocks($start, $end, Collection $items): bool

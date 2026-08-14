@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AppointmentNotificationMilestone;
 use App\Enums\AppointmentStatus;
 use App\Jobs\SendAppointmentNotificationJob;
 use App\Models\Appointment;
@@ -12,7 +13,9 @@ use App\Models\Service;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\View;
 use Tests\TestCase;
 
 class AppointmentBookingTest extends TestCase
@@ -21,14 +24,14 @@ class AppointmentBookingTest extends TestCase
 
     private Service $service;
 
-    private string $date = '2026-08-18';
+    private string $date = '2026-08-17';
 
     protected function setUp(): void
     {
         parent::setUp();
         Carbon::setTestNow('2026-08-14 10:00:00 Asia/Kolkata');
         $this->service = Service::create(['name_en' => 'Consultation', 'name_gu' => 'પરામર્શ', 'slug' => 'consultation', 'is_active' => true]);
-        OfficeTiming::create(['day_of_week' => 2, 'opens_at' => '10:00', 'closes_at' => '17:00', 'is_closed' => false]);
+        OfficeTiming::create(['day_of_week' => 1, 'opens_at' => '10:00', 'closes_at' => '17:00', 'is_closed' => false]);
     }
 
     protected function tearDown(): void
@@ -54,6 +57,34 @@ class AppointmentBookingTest extends TestCase
         Queue::assertPushed(SendAppointmentNotificationJob::class);
     }
 
+    public function test_public_slot_preserves_exact_asia_kolkata_business_time_everywhere(): void
+    {
+        Queue::fake();
+        $this->getJson(route('appointments.availability', ['date' => '2026-08-17', 'service_id' => $this->service->id]))
+            ->assertJsonFragment(['value' => '10:30', 'label' => '10:30 AM – 11:00 AM']);
+
+        $this->post(route('appointments.store'), $this->payload())->assertRedirect();
+        $appointment = Appointment::with('service')->sole();
+
+        $this->assertSame('2026-08-17 10:30:00', DB::table('appointments')->where('id', $appointment->id)->value('scheduled_at'));
+        $this->assertSame('2026-08-17 10:30', $appointment->scheduled_at->format('Y-m-d H:i'));
+        $this->assertSame('2026-08-17 10:30:00', DB::table('appointment_histories')->where('appointment_id', $appointment->id)->value('new_scheduled_at'));
+
+        $this->get(route('appointments.success', ['reference' => $appointment->reference_no]))->assertOk()->assertSee('17 Aug 2026, 10:30 AM');
+        $this->actingAs(User::factory()->create())->get(route('admin.appointments.show', $appointment))->assertOk()->assertSee('17 Aug 2026, 10:30 AM');
+
+        $email = View::make('emails.appointment', ['appointment' => $appointment, 'milestone' => AppointmentNotificationMilestone::Received])->render();
+        $this->assertStringContainsString('<strong>Time:</strong> 10:30 AM', $email);
+    }
+
+    public function test_exact_same_local_time_is_detected_as_a_conflict(): void
+    {
+        Queue::fake();
+        $this->post(route('appointments.store'), $this->payload())->assertRedirect();
+        $this->getJson(route('appointments.availability', ['date' => '2026-08-17', 'service_id' => $this->service->id]))->assertJsonMissing(['value' => '10:30']);
+        $this->post(route('appointments.store'), $this->payload())->assertStatus(422);
+    }
+
     public function test_invalid_contact_and_past_date_are_rejected(): void
     {
         $this->post(route('appointments.store'), $this->payload(['mobile' => '123', 'email' => 'bad', 'appointment_date' => '2026-08-13']))->assertSessionHasErrors(['mobile', 'email', 'appointment_date']);
@@ -72,9 +103,9 @@ class AppointmentBookingTest extends TestCase
 
     public function test_closed_weekday_and_outside_hours_are_rejected(): void
     {
-        OfficeTiming::where('day_of_week', 2)->update(['is_closed' => true]);
+        OfficeTiming::where('day_of_week', 1)->update(['is_closed' => true]);
         $this->post(route('appointments.store'), $this->payload())->assertStatus(422);
-        OfficeTiming::where('day_of_week', 2)->update(['is_closed' => false]);
+        OfficeTiming::where('day_of_week', 1)->update(['is_closed' => false]);
         $this->post(route('appointments.store'), $this->payload(['appointment_time' => '09:30']))->assertStatus(422);
     }
 
@@ -85,7 +116,9 @@ class AppointmentBookingTest extends TestCase
         $this->actingAs($admin)->post(route('admin.appointments.store'), $this->payload())->assertRedirect();
         $a = Appointment::sole();
         $this->patch(route('admin.appointments.transition', $a), ['status' => 'confirmed'])->assertRedirect();
-        $this->patch(route('admin.appointments.transition', $a), ['status' => 'rescheduled', 'appointment_date' => $this->date, 'appointment_time' => '10:30'])->assertRedirect();
+        $this->patch(route('admin.appointments.transition', $a), ['status' => 'rescheduled', 'appointment_date' => $this->date, 'appointment_time' => '14:30'])->assertRedirect();
+        $this->assertSame('2026-08-17 14:30:00', DB::table('appointments')->where('id', $a->id)->value('scheduled_at'));
+        $this->assertDatabaseHas('appointment_histories', ['appointment_id' => $a->id, 'action' => 'rescheduled', 'old_scheduled_at' => '2026-08-17 10:30:00', 'new_scheduled_at' => '2026-08-17 14:30:00']);
         $this->patch(route('admin.appointments.transition', $a), ['status' => 'cancelled', 'note' => 'Customer asked'])->assertRedirect();
         $this->assertDatabaseHas('appointment_histories', ['appointment_id' => $a->id, 'action' => 'cancelled', 'note' => 'Customer asked']);
         $other = $this->createAppointment('APT/2026/999999', '12:00');
@@ -103,9 +136,9 @@ class AppointmentBookingTest extends TestCase
     public function test_reminder_is_sent_once_and_cancelled_is_skipped(): void
     {
         Queue::fake();
-        Carbon::setTestNow('2026-08-17 10:00:00 Asia/Kolkata');
-        $due = $this->createAppointment('APT/2026/000010', '10:00', AppointmentStatus::Confirmed, '2026-08-18');
-        $this->createAppointment('APT/2026/000011', '11:00', AppointmentStatus::Cancelled, '2026-08-18');
+        Carbon::setTestNow('2026-08-16 10:30:00 Asia/Kolkata');
+        $due = $this->createAppointment('APT/2026/000010', '10:30', AppointmentStatus::Confirmed, '2026-08-17');
+        $this->createAppointment('APT/2026/000011', '11:00', AppointmentStatus::Cancelled, '2026-08-17');
         $this->artisan('appointments:send-reminders')->assertSuccessful();
         $this->artisan('appointments:send-reminders')->assertSuccessful();
         $this->assertNotNull($due->fresh()->reminder_sent_at);
@@ -114,12 +147,12 @@ class AppointmentBookingTest extends TestCase
 
     private function payload(array $overrides = []): array
     {
-        return array_merge(['customer_name' => 'Test Customer', 'mobile' => '9876543210', 'email' => 'customer@example.com', 'service_id' => $this->service->id, 'appointment_date' => $this->date, 'appointment_time' => '10:00', 'declaration' => '1'], $overrides);
+        return array_merge(['customer_name' => 'Test Customer', 'mobile' => '9876543210', 'email' => 'customer@example.com', 'service_id' => $this->service->id, 'appointment_date' => $this->date, 'appointment_time' => '10:30', 'declaration' => '1'], $overrides);
     }
 
     private function createAppointment(string $reference, string $time, AppointmentStatus $status = AppointmentStatus::Pending, ?string $date = null): Appointment
     {
-        $at = Carbon::parse(($date ?: $this->date).' '.$time, 'Asia/Kolkata')->utc();
+        $at = Carbon::parse(($date ?: $this->date).' '.$time, 'Asia/Kolkata');
 
         return Appointment::create(['reference_no' => $reference, 'customer_name' => 'Customer', 'mobile' => '9876543210', 'email' => 'customer@example.com', 'service_id' => $this->service->id, 'scheduled_at' => $at, 'status' => $status, 'source' => 'admin', 'slot_key' => in_array($status->value, AppointmentStatus::active(), true) ? $at->format('Y-m-d H:i') : null]);
     }

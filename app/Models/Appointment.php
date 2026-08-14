@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\AppointmentDateTime;
 use App\Enums\AppointmentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ class Appointment extends Model
 
     protected function casts(): array
     {
-        return ['scheduled_at' => 'datetime', 'status' => AppointmentStatus::class, 'reminder_sent_at' => 'datetime', 'confirmed_at' => 'datetime', 'completed_at' => 'datetime', 'cancelled_at' => 'datetime'];
+        return ['scheduled_at' => AppointmentDateTime::class, 'status' => AppointmentStatus::class, 'reminder_sent_at' => 'datetime', 'confirmed_at' => 'datetime', 'completed_at' => 'datetime', 'cancelled_at' => 'datetime'];
     }
 
     public function service(): BelongsTo

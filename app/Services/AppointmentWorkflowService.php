@@ -25,11 +25,11 @@ class AppointmentWorkflowService
                 $last = Appointment::query()->where('reference_no', 'like', "APT/$year/%")->lockForUpdate()->orderByDesc('reference_no')->value('reference_no');
                 $seq = $last ? ((int) substr($last, -6)) + 1 : 1;
                 try {
-                    $a = Appointment::query()->create(['reference_no' => sprintf('APT/%d/%06d', $year, $seq), 'customer_name' => $data['customer_name'], 'mobile' => $data['mobile'], 'whatsapp' => $data['whatsapp'] ?? null, 'email' => $data['email'] ?? null, 'service_id' => $data['service_id'], 'scheduled_at' => $at->utc(), 'status' => AppointmentStatus::Pending, 'source' => $source, 'customer_note' => $data['customer_note'] ?? null, 'admin_note' => $data['admin_note'] ?? null, 'slot_key' => $at->utc()->format('Y-m-d H:i')]);
+                    $a = Appointment::query()->create(['reference_no' => sprintf('APT/%d/%06d', $year, $seq), 'customer_name' => $data['customer_name'], 'mobile' => $data['mobile'], 'whatsapp' => $data['whatsapp'] ?? null, 'email' => $data['email'] ?? null, 'service_id' => $data['service_id'], 'scheduled_at' => $at, 'status' => AppointmentStatus::Pending, 'source' => $source, 'customer_note' => $data['customer_note'] ?? null, 'admin_note' => $data['admin_note'] ?? null, 'slot_key' => $at->format('Y-m-d H:i')]);
                 } catch (UniqueConstraintViolationException) {
                     throw ValidationException::withMessages(['appointment_time' => 'This slot has just been booked. Please choose another.']);
                 }
-                $a->histories()->create(['action' => 'created', 'new_status' => 'pending', 'new_scheduled_at' => $at->utc(), 'user_id' => $actor?->id]);
+                $a->histories()->create(['action' => 'created', 'new_status' => 'pending', 'new_scheduled_at' => $at, 'user_id' => $actor?->id]);
                 DB::afterCommit(fn () => $this->notifications->send($a, AppointmentNotificationMilestone::Received));
 
                 return $a;
@@ -45,7 +45,7 @@ class AppointmentWorkflowService
             $oldAt = $a->scheduled_at;
             $newAt = $oldAt;
             if ($status === AppointmentStatus::Rescheduled) {
-                $newAt = $this->availability->scheduledAt($slot['appointment_date'], $slot['appointment_time'], $a->id)->utc();
+                $newAt = $this->availability->scheduledAt($slot['appointment_date'], $slot['appointment_time'], $a->id);
             }
             $active = in_array($status->value, AppointmentStatus::active(), true);
             $a->update(['status' => $status, 'scheduled_at' => $newAt, 'slot_key' => $active ? $newAt->format('Y-m-d H:i') : null, 'admin_note' => $note ?: $a->admin_note, 'confirmed_at' => $status === AppointmentStatus::Confirmed ? now() : $a->confirmed_at, 'completed_at' => $status === AppointmentStatus::Completed ? now() : $a->completed_at, 'cancelled_at' => $status === AppointmentStatus::Cancelled ? now() : $a->cancelled_at, 'reminder_sent_at' => $status === AppointmentStatus::Rescheduled ? null : $a->reminder_sent_at]);
