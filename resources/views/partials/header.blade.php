@@ -16,6 +16,7 @@
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('about') ? 'active' : '' }}" href="{{ route('about') }}">About Us</a></li>
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('faq') ? 'active' : '' }}" href="{{ route('faq') }}">FAQ</a></li>
                     <li class="nav-item"><a class="nav-link {{ request()->routeIs('contact') ? 'active' : '' }}" href="{{ route('contact') }}">Contact</a></li>
+                    <li class="nav-item"><a class="nav-link {{ request()->routeIs('appointments.*') ? 'active' : '' }}" href="{{ route('appointments.create') }}">Book Appointment</a></li>
                 </ul>
                 <a href="{{ route('request.create') }}" class="btn btn-primary rounded-pill px-4 ms-xl-3 mt-3 mt-xl-0 header-cta">ઓનલાઇન અરજી કરો</a>
             </div>

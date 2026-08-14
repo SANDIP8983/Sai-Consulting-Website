@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Admin\AppointmentBlockController;
+use App\Http\Controllers\Admin\AppointmentController as AdminAppointmentController;
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\CommonRequiredDocumentController;
 use App\Http\Controllers\Admin\CustomerNotificationLogController;
@@ -15,6 +17,7 @@ use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\ServiceRequiredDocumentController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StaffUserController;
+use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\CustomerRequestController;
 use App\Http\Controllers\HomeController;
@@ -64,6 +67,10 @@ Route::get('/request/track/{customerRequest}/pdf/{documentType}', PublicRequestP
     ->name('request.track.pdf');
 
 Route::get('/branding/{asset}', [BrandingAssetController::class, 'publicAsset'])->name('branding.asset');
+Route::get('/appointments', [AppointmentController::class, 'create'])->name('appointments.create');
+Route::get('/appointments/availability', [AppointmentController::class, 'availability'])->middleware('throttle:60,1')->name('appointments.availability');
+Route::post('/appointments', [AppointmentController::class, 'store'])->middleware('throttle:10,1')->name('appointments.store');
+Route::get('/appointments/success', [AppointmentController::class, 'success'])->name('appointments.success');
 
 Route::get('/admin', fn () => auth()->check()
     ? to_route('admin.dashboard')
@@ -131,6 +138,19 @@ Route::middleware(['auth', 'active', 'can:notifications.manage'])->group(functio
     Route::put('/admin/settings/customer-notifications', [SettingsController::class, 'updateCustomerNotifications'])->name('admin.settings.customer-notifications.update');
 });
 Route::get('/admin/notifications', CustomerNotificationLogController::class)->middleware(['auth', 'active', 'can:notifications.view'])->name('admin.notifications.index');
+Route::middleware(['auth', 'active', 'can:appointments.manage'])->prefix('admin/appointments')->name('admin.appointments.')->controller(AdminAppointmentController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/create', 'create')->name('create');
+    Route::post('/', 'store')->name('store');
+    Route::get('/{appointment}', 'show')->name('show');
+    Route::patch('/{appointment}/status', 'transition')->name('transition');
+});
+Route::middleware(['auth', 'active', 'can:appointments.manage'])->prefix('admin/appointment-blocks')->name('admin.appointment-blocks.')->controller(AppointmentBlockController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::post('/', 'store')->name('store');
+    Route::put('/{appointmentBlock}', 'update')->name('update');
+    Route::delete('/{appointmentBlock}', 'destroy')->name('destroy');
+});
 
 Route::middleware(['auth', 'active', 'can:dispatch.manage', 'request.assigned'])->prefix('admin/requests/{customerRequest}/dispatches')->name('admin.requests.dispatches.')->controller(RequestDispatchController::class)->group(function () {
     Route::post('/', 'store')->name('store');

@@ -5,7 +5,7 @@ return [
         'dashboard.view', 'requests.view', 'requests.manage', 'requests.approve',
         'billing.view', 'billing.manage', 'payments.manage', 'processing.manage',
         'dispatch.manage', 'requests.assign', 'services.manage', 'documents.manage', 'settings.manage',
-        'users.manage', 'notifications.view', 'notifications.manage',
+        'users.manage', 'notifications.view', 'notifications.manage', 'appointments.manage',
     ],
     'roles' => [
         'super_admin' => ['*'],
@@ -13,6 +13,7 @@ return [
             'dashboard.view', 'requests.view', 'requests.manage', 'requests.approve',
             'billing.view', 'billing.manage', 'payments.manage', 'processing.manage',
             'dispatch.manage', 'requests.assign',
+            'appointments.manage',
         ],
         'staff' => ['dashboard.view', 'requests.view', 'processing.manage', 'dispatch.manage'],
     ],
