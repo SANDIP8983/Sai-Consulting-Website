@@ -23,6 +23,9 @@ class CustomerMessageFactory
             NotificationMilestone::Completed => 'તમારી અરજીનું કામ પૂર્ણ થયું છે. / Request completed.',
             NotificationMilestone::Dispatched => 'તમારા દસ્તાવેજો મોકલવામાં આવ્યા છે. / Documents dispatched.',
             NotificationMilestone::DeliveredClosed => 'તમારા દસ્તાવેજોની ડિલિવરી પૂર્ણ થઈ છે અને કેસ પૂર્ણ થયો છે. / Delivery and case conclusion completed.',
+            NotificationMilestone::AppointmentReceived, NotificationMilestone::AppointmentConfirmed,
+            NotificationMilestone::AppointmentRescheduled, NotificationMilestone::AppointmentCancelled,
+            NotificationMilestone::AppointmentReminder => throw new \LogicException('Appointment milestones require AppointmentMessageFactory.'),
         };
         $tracking = route('request.track');
         $details = [];

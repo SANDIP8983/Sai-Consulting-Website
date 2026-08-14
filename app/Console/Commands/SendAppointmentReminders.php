@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\AppointmentNotificationMilestone;
 use App\Enums\AppointmentStatus;
+use App\Enums\NotificationMilestone;
 use App\Models\Appointment;
 use App\Services\AppointmentAvailabilityService;
 use App\Services\Notifications\AppointmentNotificationService;
@@ -20,7 +20,7 @@ class SendAppointmentReminders extends Command
         $now = now(AppointmentAvailabilityService::TIMEZONE);
         Appointment::whereIn('status', [AppointmentStatus::Confirmed, AppointmentStatus::Rescheduled])->whereNull('reminder_sent_at')->whereBetween('scheduled_at', [$now->copy()->addHours(23), $now->copy()->addHours(25)])->each(function ($a) use ($notifications) {
             if ($a->whereKey($a->id)->whereNull('reminder_sent_at')->update(['reminder_sent_at' => now()])) {
-                $notifications->send($a, AppointmentNotificationMilestone::Reminder);
+                $notifications->record($a, NotificationMilestone::AppointmentReminder);
             }
         });
 

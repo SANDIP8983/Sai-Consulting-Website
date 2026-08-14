@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Enums\AppointmentNotificationMilestone;
 use App\Enums\AppointmentStatus;
+use App\Enums\NotificationMilestone;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Services\Notifications\AppointmentNotificationService;
@@ -30,7 +30,7 @@ class AppointmentWorkflowService
                     throw ValidationException::withMessages(['appointment_time' => 'This slot has just been booked. Please choose another.']);
                 }
                 $a->histories()->create(['action' => 'created', 'new_status' => 'pending', 'new_scheduled_at' => $at, 'user_id' => $actor?->id]);
-                DB::afterCommit(fn () => $this->notifications->send($a, AppointmentNotificationMilestone::Received));
+                $this->notifications->afterCommit($a, NotificationMilestone::AppointmentReceived);
 
                 return $a;
             });
@@ -51,10 +51,10 @@ class AppointmentWorkflowService
             $a->update(['status' => $status, 'scheduled_at' => $newAt, 'slot_key' => $active ? $newAt->format('Y-m-d H:i') : null, 'admin_note' => $note ?: $a->admin_note, 'confirmed_at' => $status === AppointmentStatus::Confirmed ? now() : $a->confirmed_at, 'completed_at' => $status === AppointmentStatus::Completed ? now() : $a->completed_at, 'cancelled_at' => $status === AppointmentStatus::Cancelled ? now() : $a->cancelled_at, 'reminder_sent_at' => $status === AppointmentStatus::Rescheduled ? null : $a->reminder_sent_at]);
             $a->histories()->create(['action' => $status->value, 'old_status' => $oldStatus->value, 'new_status' => $status->value, 'old_scheduled_at' => $oldAt, 'new_scheduled_at' => $newAt, 'note' => $note, 'user_id' => $actor?->id]);
             $milestone = match ($status) {
-                AppointmentStatus::Confirmed => AppointmentNotificationMilestone::Confirmed,AppointmentStatus::Rescheduled => AppointmentNotificationMilestone::Rescheduled,AppointmentStatus::Cancelled => AppointmentNotificationMilestone::Cancelled,default => null
+                AppointmentStatus::Confirmed => NotificationMilestone::AppointmentConfirmed,AppointmentStatus::Rescheduled => NotificationMilestone::AppointmentRescheduled,AppointmentStatus::Cancelled => NotificationMilestone::AppointmentCancelled,default => null
             };
             if ($milestone) {
-                DB::afterCommit(fn () => $this->notifications->send($a, $milestone));
+                $this->notifications->afterCommit($a, $milestone);
             }
         });
     }

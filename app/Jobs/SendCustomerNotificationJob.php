@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Contracts\WhatsAppChannelInterface;
 use App\Mail\CustomerMilestoneMail;
 use App\Models\CustomerNotificationDelivery;
+use App\Services\Notifications\AppointmentMessageFactory;
+use App\Services\Notifications\AppointmentNotificationService;
 use App\Services\Notifications\CustomerMessageFactory;
 use App\Services\Notifications\CustomerNotificationService;
 use Illuminate\Bus\Queueable;
@@ -27,14 +29,17 @@ class SendCustomerNotificationJob implements ShouldQueue
 
     public function handle(CustomerNotificationService $notifications, CustomerMessageFactory $messages, WhatsAppChannelInterface $whatsApp): void
     {
-        $delivery = CustomerNotificationDelivery::query()->with('event.customerRequest')->findOrFail($this->deliveryId);
+        $delivery = CustomerNotificationDelivery::query()->with(['event.customerRequest', 'event.appointment.service'])->findOrFail($this->deliveryId);
         if (in_array($delivery->status, ['sent', 'skipped'], true)) {
             return;
         }
         $delivery->increment('attempt_count');
         $delivery->update(['last_attempt_at' => now(), 'failure_category' => null, 'failure_message' => null, 'failed_at' => null]);
+        $appointment = $delivery->event->appointment;
         $request = $delivery->event->customerRequest;
-        $recipient = $notifications->recipient($request, $delivery->channel);
+        $recipient = $appointment
+            ? app(AppointmentNotificationService::class)->recipient($appointment, $delivery->channel)
+            : $notifications->recipient($request, $delivery->channel);
         if (! $recipient) {
             $delivery->update(['status' => 'skipped', 'failure_category' => 'missing_or_invalid_recipient']);
 
@@ -45,7 +50,9 @@ class SendCustomerNotificationJob implements ShouldQueue
 
             return;
         }
-        $message = $messages->make($request, $delivery->event->milestone);
+        $message = $appointment
+            ? app(AppointmentMessageFactory::class)->make($appointment, $delivery->event->milestone)
+            : $messages->make($request, $delivery->event->milestone);
         try {
             if ($delivery->channel === 'email') {
                 Mail::to($recipient)->send(new CustomerMilestoneMail($message));

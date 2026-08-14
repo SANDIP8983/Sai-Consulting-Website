@@ -15,6 +15,11 @@ enum NotificationMilestone: string
     case Completed = 'completed';
     case Dispatched = 'dispatched';
     case DeliveredClosed = 'delivered_closed';
+    case AppointmentReceived = 'appointment_received';
+    case AppointmentConfirmed = 'appointment_confirmed';
+    case AppointmentRescheduled = 'appointment_rescheduled';
+    case AppointmentCancelled = 'appointment_cancelled';
+    case AppointmentReminder = 'appointment_reminder';
 
     public function label(): string
     {
@@ -23,6 +28,8 @@ enum NotificationMilestone: string
             self::PaymentPending => 'Payment Pending', self::PaymentReceived => 'Payment Received / Awaiting Assignment',
             self::ProcessingStarted => 'Processing Started', self::DraftReady => 'Draft Ready', self::FinalDraftReady => 'Final Draft Ready',
             self::Completed => 'Completed', self::Dispatched => 'Dispatched', self::DeliveredClosed => 'Delivered / Closed',
+            self::AppointmentReceived => 'Appointment Booking Received', self::AppointmentConfirmed => 'Appointment Confirmed',
+            self::AppointmentRescheduled => 'Appointment Rescheduled', self::AppointmentCancelled => 'Appointment Cancelled', self::AppointmentReminder => 'Appointment Reminder',
         };
     }
 

@@ -73,8 +73,8 @@ class ProductionBootstrapSeederTest extends TestCase
         $this->assertDatabaseCount('work_scope_items', 14);
         $this->assertEqualsCanonicalizing(self::CURRENT_SCOPES, WorkScopeItem::query()->pluck('normalized_name')->all());
         $this->assertDatabaseCount('service_work_scope_defaults', 46);
-        $this->assertDatabaseCount('settings', 44);
-        $this->assertSame(22, Setting::query()->where('setting_group', 'customer_notifications')->count());
+        $this->assertDatabaseCount('settings', 54);
+        $this->assertSame(32, Setting::query()->where('setting_group', 'customer_notifications')->count());
         $this->assertSame(22, Setting::query()->where('setting_group', '!=', 'customer_notifications')->count());
         $this->assertSame(0, Setting::query()->where('setting_group', 'customer_notifications')->where('setting_value', '!=', '0')->count());
         $this->assertEqualsCanonicalizing(self::BASE_SETTING_KEYS, Setting::query()->where('setting_group', '!=', 'customer_notifications')->pluck('setting_key')->all());

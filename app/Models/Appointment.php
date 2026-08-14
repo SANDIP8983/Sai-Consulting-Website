@@ -26,4 +26,9 @@ class Appointment extends Model
     {
         return $this->hasMany(AppointmentHistory::class)->latest();
     }
+
+    public function notificationEvents(): HasMany
+    {
+        return $this->hasMany(CustomerNotificationEvent::class);
+    }
 }

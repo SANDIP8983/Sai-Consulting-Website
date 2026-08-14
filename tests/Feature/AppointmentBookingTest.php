@@ -2,20 +2,25 @@
 
 namespace Tests\Feature;
 
-use App\Enums\AppointmentNotificationMilestone;
 use App\Enums\AppointmentStatus;
-use App\Jobs\SendAppointmentNotificationJob;
+use App\Enums\NotificationMilestone;
+use App\Jobs\SendCustomerNotificationJob;
+use App\Mail\CustomerMilestoneMail;
 use App\Models\Appointment;
 use App\Models\AppointmentBlock;
 use App\Models\Holiday;
 use App\Models\OfficeTiming;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\Notifications\AppointmentMessageFactory;
+use App\Services\Notifications\CustomerMessageFactory;
+use App\Services\Notifications\CustomerNotificationService;
+use App\Services\Notifications\DisabledWhatsAppChannel;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\View;
 use Tests\TestCase;
 
 class AppointmentBookingTest extends TestCase
@@ -54,7 +59,9 @@ class AppointmentBookingTest extends TestCase
         $this->assertMatchesRegularExpression('#^APT/2026/\d{6}$#', $a->reference_no);
         $this->assertSame('pending', $a->status->value);
         $this->assertDatabaseHas('appointment_histories', ['appointment_id' => $a->id, 'action' => 'created']);
-        Queue::assertPushed(SendAppointmentNotificationJob::class);
+        $this->assertDatabaseHas('customer_notification_events', ['appointment_id' => $a->id, 'request_id' => null, 'milestone' => 'appointment_received', 'source_type' => 'appointment', 'source_id' => $a->id]);
+        $this->assertDatabaseHas('customer_notification_deliveries', ['channel' => 'email', 'status' => 'pending', 'recipient_masked' => 'c***@example.com']);
+        Queue::assertPushed(SendCustomerNotificationJob::class, fn ($job) => $job->queue === config('customer-notifications.queue'));
     }
 
     public function test_public_slot_preserves_exact_asia_kolkata_business_time_everywhere(): void
@@ -73,8 +80,32 @@ class AppointmentBookingTest extends TestCase
         $this->get(route('appointments.success', ['reference' => $appointment->reference_no]))->assertOk()->assertSee('17 Aug 2026, 10:30 AM');
         $this->actingAs(User::factory()->create())->get(route('admin.appointments.show', $appointment))->assertOk()->assertSee('17 Aug 2026, 10:30 AM');
 
-        $email = View::make('emails.appointment', ['appointment' => $appointment, 'milestone' => AppointmentNotificationMilestone::Received])->render();
-        $this->assertStringContainsString('<strong>Time:</strong> 10:30 AM', $email);
+        $email = app(AppointmentMessageFactory::class)->make($appointment, NotificationMilestone::AppointmentReceived);
+        $this->assertStringContainsString('Time: 10:30 AM', $email['body']);
+    }
+
+    public function test_missing_email_is_logged_as_skipped_without_failing_booking(): void
+    {
+        Queue::fake();
+        $this->post(route('appointments.store'), $this->payload(['email' => null]))->assertRedirect();
+        $this->assertDatabaseHas('customer_notification_deliveries', ['channel' => 'email', 'status' => 'skipped', 'failure_category' => 'missing_or_invalid_recipient']);
+    }
+
+    public function test_shared_delivery_job_sends_appointment_email_and_updates_log(): void
+    {
+        Queue::fake();
+        Mail::fake();
+        $this->post(route('appointments.store'), $this->payload())->assertRedirect();
+        $delivery = DB::table('customer_notification_deliveries')->where('channel', 'email')->first();
+
+        (new SendCustomerNotificationJob($delivery->id))->handle(
+            app(CustomerNotificationService::class),
+            app(CustomerMessageFactory::class),
+            app(DisabledWhatsAppChannel::class),
+        );
+
+        Mail::assertSent(CustomerMilestoneMail::class, fn ($mail) => str_contains($mail->messageData['body'], 'Time: 10:30 AM'));
+        $this->assertDatabaseHas('customer_notification_deliveries', ['id' => $delivery->id, 'status' => 'sent', 'provider' => config('mail.default')]);
     }
 
     public function test_exact_same_local_time_is_detected_as_a_conflict(): void
@@ -116,10 +147,13 @@ class AppointmentBookingTest extends TestCase
         $this->actingAs($admin)->post(route('admin.appointments.store'), $this->payload())->assertRedirect();
         $a = Appointment::sole();
         $this->patch(route('admin.appointments.transition', $a), ['status' => 'confirmed'])->assertRedirect();
+        $this->assertDatabaseHas('customer_notification_events', ['appointment_id' => $a->id, 'milestone' => 'appointment_confirmed']);
         $this->patch(route('admin.appointments.transition', $a), ['status' => 'rescheduled', 'appointment_date' => $this->date, 'appointment_time' => '14:30'])->assertRedirect();
+        $this->assertDatabaseHas('customer_notification_events', ['appointment_id' => $a->id, 'milestone' => 'appointment_rescheduled']);
         $this->assertSame('2026-08-17 14:30:00', DB::table('appointments')->where('id', $a->id)->value('scheduled_at'));
         $this->assertDatabaseHas('appointment_histories', ['appointment_id' => $a->id, 'action' => 'rescheduled', 'old_scheduled_at' => '2026-08-17 10:30:00', 'new_scheduled_at' => '2026-08-17 14:30:00']);
         $this->patch(route('admin.appointments.transition', $a), ['status' => 'cancelled', 'note' => 'Customer asked'])->assertRedirect();
+        $this->assertDatabaseHas('customer_notification_events', ['appointment_id' => $a->id, 'milestone' => 'appointment_cancelled']);
         $this->assertDatabaseHas('appointment_histories', ['appointment_id' => $a->id, 'action' => 'cancelled', 'note' => 'Customer asked']);
         $other = $this->createAppointment('APT/2026/999999', '12:00');
         $this->patch(route('admin.appointments.transition', $other), ['status' => 'completed'])->assertRedirect();
@@ -142,7 +176,23 @@ class AppointmentBookingTest extends TestCase
         $this->artisan('appointments:send-reminders')->assertSuccessful();
         $this->artisan('appointments:send-reminders')->assertSuccessful();
         $this->assertNotNull($due->fresh()->reminder_sent_at);
-        Queue::assertPushed(SendAppointmentNotificationJob::class, 1);
+        $this->assertDatabaseHas('customer_notification_events', ['appointment_id' => $due->id, 'milestone' => 'appointment_reminder', 'source_type' => 'appointment', 'source_id' => $due->id]);
+        $this->assertSame(1, DB::table('customer_notification_events')->where('appointment_id', $due->id)->where('milestone', 'appointment_reminder')->count());
+        Queue::assertPushed(SendCustomerNotificationJob::class, 2);
+    }
+
+    public function test_notification_log_identifies_and_filters_appointment_events(): void
+    {
+        Queue::fake();
+        $this->post(route('appointments.store'), $this->payload())->assertRedirect();
+        $appointment = Appointment::sole();
+        $admin = User::factory()->create(['role' => 'super_admin']);
+
+        $this->actingAs($admin)->get(route('admin.notifications.index', ['q' => $appointment->reference_no]))
+            ->assertOk()
+            ->assertSee($appointment->reference_no)
+            ->assertSee('Appointment Booking Received')
+            ->assertSee('Appointment');
     }
 
     private function payload(array $overrides = []): array
