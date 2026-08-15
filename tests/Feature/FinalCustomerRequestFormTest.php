@@ -51,7 +51,17 @@ class FinalCustomerRequestFormTest extends TestCase
             ->assertSee('id="any-one-required-documents"', false)
             ->assertSee('id="optional-documents"', false)
             ->assertSee('Any One Required')
-            ->assertSee('any_one_required');
+            ->assertSee('any_one_required')
+            ->assertSee('document-upload-sections', false)
+            ->assertSee('document-upload-grid', false)
+            ->assertSee('grid-template-columns:repeat(2,minmax(0,1fr))', false)
+            ->assertSee('@media(max-width:767px)', false)
+            ->assertSee('.document-upload-grid{grid-template-columns:1fr}', false)
+            ->assertSee('No file selected')
+            ->assertSee('selected-document-name', false)
+            ->assertSee('✓ Selected')
+            ->assertSee('Remove')
+            ->assertSee('Documents Selected');
 
         Storage::fake('local');
         $payload = $this->payload([$service->id]);

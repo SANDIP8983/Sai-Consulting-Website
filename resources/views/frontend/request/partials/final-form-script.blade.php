@@ -37,8 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function documentRow(item, label) {
         const li = document.createElement('li');
-        li.className = 'border rounded p-3 mb-2';
-        li.innerHTML = `<div class="d-flex justify-content-between gap-2 mb-2"><span><strong>${safe(item.gu)}</strong><small class="d-block text-muted">${safe(item.en)}</small></span><span class="badge ${label === 'Required' ? 'text-bg-danger' : label === 'Any One Required' ? 'text-bg-warning' : 'text-bg-secondary'} align-self-start">${label}</span></div><input class="form-control document-upload-input" type="file" name="document_uploads[${item.id}]" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" data-document-name="${safe(item.en)}" data-requirement-type="${item.type}" ${item.type === 'required' ? 'required' : ''}><div class="document-upload-status small text-muted mt-2">No file selected</div><button type="button" class="btn btn-sm btn-outline-secondary mt-2 d-none remove-document-upload">Remove</button>`;
+        li.className = 'document-upload-card';
+        li.innerHTML = `<div class="document-upload-name"><strong>${safe(item.gu)}</strong><small>${safe(item.en)}</small></div><span class="badge document-upload-badge ${label === 'Required' ? 'text-bg-danger' : label === 'Any One Required' ? 'text-bg-warning' : 'text-bg-secondary'}">${label}</span><input class="form-control document-upload-input" type="file" name="document_uploads[${item.id}]" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" data-document-name="${safe(item.en)}" data-document-name-gu="${safe(item.gu)}" data-requirement-type="${item.type}" ${item.type === 'required' ? 'required' : ''}><div class="document-upload-result"><div class="document-upload-status small text-muted"><span>No file selected</span></div><button type="button" class="btn btn-sm btn-outline-secondary d-none remove-document-upload">Remove</button></div>`;
         return li;
     }
 
@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const list = document.getElementById(id);
                 list.replaceChildren();
                 documents.forEach(item => list.append(documentRow(item, label)));
-                if (!documents.size) list.innerHTML = '<li class="text-muted">None configured</li>';
+                if (!documents.size) list.innerHTML = '<li class="document-empty-state">None configured</li>';
             });
     }
 
@@ -101,7 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!event.target.matches('.document-upload-input')) return;
         const file = event.target.files[0];
         const row = event.target.closest('li');
-        row.querySelector('.document-upload-status').innerHTML = file ? `<span class="text-success fw-semibold">✓ Selected</span> ${safe(file.name)}` : 'No file selected';
+        row.classList.toggle('is-selected', Boolean(file));
+        row.querySelector('.document-upload-status').innerHTML = file ? `<strong class="text-success">✓ Selected</strong><span class="selected-document-name">${safe(event.target.dataset.documentNameGu)} / ${safe(event.target.dataset.documentName)}</span><span class="selected-filename">${safe(file.name)}</span>` : '<span>No file selected</span>';
         row.querySelector('.remove-document-upload').classList.toggle('d-none', !file);
     });
     document.querySelector('[data-step="3"]').addEventListener('click', event => {
