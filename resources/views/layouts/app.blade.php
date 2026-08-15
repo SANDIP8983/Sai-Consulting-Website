@@ -24,7 +24,7 @@
         <meta property="og:site_name" content="Sai Consulting">
         @if($site['primaryLogoUrl'])<meta property="og:image" content="{{ \App\Support\Seo::route('branding.asset', 'primary-logo') }}">@endif
     @endif
-    <link rel="icon" href="{{ $site['faviconUrl'] ?: asset('favicon.ico') }}">
+    <link rel="icon" href="{{ $site['faviconUrl'] ?: asset('favicon.svg') }}">
     @stack('structured-data')
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">

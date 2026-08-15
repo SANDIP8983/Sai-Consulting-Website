@@ -4,12 +4,15 @@ namespace App\Services;
 
 use App\Enums\AppointmentStatus;
 use App\Enums\NotificationMilestone;
+use App\Mail\AdminAppointmentBookedMail;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Services\Notifications\AppointmentNotificationService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class AppointmentWorkflowService
@@ -31,6 +34,9 @@ class AppointmentWorkflowService
                 }
                 $a->histories()->create(['action' => 'created', 'new_status' => 'pending', 'new_scheduled_at' => $at, 'user_id' => $actor?->id]);
                 $this->notifications->afterCommit($a, NotificationMilestone::AppointmentReceived);
+                if ($source === 'online') {
+                    $this->notifyAdminAfterCommit($a);
+                }
 
                 return $a;
             });
@@ -55,6 +61,25 @@ class AppointmentWorkflowService
             };
             if ($milestone) {
                 $this->notifications->afterCommit($a, $milestone);
+            }
+        });
+    }
+
+    private function notifyAdminAfterCommit(Appointment $appointment): void
+    {
+        DB::afterCommit(function () use ($appointment): void {
+            $recipient = config('appointments.admin_notification_email');
+            if (! is_string($recipient) || ! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+                return;
+            }
+
+            try {
+                Mail::to($recipient)->queue(new AdminAppointmentBookedMail($appointment->fresh('service')));
+            } catch (\Throwable $exception) {
+                Log::error('Admin appointment notification could not be queued.', [
+                    'appointment_id' => $appointment->id,
+                    'exception' => $exception::class,
+                ]);
             }
         });
     }

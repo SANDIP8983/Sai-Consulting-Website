@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AppointmentStatus;
 use App\Enums\NotificationMilestone;
 use App\Jobs\SendCustomerNotificationJob;
+use App\Mail\AdminAppointmentBookedMail;
 use App\Mail\CustomerMilestoneMail;
 use App\Models\Appointment;
 use App\Models\AppointmentBlock;
@@ -62,6 +63,44 @@ class AppointmentBookingTest extends TestCase
         $this->assertDatabaseHas('customer_notification_events', ['appointment_id' => $a->id, 'request_id' => null, 'milestone' => 'appointment_received', 'source_type' => 'appointment', 'source_id' => $a->id]);
         $this->assertDatabaseHas('customer_notification_deliveries', ['channel' => 'email', 'status' => 'pending', 'recipient_masked' => 'c***@example.com']);
         Queue::assertPushed(SendCustomerNotificationJob::class, fn ($job) => $job->queue === config('customer-notifications.queue'));
+    }
+
+    public function test_success_page_requires_the_booking_session_and_does_not_accept_enumerable_references(): void
+    {
+        $appointment = Appointment::create([
+            'reference_no' => 'APT/2026/000001', 'customer_name' => 'Private Customer',
+            'mobile' => '9876543210', 'service_id' => $this->service->id,
+            'scheduled_at' => '2026-08-17 10:30', 'status' => AppointmentStatus::Pending,
+            'slot_key' => '2026-08-17 10:30',
+        ]);
+
+        $this->get(route('appointments.success', ['reference' => $appointment->reference_no]))
+            ->assertRedirect(route('appointments.create'))
+            ->assertDontSee('Private Customer');
+    }
+
+    public function test_public_booking_cannot_set_an_internal_admin_note(): void
+    {
+        Queue::fake();
+
+        $this->post(route('appointments.store'), [
+            ...$this->payload(),
+            'admin_note' => 'Customer-controlled internal note',
+        ])->assertRedirect(route('appointments.success'));
+
+        $this->assertNull(Appointment::sole()->admin_note);
+    }
+
+    public function test_public_booking_queues_admin_email_when_configured(): void
+    {
+        Queue::fake();
+        Mail::fake();
+        config()->set('appointments.admin_notification_email', 'office@example.com');
+
+        $this->post(route('appointments.store'), $this->payload())
+            ->assertRedirect(route('appointments.success'));
+
+        Mail::assertQueued(AdminAppointmentBookedMail::class, fn ($mail) => $mail->hasTo('office@example.com'));
     }
 
     public function test_public_slot_preserves_exact_asia_kolkata_business_time_everywhere(): void

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAppointmentRequest;
-use App\Models\Appointment;
 use App\Models\Service;
 use App\Services\AppointmentAvailabilityService;
 use App\Services\AppointmentWorkflowService;
@@ -29,17 +28,20 @@ class AppointmentController extends Controller
 
     public function store(StoreAppointmentRequest $request, AppointmentWorkflowService $workflow): RedirectResponse
     {
-        $a = $workflow->create($request->validated());
+        $appointment = $workflow->create($request->safe()->except(['admin_note']));
 
-        return to_route('appointments.success', ['reference' => $a->reference_no]);
+        return to_route('appointments.success')->with('submitted_appointment', [
+            'reference_no' => $appointment->reference_no,
+            'service_name' => $appointment->service->name_en,
+            'scheduled_at' => $appointment->scheduled_at->format('d M Y, g:i A'),
+            'status' => $appointment->status->value,
+        ]);
     }
 
-    public function success(Request $request): View
+    public function success(Request $request): View|RedirectResponse
     {
-        $reference = $request->string('reference')->toString();
-        abort_unless($reference, 404);
-        $a = Appointment::with('service')->where('reference_no', $reference)->firstOrFail();
-
-        return view('frontend.appointments.success', ['appointment' => $a]);
+        return $request->session()->has('submitted_appointment')
+            ? view('frontend.appointments.success')
+            : to_route('appointments.create');
     }
 }
