@@ -33,8 +33,10 @@ class ConfigurableBillingMigrationTest extends TestCase
         $this->assertStringNotContainsString('request_billing_government_charges_government_charge_type_id_foreign', $source);
         $this->assertStringContainsString('information_schema.tables', $source);
         $this->assertStringContainsString('information_schema.columns', $source);
-        $this->assertStringContainsString('information_schema.statistics', $source);
-        $this->assertStringContainsString('information_schema.key_column_usage', $source);
+        $this->assertStringContainsString('Schema::getIndexes($table)', $source);
+        $this->assertStringContainsString('Schema::getForeignKeys($table)', $source);
+        $this->assertStringNotContainsString('->non_unique', $source);
+        $this->assertStringNotContainsString('information_schema.statistics', $source);
         $this->assertStringContainsString('createTableSafely', $source);
         $this->assertStringContainsString('addColumnSafely', $source);
     }
@@ -73,7 +75,10 @@ class ConfigurableBillingMigrationTest extends TestCase
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->timestamps();
         });
-        Schema::table('request_billing_government_charges', fn (Blueprint $table) => $table->foreignId('government_charge_type_id')->nullable());
+        Schema::table('request_billing_government_charges', function (Blueprint $table): void {
+            $table->foreignId('government_charge_type_id')->nullable();
+            $table->index('government_charge_type_id', 'legacy_partial_type_idx');
+        });
 
         $base = Service::query()->create(['name_en' => 'Partial Base', 'name_gu' => 'Partial Base', 'slug' => 'partial-base']);
         $addOn = Service::query()->create(['name_en' => 'Partial Add-on', 'name_gu' => 'Partial Add-on', 'slug' => 'partial-add-on']);
@@ -85,6 +90,11 @@ class ConfigurableBillingMigrationTest extends TestCase
 
         $this->assertTrue(Schema::hasColumn('request_billing_government_charges', 'name_gu'));
         $this->assertTrue($this->hasForeignKey('request_billing_government_charges', ['government_charge_type_id'], 'government_charge_types'));
+        $this->assertTrue($this->hasIndex('request_billing_government_charges', ['government_charge_type_id']));
+        $this->assertTrue($this->hasIndex('service_add_ons', ['service_id', 'add_on_service_id'], true));
+        $this->assertTrue($this->hasIndex('government_charge_types', ['name_en'], true));
+        $this->assertTrue($this->hasForeignKey('service_add_ons', ['service_id'], 'services'));
+        $this->assertTrue($this->hasForeignKey('service_add_ons', ['add_on_service_id'], 'services'));
         $this->assertDatabaseHas('service_add_ons', ['service_id' => $base->id, 'add_on_service_id' => $addOn->id]);
         $this->assertDatabaseHas('government_charge_types', ['name_en' => 'Preserved Charge', 'default_amount' => 25]);
     }
@@ -93,6 +103,13 @@ class ConfigurableBillingMigrationTest extends TestCase
     {
         return collect(Schema::getForeignKeys($table))->contains(
             fn (array $key): bool => $key['columns'] === $columns && $key['foreign_table'] === $foreignTable
+        );
+    }
+
+    private function hasIndex(string $table, array $columns, bool $unique = false): bool
+    {
+        return collect(Schema::getIndexes($table))->contains(
+            fn (array $index): bool => $index['columns'] === $columns && (! $unique || $index['unique'])
         );
     }
 }

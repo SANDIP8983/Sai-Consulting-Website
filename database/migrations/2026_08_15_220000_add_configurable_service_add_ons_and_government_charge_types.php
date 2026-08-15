@@ -189,12 +189,7 @@ return new class extends Migration
 
     private function index(string $table, array $columns, bool $unique = false): ?array
     {
-        $indexes = DB::getDriverName() === 'mysql'
-            ? collect(DB::select('select index_name, non_unique, column_name, seq_in_index from information_schema.statistics where table_schema = database() and table_name = ? order by index_name, seq_in_index', [$table]))
-                ->groupBy('index_name')->map(fn ($rows, $name) => ['name' => $name, 'columns' => $rows->pluck('column_name')->all(), 'unique' => ! (bool) $rows->first()->non_unique])->values()
-            : collect(Schema::getIndexes($table));
-
-        return $indexes->first(
+        return collect(Schema::getIndexes($table))->first(
             fn (array $index): bool => $index['columns'] === $columns && (! $unique || $index['unique'])
         );
     }
@@ -223,12 +218,7 @@ return new class extends Migration
 
     private function foreignKey(string $table, array $columns, ?string $foreignTable = null): ?array
     {
-        $keys = DB::getDriverName() === 'mysql'
-            ? collect(DB::select('select constraint_name, referenced_table_name, column_name, ordinal_position from information_schema.key_column_usage where table_schema = database() and table_name = ? and referenced_table_name is not null order by constraint_name, ordinal_position', [$table]))
-                ->groupBy('constraint_name')->map(fn ($rows, $name) => ['name' => $name, 'columns' => $rows->pluck('column_name')->all(), 'foreign_table' => $rows->first()->referenced_table_name])->values()
-            : collect(Schema::getForeignKeys($table));
-
-        return $keys->first(
+        return collect(Schema::getForeignKeys($table))->first(
             fn (array $key): bool => $key['columns'] === $columns && ($foreignTable === null || $key['foreign_table'] === $foreignTable)
         );
     }
