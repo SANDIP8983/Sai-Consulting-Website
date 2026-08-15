@@ -6,6 +6,8 @@ use App\Models\CustomerRequest;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\RequestWorkflowService;
+use App\Support\IndiaDateTime;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -45,6 +47,40 @@ class ManualPaymentManagementTest extends TestCase
         $this->assertSame('awaiting_staff_assignment', $request->status);
         $this->assertSame('received', $request->payment_status);
         $this->assertDatabaseCount('request_payments', 2);
+    }
+
+    public function test_payment_datetime_defaults_to_india_time_and_round_trips_once_to_utc(): void
+    {
+        config(['app.timezone' => 'UTC', 'app.display_timezone' => 'Asia/Kolkata']);
+        CarbonImmutable::setTestNow('2026-08-15 12:55:00 UTC');
+        $admin = User::factory()->create();
+        $request = $this->request(['status' => 'approved', 'file_number' => 'SC/2026/F000001']);
+        $this->createFrozenBilling($request, 500);
+
+        $this->actingAs($admin)->get(route('admin.requests.show', $request))
+            ->assertOk()
+            ->assertSee('type="datetime-local" name="received_at" value="2026-08-15T18:25"', false)
+            ->assertSee('Payment Date (IST)')
+            ->assertSee('15 Aug 2026, 6:25 PM IST');
+
+        $this->actingAs($admin)->post(route('admin.requests.payments.store', $request), $this->paymentPayload([
+            'received_at' => '2026-08-15T18:25',
+        ]))->assertSessionHasNoErrors();
+
+        $payment = $request->payments()->sole();
+        $this->assertSame('2026-08-15 12:55:00', $payment->getRawOriginal('received_at'));
+        $this->assertSame('15 Aug 2026, 6:25 PM', IndiaDateTime::format($payment->received_at));
+        $this->actingAs($admin)->get(route('admin.requests.show', $request))->assertSee('15 Aug 2026, 6:25 PM IST');
+        CarbonImmutable::setTestNow();
+    }
+
+    public function test_date_only_values_are_not_shifted_by_ist_presentation(): void
+    {
+        config(['app.display_timezone' => 'Asia/Kolkata']);
+
+        $date = CarbonImmutable::parse('2026-08-15 00:00:00', 'Asia/Kolkata');
+        $this->assertSame('15 Aug 2026', $date->format('d M Y'));
+        $this->assertSame('Asia/Kolkata', IndiaDateTime::timezone());
     }
 
     public function test_invalid_status_and_method_are_rejected(): void

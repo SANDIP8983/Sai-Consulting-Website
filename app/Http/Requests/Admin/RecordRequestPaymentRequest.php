@@ -2,11 +2,22 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Support\IndiaDateTime;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class RecordRequestPaymentRequest extends FormRequest
 {
+    public function validated($key = null, $default = null)
+    {
+        $validated = parent::validated();
+        if (isset($validated['received_at'])) {
+            $validated['received_at'] = IndiaDateTime::localInputToStorage($validated['received_at']);
+        }
+
+        return $key === null ? $validated : data_get($validated, $key, $default);
+    }
+
     public function authorize(): bool
     {
         return $this->user() !== null;

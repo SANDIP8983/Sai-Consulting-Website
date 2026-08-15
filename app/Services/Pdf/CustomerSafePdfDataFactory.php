@@ -6,6 +6,7 @@ use App\Data\Pdf\PdfDocumentData;
 use App\Enums\PdfDocumentType;
 use App\Models\CustomerRequest;
 use App\Services\RequestBillingStateResolver;
+use App\Support\IndiaDateTime;
 use Illuminate\Support\Carbon;
 
 class CustomerSafePdfDataFactory
@@ -35,7 +36,7 @@ class CustomerSafePdfDataFactory
             'customer' => ['name' => $request->name, 'mobile' => $request->mobile, 'email' => $request->email, 'address' => $request->address],
             'request' => [
                 'status' => str($request->status)->headline()->toString(),
-                'submitted_at' => $request->created_at?->format('d M Y, g:i A'),
+                'submitted_at' => IndiaDateTime::format($request->created_at),
                 'estimated_completion_date' => $request->estimated_completion_date?->format('d M Y'),
                 'details' => $request->details,
                 'property' => collect([$request->property_village ?: $request->village, $request->property_taluka ?: $request->taluka, $request->property_district ?: $request->district])->filter()->implode(', '),
@@ -80,13 +81,13 @@ class CustomerSafePdfDataFactory
             'charges' => $billing->charges->map(fn ($charge) => ['name' => $charge->name, 'amount' => (float) $charge->amount])->all(),
         ] : ['grand_total' => $state->grandTotal, 'charges' => []],
             'payment_status' => str($state->paymentStatus)->headline()->toString(), 'amount_paid' => $state->confirmedPaidAmount,
-            'payments' => $request->payments()->latest('received_at')->get()->map(fn ($payment) => ['amount' => (float) $payment->amount, 'status' => str($payment->payment_status)->headline()->toString(), 'method' => str($payment->payment_method)->headline()->toString(), 'reference' => $payment->transaction_reference, 'received_at' => $payment->received_at?->format('d M Y, g:i A'), 'customer_remark' => $payment->customer_remark])->all(),
+            'payments' => $request->payments()->latest('received_at')->get()->map(fn ($payment) => ['amount' => (float) $payment->amount, 'status' => str($payment->payment_status)->headline()->toString(), 'method' => str($payment->payment_method)->headline()->toString(), 'reference' => $payment->transaction_reference, 'received_at' => IndiaDateTime::format($payment->received_at), 'customer_remark' => $payment->customer_remark])->all(),
         ];
     }
 
     private function caseSummary(CustomerRequest $request): array
     {
-        return [...$this->base($request), 'services' => $this->services($request), 'completion' => ['date' => $request->completed_at?->format('d M Y, g:i A'), 'customer_remark' => $request->completion_customer_remark], 'closure' => ['date' => $request->closed_at?->format('d M Y, g:i A'), 'customer_remark' => $request->closure_customer_remark], 'dispatches' => $this->safeDispatches($request)];
+        return [...$this->base($request), 'services' => $this->services($request), 'completion' => ['date' => IndiaDateTime::format($request->completed_at), 'customer_remark' => $request->completion_customer_remark], 'closure' => ['date' => IndiaDateTime::format($request->closed_at), 'customer_remark' => $request->closure_customer_remark], 'dispatches' => $this->safeDispatches($request)];
     }
 
     private function dispatch(CustomerRequest $request): array
@@ -98,11 +99,11 @@ class CustomerSafePdfDataFactory
     {
         return $request->dispatches()->latest('dispatch_date')->get()->map(fn ($dispatch) => [
             'method' => str($dispatch->dispatch_method)->headline()->toString(), 'status' => str($dispatch->dispatch_status)->headline()->toString(),
-            'dispatch_date' => $dispatch->dispatch_date?->format('d M Y, g:i A'), 'description' => $dispatch->document_description,
+            'dispatch_date' => IndiaDateTime::format($dispatch->dispatch_date), 'description' => $dispatch->document_description,
             'recipient_name' => $dispatch->recipient_name, 'recipient_mobile' => $dispatch->recipient_mobile, 'recipient_email' => $dispatch->recipient_email,
             'delivery_address' => $dispatch->delivery_address, 'carrier' => $dispatch->carrier_name, 'tracking_number' => $dispatch->tracking_number,
-            'tracking_url' => $dispatch->tracking_url, 'delivered_at' => $dispatch->delivered_at?->format('d M Y, g:i A'),
-            'collected_at' => $dispatch->collected_at?->format('d M Y, g:i A'), 'customer_remark' => $dispatch->customer_remark,
+            'tracking_url' => $dispatch->tracking_url, 'delivered_at' => IndiaDateTime::format($dispatch->delivered_at),
+            'collected_at' => IndiaDateTime::format($dispatch->collected_at), 'customer_remark' => $dispatch->customer_remark,
         ])->all();
     }
 }

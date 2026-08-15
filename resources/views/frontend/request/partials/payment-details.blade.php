@@ -9,7 +9,7 @@
         <div class="d-flex justify-content-between gap-3 py-2"><dt>Status</dt><dd class="mb-0 fw-semibold">{{ str($customerRequest->public_billing_state->paymentStatus)->replace('_', ' ')->title() }}</dd></div>
         @if($receivedPayment)
             <div class="d-flex justify-content-between gap-3 py-2 border-top"><dt>Method</dt><dd class="mb-0 fw-semibold">{{ str($receivedPayment->payment_method)->replace('_', ' ')->title() }}</dd></div>
-            <div class="d-flex justify-content-between gap-3 py-2"><dt>Payment Date</dt><dd class="mb-0 fw-semibold">{{ $receivedPayment->received_at->format('d M Y') }}</dd></div>
+            <div class="d-flex justify-content-between gap-3 py-2"><dt>Payment Date</dt><dd class="mb-0 fw-semibold">{{ \App\Support\IndiaDateTime::format($receivedPayment->received_at, 'd M Y') }}</dd></div>
         @endif
     </dl>
     @foreach($publicPaymentRemarks as $payment)

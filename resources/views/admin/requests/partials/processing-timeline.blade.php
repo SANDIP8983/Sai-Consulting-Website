@@ -50,7 +50,7 @@
 
         <div class="vstack gap-3 mt-4">
             @foreach($customerRequest->processingHistory as $history)
-                <article class="card border-0 border-start border-4 border-primary shadow-sm"><div class="card-body py-3"><div class="d-flex flex-column flex-md-row justify-content-between gap-2"><div><strong>{{ str($history->to_stage)->replace('_', ' ')->title() }}</strong><span class="badge text-bg-light border ms-1">{{ str($history->from_stage)->headline() }} → {{ str($history->to_stage)->headline() }}</span></div><time class="small text-muted">{{ $history->created_at->format('d M Y') }} · {{ $history->created_at->format('g:i A') }}</time></div><div class="small text-muted mt-1">Admin: {{ $history->changedBy?->name ?? 'System' }} · Action: Processing stage changed</div>@if($history->remarks)<p class="mb-0 mt-2">{{ $history->remarks }}</p>@endif</div></article>
+                <article class="card border-0 border-start border-4 border-primary shadow-sm"><div class="card-body py-3"><div class="d-flex flex-column flex-md-row justify-content-between gap-2"><div><strong>{{ str($history->to_stage)->replace('_', ' ')->title() }}</strong><span class="badge text-bg-light border ms-1">{{ str($history->from_stage)->headline() }} → {{ str($history->to_stage)->headline() }}</span></div><time class="small text-muted">{{ \App\Support\IndiaDateTime::format($history->created_at) }} IST</time></div><div class="small text-muted mt-1">Admin: {{ $history->changedBy?->name ?? 'System' }} · Action: Processing stage changed</div>@if($history->remarks)<p class="mb-0 mt-2">{{ $history->remarks }}</p>@endif</div></article>
             @endforeach
         </div>
     </div>
