@@ -39,13 +39,14 @@ class CasePlanningService
                 if ($decision === 'rejected' && $note === '') {
                     throw ValidationException::withMessages(["services.$id.decision_notes" => 'A rejection reason is required.']);
                 }
-                if ($decision === 'approved' && $scopeIds === [] && $custom === '') {
+                if ($decision === 'approved' && ! $row->isAddOn() && $scopeIds === [] && $custom === '') {
                     throw ValidationException::withMessages(["services.$id.work_scope_ids" => 'Select at least one work-scope item for each accepted service.']);
                 }
                 $row->update(['status' => $decision, 'decision_notes' => $note ?: null, 'customer_decision_message' => $input['customer_decision_message'] ?? null, 'decided_by' => $user->id, 'decided_at' => now(), 'approved_at' => $decision === 'approved' ? now() : null, 'rejected_at' => $decision === 'rejected' ? now() : null]);
                 $this->syncScopes($row, $decision, $scopeIds, $custom, $input, $user);
                 $row->approvalHistory()->create(['request_id' => $locked->id, 'approved_by' => $user->id, 'pricing_snapshot' => ['decision' => $decision, 'work_scope_ids' => $scopeIds, 'custom_work_item' => $custom ?: null], 'action' => 'decision', 'note' => $note ?: null]);
             }
+            $this->removeDuplicateAddOnScopes($locked);
             $from = $locked->status;
             $locked->unsetRelation('requestServices');
             $this->decisionNormalizer->normalize($locked, $user);
@@ -96,8 +97,8 @@ class CasePlanningService
             $locked = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
             $this->assertMutable($locked);
             $row = $locked->requestServices()->whereKey($requestService->id)->lockForUpdate()->firstOrFail();
-            if (! $row->is_admin_added || $row->status === 'approved' || $row->workScopes()->exists()) {
-                throw ValidationException::withMessages(['service' => 'Only an unfinalized Admin-added service can be removed. Reject it and clear its work scope first.']);
+            if (! $row->isAddOn()) {
+                throw ValidationException::withMessages(['service' => 'Only an additional paid service can be removed from the request.']);
             }
             $row->delete();
         });
@@ -123,7 +124,7 @@ class CasePlanningService
             if (in_array($locked->status, ['completed', 'dispatched', 'delivered', 'closed', 'archived'], true)) {
                 throw ValidationException::withMessages(['status' => 'This request is already completed or closed.']);
             }$accepted = $locked->requestServices()->where('status', 'approved')->with('workScopes')->get();
-            if ($accepted->isEmpty() || $accepted->contains(fn ($s) => $s->workScopes->isEmpty()) || $accepted->flatMap->workScopes->contains(fn ($s) => ! in_array($s->status, ['completed', 'not_required', 'cancelled'], true))) {
+            if ($accepted->isEmpty() || $accepted->contains(fn ($s) => ! $s->isAddOn() && $s->workScopes->isEmpty()) || $accepted->flatMap->workScopes->contains(fn ($s) => ! in_array($s->status, ['completed', 'not_required', 'cancelled'], true))) {
                 throw ValidationException::withMessages(['work_scopes' => 'All selected work-scope items must be Completed or Cancelled / Not Required.']);
             }$from = $locked->status;
             $locked->update(['status' => 'completed', 'last_status_changed_at' => now()]);
@@ -153,7 +154,16 @@ class CasePlanningService
             $row->workScopes()->delete();
 
             return;
-        }$items = WorkScopeItem::query()->where('is_active', true)->whereIn('id', $scopeIds)->get()->keyBy('id');
+        }
+        if ($row->isAddOn() && $scopeIds !== []) {
+            $existingRequestScopeIds = RequestServiceWorkScope::query()
+                ->whereHas('requestService', fn ($query) => $query->where('request_id', $row->request_id)->whereKeyNot($row->id)->where('status', 'approved'))
+                ->whereNotNull('work_scope_item_id')
+                ->pluck('work_scope_item_id')
+                ->all();
+            $scopeIds = array_values(array_diff($scopeIds, $existingRequestScopeIds));
+        }
+        $items = WorkScopeItem::query()->where('is_active', true)->whereIn('id', $scopeIds)->get()->keyBy('id');
         if ($items->count() !== count($scopeIds)) {
             throw ValidationException::withMessages(['work_scopes' => 'One or more work-scope items are unavailable.']);
         }$retained = [];
@@ -179,6 +189,21 @@ class CasePlanningService
         // audited pricing unlock deliberately makes the case editable again.
         if ($this->billingStateResolver->resolve($request)->pricingLocked) {
             throw ValidationException::withMessages(['case' => 'Payment-confirmed pricing is locked. Use the audited Unlock Pricing action before making changes.']);
+        }
+    }
+
+    private function removeDuplicateAddOnScopes(CustomerRequest $request): void
+    {
+        $baseScopeIds = RequestServiceWorkScope::query()
+            ->whereHas('requestService', fn ($query) => $query->where('request_id', $request->id)->where('is_admin_added', false)->where('status', 'approved'))
+            ->whereNotNull('work_scope_item_id')
+            ->pluck('work_scope_item_id');
+
+        if ($baseScopeIds->isNotEmpty()) {
+            RequestServiceWorkScope::query()
+                ->whereHas('requestService', fn ($query) => $query->where('request_id', $request->id)->where('is_admin_added', true)->where('status', 'approved'))
+                ->whereIn('work_scope_item_id', $baseScopeIds)
+                ->delete();
         }
     }
 }

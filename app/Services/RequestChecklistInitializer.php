@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CustomerRequest;
 use App\Models\RequestService;
+use App\Models\RequestServiceWorkScope;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -17,6 +18,19 @@ final class RequestChecklistInitializer
             ->filter(fn ($item): bool => $item->is_active && (bool) $item->pivot->is_default)
             ->values() ?? collect();
 
+        if ($requestService->isAddOn() && $defaults->isNotEmpty()) {
+            $existingRequestScopeIds = $requestService->request->requestServices()
+                ->whereKeyNot($requestService->id)
+                ->where('status', 'approved')
+                ->whereHas('workScopes')
+                ->with('workScopes:id,request_service_id,work_scope_item_id')
+                ->get()
+                ->flatMap->workScopes
+                ->pluck('work_scope_item_id')
+                ->filter();
+            $defaults = $defaults->whereNotIn('id', $existingRequestScopeIds)->values();
+        }
+
         foreach ($defaults as $order => $item) {
             $requestService->workScopes()->firstOrCreate(
                 ['work_scope_item_id' => $item->id],
@@ -29,6 +43,13 @@ final class RequestChecklistInitializer
                     'selected_by' => $user?->id,
                 ],
             );
+        }
+
+        if (! $requestService->isAddOn() && $defaults->isNotEmpty()) {
+            RequestServiceWorkScope::query()
+                ->whereHas('requestService', fn ($query) => $query->where('request_id', $requestService->request_id)->where('is_admin_added', true)->where('status', 'approved'))
+                ->whereIn('work_scope_item_id', $defaults->pluck('id'))
+                ->delete();
         }
 
         return $requestService->workScopes()->count();

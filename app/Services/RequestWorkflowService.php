@@ -264,7 +264,7 @@ class RequestWorkflowService
             if ($undecided->isNotEmpty()) {
                 throw ValidationException::withMessages(['pricing' => 'Accept or reject every selected service before freezing billing. Undecided: '.$undecided->implode(', ').'.']);
             }
-            if ($lockedRequest->usesChecklistWorkflow() && $services->contains(fn ($service) => ! $service->workScopes()->exists())) {
+            if ($lockedRequest->usesChecklistWorkflow() && $services->contains(fn ($service) => ! $service->isAddOn() && ! $service->workScopes()->exists())) {
                 throw ValidationException::withMessages(['pricing' => 'Every accepted service requires at least one selected work-scope item.']);
             }
             if ($lockedRequest->billing?->isLocked()) {
@@ -338,7 +338,19 @@ class RequestWorkflowService
 
     private function requestBillingSnapshot(RequestBilling $billing): array
     {
-        return [...$billing->only(['total_original_professional_fee', 'discount_type', 'discount_value', 'discount_amount', 'discount_reason', 'internal_note', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'applied_by', 'applied_at', 'pricing_locked_at']), 'government_charges' => $billing->charges->map->only(['name', 'amount', 'note', 'display_order'])->all()];
+        $services = $billing->request->requestServices()->where('status', 'approved')->orderBy('id')->get()->map(fn (RequestService $service): array => [
+            'request_service_id' => $service->id,
+            'service_id' => $service->service_id,
+            'billing_role' => $service->isAddOn() ? 'add_on' : 'base_service',
+            'name_en' => $service->service_name_en_snapshot,
+            'name_gu' => $service->service_name_gu_snapshot,
+            'default_professional_fee' => (float) ($service->original_professional_fee ?? 0),
+            'professional_fee' => $service->billingProfessionalFee(),
+            'gst_rate' => (float) $service->gst_rate,
+            'estimated_days' => $service->estimated_days,
+        ])->all();
+
+        return [...$billing->only(['total_original_professional_fee', 'discount_type', 'discount_value', 'discount_amount', 'discount_reason', 'internal_note', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'applied_by', 'applied_at', 'pricing_locked_at']), 'services' => $services, 'government_charges' => $billing->charges->map->only(['name', 'amount', 'note', 'display_order'])->all()];
     }
 
     public function addRemark(CustomerRequest $request, string $remarks, bool $visible, User $user): void

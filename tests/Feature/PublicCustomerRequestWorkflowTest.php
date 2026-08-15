@@ -32,6 +32,9 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee($request->reference_no)
             ->assertSee('Approximately 7 working day(s)')
+            ->assertSee('અમારી ટીમ અરજીની ચકાસણી કર્યા બાદ તમારો સંપર્ક કરશે.')
+            ->assertSee('Our team will contact you after reviewing your request.')
+            ->assertDontSee('જરૂરી હોય તો તમારો સંપર્ક કરશે.')
             ->assertSee('દર્શાવેલ સમય જરૂરી માહિતી અને દસ્તાવેજો ઉપલબ્ધ થયા પછીનો અંદાજિત કાર્ય સમય છે.');
         $this->assertNull($request->file_number);
     }

@@ -128,7 +128,7 @@ class CustomerRequestController extends Controller
     {
         $this->casePlanning->addService($customerRequest, (int) $request->validated('service_id'), (float) $request->validated('professional_fee'), $request->validated('internal_note'), $request->user());
 
-        return back()->with('success', 'Service added to the existing case without changing its reference number.');
+        return back()->with('success', 'Additional paid service added without changing the request reference number.');
     }
 
     public function updateServiceFee(UpdateRequestServiceFeeRequest $request, CustomerRequest $customerRequest, RequestService $requestService): RedirectResponse
@@ -142,7 +142,7 @@ class CustomerRequestController extends Controller
     {
         $this->casePlanning->removeService($customerRequest, $requestService);
 
-        return back()->with('success', 'Unfinalized Admin-added service removed.');
+        return back()->with('success', 'Additional paid service removed before pricing freeze.');
     }
 
     public function rejectCase(CustomerRequest $customerRequest): RedirectResponse

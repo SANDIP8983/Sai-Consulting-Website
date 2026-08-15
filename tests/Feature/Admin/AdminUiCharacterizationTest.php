@@ -67,7 +67,11 @@ class AdminUiCharacterizationTest extends TestCase
             ->assertSee('id="panel-customer" class="accordion-collapse collapse"', false)
             ->assertSee('aria-label="Request actions"', false)
             ->assertSee('Overall Progress')
-            ->assertSee('Activity History');
+            ->assertSee('6. Processing Checklist')
+            ->assertSee('7. Dispatch')
+            ->assertSee('8. Activity History')
+            ->assertDontSee('Processing Timeline')
+            ->assertDontSee('9. Activity History');
         $this->assertSame(1, substr_count($response->getContent(), 'accordion-collapse collapse show'));
     }
 

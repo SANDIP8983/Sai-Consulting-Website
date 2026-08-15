@@ -23,6 +23,16 @@ class RequestService extends Model
         return (float) ($this->original_professional_fee ?? $this->professional_fee ?? 0);
     }
 
+    public function isAddOn(): bool
+    {
+        return $this->is_admin_added;
+    }
+
+    public function billingRoleLabel(): string
+    {
+        return $this->isAddOn() ? 'Add-on / Additional Charge' : 'Base Service';
+    }
+
     public function request(): BelongsTo
     {
         return $this->belongsTo(CustomerRequest::class, 'request_id');

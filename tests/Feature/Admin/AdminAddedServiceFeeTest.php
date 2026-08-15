@@ -140,7 +140,7 @@ class AdminAddedServiceFeeTest extends TestCase
             ->assertDontSee('Private override rationale')->assertDontSee('Private Pricing Admin')->assertDontSee('Default Fee');
     }
 
-    public function test_duplicate_inactive_cross_request_edit_and_finalized_removal_are_rejected(): void
+    public function test_duplicate_inactive_and_cross_request_edits_are_rejected_but_unfrozen_add_on_can_be_removed(): void
     {
         [$request] = $this->requestCase();
         [$otherRequest] = $this->requestCase('SC/2026/810002', 'Other Primary Service');
@@ -154,8 +154,8 @@ class AdminAddedServiceFeeTest extends TestCase
         $added = $request->requestServices()->where('service_id', $service->id)->sole();
         $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$otherRequest, $added]), ['professional_fee' => 900])->assertNotFound();
         $added->update(['status' => 'approved']);
-        $this->actingAs($admin)->delete(route('admin.requests.services.remove', [$request, $added]))->assertSessionHasErrors('service');
-        $this->assertDatabaseHas('request_services', ['id' => $added->id]);
+        $this->actingAs($admin)->delete(route('admin.requests.services.remove', [$request, $added]))->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('request_services', ['id' => $added->id]);
     }
 
     private function requestCase(string $reference = 'SC/2026/810001', string $primaryName = 'Primary Service'): array

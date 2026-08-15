@@ -36,8 +36,8 @@ class ProcessingChecklistService
         if (! $request->file_number) {
             $reasons[] = 'A file number must be generated.';
         }
-        if ($accepted->isNotEmpty() && $accepted->contains(fn ($service) => $service->workScopes->isEmpty())) {
-            $reasons[] = 'Every accepted service must have selected work-scope items.';
+        if ($accepted->isNotEmpty() && $accepted->contains(fn ($service) => ! $service->isAddOn() && $service->workScopes->isEmpty())) {
+            $reasons[] = 'Every accepted base service must have selected included work-scope items.';
         }
         $paymentPending = $requiresPayment && $this->billingStateResolver->resolve($request)->paymentStatus !== 'paid';
         if ($paymentPending) {
