@@ -42,6 +42,7 @@ class ServiceManagementService
             $this->syncRequiredDocuments($service, $attributes['documents'] ?? []);
             $this->syncGovernmentCharges($service, $attributes['government_charge_items'] ?? []);
             $this->syncWorkScopeDefaults($service, $attributes['work_scope_item_ids'] ?? []);
+            $this->syncAvailableAddOns($service, $attributes['add_on_service_ids'] ?? []);
 
             return $service;
         });
@@ -57,6 +58,7 @@ class ServiceManagementService
             $this->syncRequiredDocuments($service, $attributes['documents'] ?? []);
             $this->syncGovernmentCharges($service, $attributes['government_charge_items'] ?? []);
             $this->syncWorkScopeDefaults($service, $attributes['work_scope_item_ids'] ?? []);
+            $this->syncAvailableAddOns($service, $attributes['add_on_service_ids'] ?? []);
         });
     }
 
@@ -126,7 +128,8 @@ class ServiceManagementService
             ]);
             $attributes = [
                 ...Arr::only($document, ['name_en', 'name_gu', 'allowed_file_types', 'max_upload_size_kb', 'sort_order']),
-                'is_mandatory' => (bool) ($document['is_mandatory'] ?? true),
+                'requirement_type' => $document['requirement_type'] ?? ((bool) ($document['is_mandatory'] ?? false) ? 'required' : 'optional'),
+                'is_mandatory' => ($document['requirement_type'] ?? null) === 'required' || (bool) ($document['is_mandatory'] ?? false),
                 'common_required_document_id' => $master->id,
                 'allowed_file_types' => $document['allowed_file_types'] ?? ['pdf', 'jpg', 'jpeg', 'png'],
                 'max_upload_size_kb' => $document['max_upload_size_kb'] ?? 10240,
@@ -177,6 +180,13 @@ class ServiceManagementService
     private function syncWorkScopeDefaults(Service $service, array $ids): void
     {
         $service->defaultWorkScopes()->sync(collect($ids)->values()->mapWithKeys(fn ($id, $order) => [(int) $id => ['is_default' => true, 'display_order' => $order + 1]])->all());
+    }
+
+    private function syncAvailableAddOns(Service $service, array $ids): void
+    {
+        $ids = collect($ids)->map('intval')->reject(fn (int $id) => $id === $service->id)->unique()->values();
+        $valid = Service::query()->whereIn('id', $ids)->pluck('id');
+        $service->availableAddOns()->sync($valid->mapWithKeys(fn (int $id, int $order) => [$id => ['is_active' => true, 'sort_order' => $order + 1]])->all());
     }
 
     private function uniqueSlug(string $name): string

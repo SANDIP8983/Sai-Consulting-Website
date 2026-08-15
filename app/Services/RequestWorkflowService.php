@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\NotificationMilestone;
 use App\Models\CustomerRequest;
+use App\Models\GovernmentChargeType;
 use App\Models\RequestBilling;
 use App\Models\RequestService;
 use App\Models\Service;
@@ -276,7 +277,12 @@ class RequestWorkflowService
             if ($type === 'percentage' && $value > 100) {
                 throw ValidationException::withMessages(['discount_value' => 'Percentage discount must be between 0 and 100.']);
             }
-            $charges = collect($attributes['government_charges'] ?? [])->map(fn ($charge, $index) => ['name' => $charge['name'], 'amount' => round((float) $charge['amount'], 2), 'note' => $charge['note'] ?? null, 'display_order' => (int) ($charge['display_order'] ?? $index)])->values();
+            $types = GovernmentChargeType::query()->whereIn('id', collect($attributes['government_charges'] ?? [])->pluck('government_charge_type_id')->filter())->get()->keyBy('id');
+            $charges = collect($attributes['government_charges'] ?? [])->map(function ($charge, $index) use ($types): array {
+                $type = $types->get((int) ($charge['government_charge_type_id'] ?? 0));
+
+                return ['government_charge_type_id' => $type?->id, 'name' => $type?->name_en ?? trim((string) ($charge['name'] ?? 'Other')), 'name_gu' => $type?->name_gu, 'amount' => round((float) $charge['amount'], 2), 'note' => $charge['note'] ?? null, 'display_order' => (int) ($charge['display_order'] ?? $index)];
+            })->values();
             try {
                 $calculation = $this->billingCalculator->calculate($services, $type, $value, (float) $attributes['gst_rate'], $charges->all());
             } catch (\InvalidArgumentException $exception) {
@@ -350,7 +356,7 @@ class RequestWorkflowService
             'estimated_days' => $service->estimated_days,
         ])->all();
 
-        return [...$billing->only(['total_original_professional_fee', 'discount_type', 'discount_value', 'discount_amount', 'discount_reason', 'internal_note', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'applied_by', 'applied_at', 'pricing_locked_at']), 'services' => $services, 'government_charges' => $billing->charges->map->only(['name', 'amount', 'note', 'display_order'])->all()];
+        return [...$billing->only(['total_original_professional_fee', 'discount_type', 'discount_value', 'discount_amount', 'discount_reason', 'internal_note', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'applied_by', 'applied_at', 'pricing_locked_at']), 'services' => $services, 'government_charges' => $billing->charges->map->only(['government_charge_type_id', 'name', 'name_gu', 'amount', 'note', 'display_order'])->all()];
     }
 
     public function addRemark(CustomerRequest $request, string $remarks, bool $visible, User $user): void

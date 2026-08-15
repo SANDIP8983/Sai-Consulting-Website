@@ -10,8 +10,8 @@
 </div>
 
 <hr class="my-4">
-<h2 class="h5 mb-3">Default Suggested Work Scope</h2>
-<p class="small text-muted">Only explicitly selected items are suggested when this service is accepted. Admin can change them for each case.</p>
+<h2 class="h5 mb-3">Included Work Scope</h2>
+<p class="small text-muted">Included in the base professional fee. Selected items feed the Processing Checklist and are snapshotted for each approved request.</p>
 @php($selectedScopeIds = array_map('intval', old('work_scope_item_ids', $service?->defaultWorkScopes?->pluck('id')->all() ?? [])))
 <div class="row g-2 mb-4">@foreach($workScopeItems as $scope)<div class="col-md-6 col-xl-4"><label class="form-check border rounded p-3 h-100"><input class="form-check-input" type="checkbox" name="work_scope_item_ids[]" value="{{ $scope->id }}" @checked(in_array($scope->id,$selectedScopeIds,true))><span class="form-check-label ms-1"><strong>{{ $scope->name_en }}</strong><small class="d-block text-muted">{{ $scope->name_gu }}</small></span></label></div>@endforeach</div>
 <hr class="my-4">

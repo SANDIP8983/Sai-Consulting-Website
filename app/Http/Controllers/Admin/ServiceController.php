@@ -25,7 +25,7 @@ class ServiceController extends Controller
 
     public function create(): View
     {
-        return view('admin.services.create', ['workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->get()]);
+        return view('admin.services.create', $this->formData());
     }
 
     public function store(StoreServiceRequest $request): RedirectResponse
@@ -37,9 +37,9 @@ class ServiceController extends Controller
 
     public function edit(Service $service): View
     {
-        $service->load(['requiredDocuments', 'governmentChargeItems', 'defaultWorkScopes']);
+        $service->load(['requiredDocuments', 'governmentChargeItems', 'defaultWorkScopes', 'availableAddOns']);
 
-        return view('admin.services.edit', ['service' => $service, 'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->get()]);
+        return view('admin.services.edit', ['service' => $service, ...$this->formData($service)]);
     }
 
     public function update(UpdateServiceRequest $request, Service $service): RedirectResponse
@@ -56,5 +56,13 @@ class ServiceController extends Controller
         }
 
         return to_route('admin.services.index')->with('success', 'Service deleted successfully.');
+    }
+
+    private function formData(?Service $service = null): array
+    {
+        return [
+            'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->get(),
+            'addOnServices' => Service::query()->where('is_active', true)->when($service, fn ($query) => $query->whereKeyNot($service->id))->orderBy('name_en')->get(),
+        ];
     }
 }

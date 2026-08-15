@@ -20,6 +20,7 @@ class PaidAddOnWorkflowTest extends TestCase
         $addOnWork = $this->scope('Title Verification');
         $base = $this->service('Sale Deed', 1999, [$included]);
         $addOn = $this->service('Title Verification', 2499, [$addOnWork]);
+        $base->availableAddOns()->attach($addOn);
         [$request, $baseRow] = $this->requestWithBase($base);
 
         $this->approve($admin, $request, $baseRow);
@@ -69,6 +70,7 @@ class PaidAddOnWorkflowTest extends TestCase
         $base = $this->service('Base Service', 1000, [$this->scope('Base Work')]);
         $first = $this->service('GARVI Work', 500);
         $second = $this->service('Registration Preparation', 700);
+        $base->availableAddOns()->attach([$first->id, $second->id]);
         [$request, $baseRow] = $this->requestWithBase($base);
         $this->approve($admin, $request, $baseRow);
 
@@ -95,6 +97,7 @@ class PaidAddOnWorkflowTest extends TestCase
         $unique = $this->scope('Final Title Report');
         $base = $this->service('Sale Deed', 1999, [$shared]);
         $addOn = $this->service('Title Report', 2499, [$shared, $unique]);
+        $base->availableAddOns()->attach($addOn);
         [$request, $baseRow] = $this->requestWithBase($base);
         $this->actingAs($admin)->post(route('admin.requests.services.add', $request), ['service_id' => $addOn->id, 'professional_fee' => 2499])->assertSessionHasNoErrors();
         $addOnRow = $request->requestServices()->where('service_id', $addOn->id)->sole();
@@ -121,6 +124,7 @@ class PaidAddOnWorkflowTest extends TestCase
         $first = $this->service('Sale Deed', 1999, [$this->scope('Draft')]);
         $second = $this->service('Legal Consulting', 1499, [$this->scope('Guidance')]);
         $addOn = $this->service('Token Booking', 399);
+        $first->availableAddOns()->attach($addOn);
         [$request, $firstRow] = $this->requestWithBase($first);
         $secondRow = $request->requestServices()->create($this->serviceSnapshot($second));
         $this->approve($admin, $request, $firstRow);

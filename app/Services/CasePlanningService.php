@@ -66,6 +66,10 @@ class CasePlanningService
             $locked = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
             $this->assertMutable($locked);
             $service = Service::query()->with('activeRequiredDocuments')->where('is_active', true)->findOrFail($serviceId);
+            $configured = $locked->requestServices()->where('is_admin_added', false)->whereHas('service.activeAvailableAddOns', fn ($query) => $query->whereKey($service->id))->exists();
+            if (! $configured) {
+                throw ValidationException::withMessages(['service_id' => 'This additional paid service is not configured for the selected base services.']);
+            }
             if ($locked->requestServices()->where('service_id', $service->id)->exists()) {
                 throw ValidationException::withMessages(['service_id' => 'This service is already part of the request.']);
             }$row = $locked->requestServices()->create(['service_id' => $service->id, 'added_by' => $user->id, 'is_admin_added' => true, 'service_name_en_snapshot' => $service->name_en, 'service_name_gu_snapshot' => $service->name_gu, 'professional_fee' => round($professionalFee, 2), 'original_professional_fee' => $service->service_fee ?? 0, 'gst_rate' => $service->gst_rate ?? 0, 'government_charges' => 0, 'government_charges_snapshot' => [], 'estimated_days' => $service->estimated_days, 'required_documents_snapshot' => $service->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'requirement_type', 'is_mandatory', 'sort_order'])->values()->all(), 'status' => 'under_review', 'internal_note' => $internalNote]);

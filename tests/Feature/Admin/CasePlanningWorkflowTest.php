@@ -57,6 +57,7 @@ class CasePlanningWorkflowTest extends TestCase
         $admin = User::factory()->create();
         [$request] = $this->case();
         $added = $this->service('Added');
+        $request->requestServices()->firstOrFail()->service->availableAddOns()->attach($added);
         $reference = $request->reference_no;
         $this->actingAs($admin)->post(route('admin.requests.services.add', $request), ['service_id' => $added->id, 'professional_fee' => 1000])->assertSessionHasNoErrors();
         $this->assertSame($reference, $request->fresh()->reference_no);

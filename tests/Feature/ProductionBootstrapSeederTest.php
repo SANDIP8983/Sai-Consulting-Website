@@ -59,10 +59,10 @@ class ProductionBootstrapSeederTest extends TestCase
 
         $this->assertDatabaseCount('users', 1);
         $this->assertSame(1, User::query()->where('role', 'super_admin')->where('is_active', true)->count());
-        $this->assertDatabaseCount('services', 13);
-        $this->assertSame(13, Service::query()->where('gst_rate', 18)->where('advance_percentage', 100)->count());
+        $this->assertDatabaseCount('services', 15);
+        $this->assertSame(15, Service::query()->where('gst_rate', 18)->where('advance_percentage', 100)->count());
         $this->assertDatabaseCount('common_required_documents', 18);
-        $this->assertDatabaseCount('service_required_documents', 234);
+        $this->assertDatabaseCount('service_required_documents', 270);
         $this->assertSame(18, CommonRequiredDocument::query()->whereNotNull('code')->distinct()->count('code'));
         $this->assertSame(0, CommonRequiredDocument::query()->whereNull('code')->count());
         $this->assertSame('required', $configured->fresh()->requirement_type);
@@ -72,7 +72,7 @@ class ProductionBootstrapSeederTest extends TestCase
         }
         $this->assertDatabaseCount('work_scope_items', 14);
         $this->assertEqualsCanonicalizing(self::CURRENT_SCOPES, WorkScopeItem::query()->pluck('normalized_name')->all());
-        $this->assertDatabaseCount('service_work_scope_defaults', 46);
+        $this->assertDatabaseCount('service_work_scope_defaults', 54);
         $this->assertDatabaseCount('settings', 54);
         $this->assertSame(32, Setting::query()->where('setting_group', 'customer_notifications')->count());
         $this->assertSame(22, Setting::query()->where('setting_group', '!=', 'customer_notifications')->count());

@@ -93,6 +93,17 @@ class Service extends Model
         return $this->hasMany(ServiceGovernmentCharge::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function availableAddOns(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'service_add_ons', 'service_id', 'add_on_service_id')
+            ->withPivot(['is_active', 'sort_order'])->withTimestamps()->orderByPivot('sort_order');
+    }
+
+    public function activeAvailableAddOns(): BelongsToMany
+    {
+        return $this->availableAddOns()->wherePivot('is_active', true)->where('services.is_active', true);
+    }
+
     public function activeGovernmentChargeItems(): HasMany
     {
         return $this->hasMany(ServiceGovernmentCharge::class)->where('is_active', true)->orderBy('sort_order')->orderBy('id');

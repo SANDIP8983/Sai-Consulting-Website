@@ -184,6 +184,9 @@ class AdminAddedServiceFeeTest extends TestCase
 
     private function service(string $name, float $fee, bool $active = true): Service
     {
-        return Service::query()->create(['name_en' => $name, 'name_gu' => $name, 'slug' => str($name)->slug().'-'.fake()->unique()->numberBetween(1, 99999), 'service_fee' => $fee, 'gst_rate' => 18, 'estimated_days' => 5, 'is_active' => $active, 'available_online' => true, 'available_offline' => true]);
+        $service = Service::query()->create(['name_en' => $name, 'name_gu' => $name, 'slug' => str($name)->slug().'-'.fake()->unique()->numberBetween(1, 99999), 'service_fee' => $fee, 'gst_rate' => 18, 'estimated_days' => 5, 'is_active' => $active, 'available_online' => true, 'available_offline' => true]);
+        Service::query()->whereKeyNot($service->id)->get()->each(fn (Service $base) => $base->availableAddOns()->syncWithoutDetaching($service->id));
+
+        return $service;
     }
 }

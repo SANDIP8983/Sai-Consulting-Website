@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RequestBillingGovernmentCharge extends Model
 {
-    protected $fillable = ['name', 'amount', 'note', 'display_order'];
+    protected $fillable = ['government_charge_type_id', 'name', 'name_gu', 'amount', 'note', 'display_order'];
 
     protected function casts(): array
     {
@@ -17,5 +17,10 @@ class RequestBillingGovernmentCharge extends Model
     public function billing(): BelongsTo
     {
         return $this->belongsTo(RequestBilling::class, 'request_billing_id');
+    }
+
+    public function type(): BelongsTo
+    {
+        return $this->belongsTo(GovernmentChargeType::class, 'government_charge_type_id');
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\CommonRequiredDocumentController;
 use App\Http\Controllers\Admin\CustomerNotificationLogController;
 use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequestController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\GovernmentChargeTypeController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\RequestAssignmentController;
 use App\Http\Controllers\Admin\RequestDispatchController;
@@ -192,6 +193,12 @@ Route::middleware(['auth', 'active', 'can:services.manage'])
         Route::put('/{service}', 'update')->name('update');
         Route::delete('/{service}', 'destroy')->name('destroy');
     });
+
+Route::middleware(['auth', 'active', 'can:services.manage'])->prefix('admin/government-charge-types')->name('admin.government-charge-types.')->controller(GovernmentChargeTypeController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::post('/', 'store')->name('store');
+    Route::put('/{governmentChargeType}', 'update')->name('update');
+});
 
 Route::middleware(['auth', 'active', 'can:documents.manage'])->prefix('admin/required-documents')->name('admin.required-documents.')->controller(ServiceRequiredDocumentController::class)->group(function () {
     Route::get('/', 'index')->name('index');

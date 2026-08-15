@@ -14,6 +14,8 @@ class ProductionBootstrapSeeder extends Seeder
             SubRegistrarTokenBookingServiceSeeder::class,
             ServiceCommercialConfigurationSeeder::class,
             CentralRequiredDocumentsSeeder::class,
+            SaleDeedServiceConfigurationSeeder::class,
+            GovernmentChargeTypeSeeder::class,
             ProductionSettingsSeeder::class,
             OfficeTimingsSeeder::class,
             NotificationSettingsSeeder::class,

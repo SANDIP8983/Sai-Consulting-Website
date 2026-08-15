@@ -20,6 +20,7 @@ use App\Http\Requests\Admin\UpdateRequestFinalFeeRequest;
 use App\Http\Requests\Admin\UpdateRequestServiceFeeRequest;
 use App\Http\Requests\Admin\UpdateWorkScopeStatusRequest;
 use App\Models\CustomerRequest;
+use App\Models\GovernmentChargeType;
 use App\Models\RequestService;
 use App\Models\RequestServiceWorkScope;
 use App\Models\Service;
@@ -87,7 +88,10 @@ class CustomerRequestController extends Controller
             'fileInChargeUsers' => User::query()->where('is_active', true)->whereIn('role', ['admin', 'staff'])->orderBy('name')->get(['id', 'name']),
             'assignableUsers' => User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'role', 'is_active'])->filter(fn (User $user): bool => $user->hasPermission('processing.manage')),
             'workScopeItems' => WorkScopeItem::query()->where('is_active', true)->orderBy('display_order')->orderBy('name_en')->get(),
-            'availableServices' => Service::query()->where('is_active', true)->whereNotIn('id', $customerRequest->requestServices->pluck('service_id'))->orderBy('name_en')->get(['id', 'name_en', 'name_gu', 'service_fee', 'gst_rate', 'estimated_days']),
+            'availableServices' => Service::query()->whereIn('id', function ($query) use ($customerRequest): void {
+                $query->select('service_add_ons.add_on_service_id')->from('service_add_ons')->join('request_services', 'request_services.service_id', '=', 'service_add_ons.service_id')->where('request_services.request_id', $customerRequest->id)->where('request_services.is_admin_added', false)->where('service_add_ons.is_active', true);
+            })->where('is_active', true)->whereNotIn('id', $customerRequest->requestServices->pluck('service_id'))->orderBy('name_en')->get(['id', 'name_en', 'name_gu', 'service_fee', 'gst_rate', 'estimated_days']),
+            'governmentChargeTypes' => GovernmentChargeType::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name_en')->get(),
             'processingEligibility' => $this->checklist->eligibility($customerRequest),
             'dispatchEligibility' => app(DispatchManagementService::class)->eligibility($customerRequest),
             'closeEligibility' => app(DispatchManagementService::class)->closeEligibility($customerRequest),

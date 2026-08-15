@@ -52,6 +52,8 @@ class StoreServiceRequest extends FormRequest
             'requires_certified_copy' => ['nullable', 'boolean'],
             'work_scope_item_ids' => ['nullable', 'array', 'max:30'],
             'work_scope_item_ids.*' => ['integer', 'distinct', 'exists:work_scope_items,id'],
+            'add_on_service_ids' => ['nullable', 'array', 'max:100'],
+            'add_on_service_ids.*' => ['integer', 'distinct', 'exists:services,id', Rule::notIn([(int) ($this->route('service')?->id ?? 0)])],
             'documents' => ['nullable', 'array', 'max:30'],
             'documents.*.id' => ['nullable', 'integer'],
             'documents.*.name_en' => ['required_with:documents', 'string', 'max:150', function (string $attribute, mixed $value, \Closure $fail): void {
@@ -61,6 +63,7 @@ class StoreServiceRequest extends FormRequest
             }],
             'documents.*.name_gu' => ['required_with:documents', 'string', 'max:150'],
             'documents.*.is_mandatory' => ['nullable', 'boolean'],
+            'documents.*.requirement_type' => ['nullable', Rule::in(['required', 'any_one_required', 'optional', 'not_applicable'])],
             'documents.*.allowed_file_types' => ['nullable', 'array', 'max:10'],
             'documents.*.allowed_file_types.*' => ['string', Rule::in(['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'])],
             'documents.*.max_upload_size_kb' => ['nullable', 'integer', 'min:1', 'max:51200'],
