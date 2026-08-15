@@ -6,6 +6,8 @@ use App\Models\CustomerRequest;
 use App\Models\Service;
 use App\Models\User;
 use App\Models\WorkScopeItem;
+use App\Support\IndiaDateTime;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -29,6 +31,43 @@ class ProcessingWorkChecklistTest extends TestCase
         $scope->update(['internal_note' => 'private processing note', 'customer_remark' => 'Customer update']);
         $this->actingAs($admin)->get(route('admin.requests.show', $request))->assertOk()->assertSee('Processing &amp; Work Checklist', false)->assertSee('Drafting');
         $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])->assertOk()->assertDontSee('Drafting')->assertSee('Customer update')->assertDontSee('private processing note')->assertDontSee('Unselected Review');
+    }
+
+    public function test_work_item_and_processing_history_timestamps_display_in_ist_once(): void
+    {
+        config(['app.timezone' => 'UTC', 'app.display_timezone' => 'Asia/Kolkata']);
+        [$admin, $request,, $scope] = $this->planned(false, true);
+        $scope->forceFill([
+            'started_at' => '2026-08-15 13:27:00',
+            'completed_at' => '2026-08-15 14:00:00',
+            'status' => 'completed',
+        ])->save();
+        $scopeHistory = $scope->history()->create([
+            'request_id' => $request->id,
+            'action' => 'status_changed',
+            'from_status' => 'in_progress',
+            'to_status' => 'completed',
+            'changed_by' => $admin->id,
+        ]);
+        $scopeHistory->forceFill(['created_at' => '2026-08-15 14:30:00'])->save();
+        $processingHistory = $request->processingHistory()->create([
+            'to_stage' => 'completed',
+            'remarks' => 'Processing completed',
+            'changed_by' => $admin->id,
+        ]);
+        $processingHistory->forceFill(['created_at' => '2026-08-15 15:00:00'])->save();
+
+        $this->actingAs($admin)->get(route('admin.requests.show', $request))
+            ->assertOk()
+            ->assertSee('15 Aug 2026, 6:57 PM IST')
+            ->assertSee('15 Aug 2026, 7:30 PM IST')
+            ->assertSee('15 Aug 2026, 8:00 PM IST')
+            ->assertSee('15 Aug 2026, 8:30 PM IST');
+
+        $instant = CarbonImmutable::parse('2026-08-15 13:27:00', 'UTC');
+        $this->assertSame('15 Aug 2026, 6:57 PM', IndiaDateTime::format($instant));
+        $this->assertSame('15 Aug 2026, 6:57 PM', IndiaDateTime::format($instant->setTimezone('Asia/Kolkata')));
+        $this->assertSame('2026-08-15', CarbonImmutable::create(2026, 8, 15)->toDateString());
     }
 
     public function test_not_required_requires_reason_and_completed_item_requires_audited_reopen(): void
