@@ -23,6 +23,9 @@ class StoreCustomerRequestRequest extends FormRequest
         $publicRestrictions = PublicDocumentPolicy::restrictionsForServices($services);
         $configuredTypes = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: PublicDocumentPolicy::ALLOWED_EXTENSIONS;
         $configuredMaximumSize = $services->flatMap->activeRequiredDocuments->max('max_upload_size_kb') ?: PublicDocumentPolicy::MAX_SIZE_KILOBYTES;
+        $minimumUploads = $this->availabilityColumn() === 'available_online'
+            ? $this->minimumRequiredUploads($services)
+            : 0;
         $fileRules = $this->availabilityColumn() === 'available_online'
             ? ['mimetypes:'.implode(',', PublicDocumentPolicy::ALLOWED_MIME_TYPES), 'max:'.$publicRestrictions['max_kilobytes']]
             : ['mimes:'.implode(',', $configuredTypes), 'max:'.$configuredMaximumSize];
@@ -46,7 +49,7 @@ class StoreCustomerRequestRequest extends FormRequest
             'final_plot_number' => ['nullable', 'string', 'max:100'],
             'revenue_village' => ['nullable', 'string', 'max:150'],
             'details' => ['nullable', 'string', 'max:2000'],
-            'documents' => ['nullable', 'array', 'max:10'],
+            'documents' => [$minimumUploads > 0 ? 'required' : 'nullable', 'array', 'min:'.$minimumUploads, 'max:10'],
             'documents.*' => ['required', 'file', ...$fileRules, function (string $attribute, mixed $value, \Closure $fail) use ($publicRestrictions): void {
                 if ($this->availabilityColumn() !== 'available_online' || ! $value instanceof UploadedFile) {
                     return;
@@ -79,12 +82,25 @@ class StoreCustomerRequestRequest extends FormRequest
         return 'available_online';
     }
 
+    private function minimumRequiredUploads($services): int
+    {
+        $documents = $services->flatMap->activeRequiredDocuments;
+        $required = $documents
+            ->where('requirement_type', 'required')
+            ->unique(fn ($document) => $document->common_required_document_id
+                ? 'common:'.$document->common_required_document_id
+                : 'name:'.str($document->name_en)->lower()->squish());
+
+        return $required->count() + ($documents->contains('requirement_type', 'any_one_required') ? 1 : 0);
+    }
+
     public function messages(): array
     {
         return [
             'mobile.digits' => 'Mobile number must contain exactly 10 digits. / મોબાઇલ નંબર બરાબર 10 અંકનો હોવો જોઈએ.',
             'documents.required' => 'Please upload at least one document. / ઓછામાં ઓછો એક દસ્તાવેજ અપલોડ કરો.',
             'documents.max' => 'You may upload a maximum of 10 files. / વધુમાં વધુ 10 ફાઇલ અપલોડ કરી શકો.',
+            'documents.min' => 'Please upload the configured required documents. / કૃપા કરીને ગોઠવેલા જરૂરી દસ્તાવેજો અપલોડ કરો.',
             'documents.*.mimetypes' => 'Only valid PDF, JPG, JPEG and PNG files are allowed. / માત્ર માન્ય PDF, JPG, JPEG અને PNG ફાઇલ માન્ય છે.',
             'documents.*.max' => 'Each file may be no larger than 10 MB. / દરેક ફાઇલ મહત્તમ 10 MB હોવી જોઈએ.',
             'declaration.accepted' => 'You must accept the declaration. / કૃપા કરીને ઘોષણા સ્વીકારો.',

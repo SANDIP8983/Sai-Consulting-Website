@@ -21,7 +21,7 @@ class ServiceSeeder extends Seeder
             ['name_en' => 'Mortgage Release', 'name_gu' => 'ગીરો મુક્ત', 'slug' => 'mortgage-release'],
             ['name_en' => 'Banakhat (Agreement to Sell)', 'name_gu' => 'બાનાખત', 'slug' => 'banakhat-agreement-to-sell'],
             ['name_en' => 'Sub Registrar Office Token Booking', 'name_gu' => 'સબ રજિસ્ટ્રાર કચેરી માટે ગરવી પોર્ટલ ટોકન બુકિંગ', 'slug' => 'sub-registrar-office-token-booking'],
-            ['name_en' => 'Legal Consulting', 'name_gu' => 'લીગલ કન્સલ્ટિંગ', 'slug' => 'legal-consulting', 'aliases' => ['legal-documentation-consulting'], 'names' => ['Legal & Documentation Consulting']],
+            ['name_en' => 'Legal Consulting', 'name_gu' => 'લીગલ કન્સલ્ટિંગ', 'slug' => 'legal-consulting', 'aliases' => ['legal-documentation-consulting'], 'names' => ['Legal & Documentation Consulting'], 'requires_property_documents' => false],
             ['name_en' => 'Other', 'name_gu' => 'અન્ય', 'slug' => 'other'],
         ];
 
@@ -41,6 +41,9 @@ class ServiceSeeder extends Seeder
                     'slug' => $definition['slug'],
                     'is_active' => true,
                     'sort_order' => $index + 1,
+                    ...array_key_exists('requires_property_documents', $definition)
+                        ? ['requires_property_documents' => $definition['requires_property_documents']]
+                        : [],
                 ],
             );
         }

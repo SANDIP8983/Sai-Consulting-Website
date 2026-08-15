@@ -21,7 +21,10 @@ class FinalCustomerRequestFormTest extends TestCase
         $second->governmentChargeItems()->create(['name' => 'Mutation Fee', 'amount' => 100, 'is_active' => true]);
         $first->requiredDocuments()->create(['name_en' => 'Property Card', 'name_gu' => 'પ્રોપર્ટી કાર્ડ', 'is_mandatory' => true]);
 
-        $response = $this->post(route('request.store'), $this->payload([$first->id, $second->id]));
+        Storage::fake('local');
+        $payload = $this->payload([$first->id, $second->id]);
+        $payload['documents'] = [UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())];
+        $response = $this->post(route('request.store'), $payload);
 
         $request = CustomerRequest::query()->with('requestServices')->sole();
         $response->assertRedirect(route('request.success'));
@@ -50,7 +53,13 @@ class FinalCustomerRequestFormTest extends TestCase
             ->assertSee('Any One Required')
             ->assertSee('any_one_required');
 
-        $this->post(route('request.store'), $this->payload([$service->id]))
+        Storage::fake('local');
+        $payload = $this->payload([$service->id]);
+        $payload['documents'] = [
+            UploadedFile::fake()->createWithContent('required-record.pdf', $this->pdfContent()),
+            UploadedFile::fake()->createWithContent('any-one-record.pdf', $this->pdfContent()."\n% distinct"),
+        ];
+        $this->post(route('request.store'), $payload)
             ->assertRedirect(route('request.success'));
 
         $snapshot = collect(CustomerRequest::query()->sole()->requestServices()->sole()->required_documents_snapshot);
@@ -62,7 +71,7 @@ class FinalCustomerRequestFormTest extends TestCase
             ],
             $snapshot->pluck('requirement_type', 'id')->all(),
         );
-        $this->assertDatabaseCount('request_documents', 0);
+        $this->assertDatabaseCount('request_documents', 2);
     }
 
     public function test_duplicate_files_and_duplicate_submission_are_rejected(): void

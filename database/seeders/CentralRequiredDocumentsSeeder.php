@@ -59,7 +59,9 @@ class CentralRequiredDocumentsSeeder extends Seeder
                 function (Service $service) use ($masters, $newMasterCodes): void {
                     foreach (self::DOCUMENTS as $order => [$code]) {
                         $master = $masters[$code];
-                        $type = in_array($code, self::ANY_ONE, true) ? 'any_one_required' : 'optional';
+                        $type = $service->requires_property_documents && in_array($code, self::ANY_ONE, true)
+                            ? 'any_one_required'
+                            : 'optional';
                         $mapping = ServiceRequiredDocument::withTrashed()->firstOrNew([
                             'service_id' => $service->id,
                             'common_required_document_id' => $master->id,
