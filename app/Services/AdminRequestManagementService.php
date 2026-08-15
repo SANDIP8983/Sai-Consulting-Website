@@ -83,7 +83,7 @@ class AdminRequestManagementService
             'billing.unlockedBy:id,name',
             'billing.history' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'feeUpdatedBy:id,name',
-            'documents',
+            'documents.requiredDocument',
             'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at'),
             'dispatches' => fn ($q) => $q->with(['performedBy:id,name', 'updatedBy:id,name', 'proofs', 'history.changedBy:id,name'])->latest('dispatch_date'),

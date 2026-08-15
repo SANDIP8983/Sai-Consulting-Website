@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Service;
+use App\Models\ServiceRequiredDocument;
 use App\Support\PublicDocumentPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
@@ -23,9 +24,7 @@ class StoreCustomerRequestRequest extends FormRequest
         $publicRestrictions = PublicDocumentPolicy::restrictionsForServices($services);
         $configuredTypes = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: PublicDocumentPolicy::ALLOWED_EXTENSIONS;
         $configuredMaximumSize = $services->flatMap->activeRequiredDocuments->max('max_upload_size_kb') ?: PublicDocumentPolicy::MAX_SIZE_KILOBYTES;
-        $minimumUploads = $this->availabilityColumn() === 'available_online'
-            ? $this->minimumRequiredUploads($services)
-            : 0;
+        $online = $this->availabilityColumn() === 'available_online';
         $fileRules = $this->availabilityColumn() === 'available_online'
             ? ['mimetypes:'.implode(',', PublicDocumentPolicy::ALLOWED_MIME_TYPES), 'max:'.$publicRestrictions['max_kilobytes']]
             : ['mimes:'.implode(',', $configuredTypes), 'max:'.$configuredMaximumSize];
@@ -49,8 +48,8 @@ class StoreCustomerRequestRequest extends FormRequest
             'final_plot_number' => ['nullable', 'string', 'max:100'],
             'revenue_village' => ['nullable', 'string', 'max:150'],
             'details' => ['nullable', 'string', 'max:2000'],
-            'documents' => [$minimumUploads > 0 ? 'required' : 'nullable', 'array', 'min:'.$minimumUploads, 'max:10'],
-            'documents.*' => ['required', 'file', ...$fileRules, function (string $attribute, mixed $value, \Closure $fail) use ($publicRestrictions): void {
+            $online ? 'document_uploads' : 'documents' => ['nullable', 'array', 'max:10'],
+            ($online ? 'document_uploads' : 'documents').'.*' => ['required', 'file', ...$fileRules, function (string $attribute, mixed $value, \Closure $fail) use ($publicRestrictions): void {
                 if ($this->availabilityColumn() !== 'available_online' || ! $value instanceof UploadedFile) {
                     return;
                 }
@@ -68,6 +67,44 @@ class StoreCustomerRequestRequest extends FormRequest
         ];
     }
 
+    public function after(): array
+    {
+        if ($this->availabilityColumn() !== 'available_online') {
+            return [];
+        }
+
+        return [function ($validator): void {
+            $services = $this->selectedServices();
+            $applicable = $services->flatMap->activeRequiredDocuments;
+            $byId = $applicable->keyBy(fn ($document) => (string) $document->id);
+            $submitted = collect(array_keys((array) $this->file('document_uploads', [])))->map(fn ($id) => (string) $id);
+
+            if ($submitted->contains(fn ($id) => ! $byId->has($id))) {
+                $validator->errors()->add('document_uploads', 'One or more selected document types are not valid for the selected services.');
+
+                return;
+            }
+
+            $uploadedKeys = $submitted->map(fn ($id) => $this->documentKey($byId[$id]))->unique();
+            $requiredKeys = $applicable->where('requirement_type', 'required')->map(fn ($document) => $this->documentKey($document))->unique();
+            if ($requiredKeys->diff($uploadedKeys)->isNotEmpty()) {
+                $validator->errors()->add('document_uploads', 'Please upload a file for every required document type.');
+            }
+
+            $missingAnyOneGroup = $services->contains(function (Service $service) use ($uploadedKeys): bool {
+                $keys = $service->activeRequiredDocuments
+                    ->where('requirement_type', 'any_one_required')
+                    ->map(fn ($document) => $this->documentKey($document))
+                    ->unique();
+
+                return $keys->isNotEmpty() && $uploadedKeys->intersect($keys)->isEmpty();
+            });
+            if ($missingAnyOneGroup) {
+                $validator->errors()->add('document_uploads', 'Please upload at least one document from the Any One Required group.');
+            }
+        }];
+    }
+
     protected function prepareForValidation(): void
     {
         $serviceIds = array_values(array_filter((array) $this->input('service_ids', [])));
@@ -82,27 +119,25 @@ class StoreCustomerRequestRequest extends FormRequest
         return 'available_online';
     }
 
-    private function minimumRequiredUploads($services): int
+    private function selectedServices()
     {
-        $documents = $services->flatMap->activeRequiredDocuments;
-        $required = $documents
-            ->where('requirement_type', 'required')
-            ->unique(fn ($document) => $document->common_required_document_id
-                ? 'common:'.$document->common_required_document_id
-                : 'name:'.str($document->name_en)->lower()->squish());
+        return Service::query()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
+    }
 
-        return $required->count() + ($documents->contains('requirement_type', 'any_one_required') ? 1 : 0);
+    private function documentKey(ServiceRequiredDocument $document): string
+    {
+        return $document->common_required_document_id
+            ? 'common:'.$document->common_required_document_id
+            : 'mapping:'.$document->id;
     }
 
     public function messages(): array
     {
         return [
             'mobile.digits' => 'Mobile number must contain exactly 10 digits. / મોબાઇલ નંબર બરાબર 10 અંકનો હોવો જોઈએ.',
-            'documents.required' => 'Please upload at least one document. / ઓછામાં ઓછો એક દસ્તાવેજ અપલોડ કરો.',
-            'documents.max' => 'You may upload a maximum of 10 files. / વધુમાં વધુ 10 ફાઇલ અપલોડ કરી શકો.',
-            'documents.min' => 'Please upload the configured required documents. / કૃપા કરીને ગોઠવેલા જરૂરી દસ્તાવેજો અપલોડ કરો.',
-            'documents.*.mimetypes' => 'Only valid PDF, JPG, JPEG and PNG files are allowed. / માત્ર માન્ય PDF, JPG, JPEG અને PNG ફાઇલ માન્ય છે.',
-            'documents.*.max' => 'Each file may be no larger than 10 MB. / દરેક ફાઇલ મહત્તમ 10 MB હોવી જોઈએ.',
+            'document_uploads.max' => 'You may upload a maximum of 10 files. / વધુમાં વધુ 10 ફાઇલ અપલોડ કરી શકો.',
+            'document_uploads.*.mimetypes' => 'Only valid PDF, JPG, JPEG and PNG files are allowed. / માત્ર માન્ય PDF, JPG, JPEG અને PNG ફાઇલ માન્ય છે.',
+            'document_uploads.*.max' => 'Each file may be no larger than 10 MB. / દરેક ફાઇલ મહત્તમ 10 MB હોવી જોઈએ.',
             'declaration.accepted' => 'You must accept the declaration. / કૃપા કરીને ઘોષણા સ્વીકારો.',
         ];
     }

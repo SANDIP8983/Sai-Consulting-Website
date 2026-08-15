@@ -122,10 +122,17 @@ class RequestWorkflowService
                     $publicRestrictions = $origin === 'online'
                         ? PublicDocumentPolicy::restrictionsForServices($orderedServices)
                         : null;
-                    foreach ($files as $file) {
+                    $applicableDocuments = $origin === 'online'
+                        ? $orderedServices->flatMap->activeRequiredDocuments->keyBy(fn ($document) => (string) $document->id)
+                        : collect();
+                    foreach ($files as $documentId => $file) {
+                        $requiredDocument = $origin === 'online' ? $applicableDocuments->get((string) $documentId) : null;
+                        if ($origin === 'online' && ! $requiredDocument) {
+                            throw ValidationException::withMessages(['document_uploads' => 'One or more selected document types are invalid.']);
+                        }
                         $hash = hash_file('sha256', $file->getRealPath());
                         if (in_array($hash, $uploadedHashes, true)) {
-                            throw ValidationException::withMessages(['documents' => 'The same document cannot be uploaded more than once.']);
+                            throw ValidationException::withMessages(['document_uploads' => 'The same document cannot be uploaded more than once.']);
                         }
                         $uploadedHashes[] = $hash;
                         if ($publicRestrictions) {
@@ -142,6 +149,7 @@ class RequestWorkflowService
 
                         $storedPaths[] = $path;
                         $request->documents()->create([
+                            'service_required_document_id' => $requiredDocument?->id,
                             'file_name' => $publicRestrictions
                                 ? PublicDocumentPolicy::safeDisplayName($file)
                                 : $file->getClientOriginalName(),

@@ -19,11 +19,11 @@ class FinalCustomerRequestFormTest extends TestCase
         $second = $this->service('mutation', 500, 5, 9);
         $first->governmentChargeItems()->create(['name' => 'Stamp Duty', 'amount' => 250, 'description' => 'As applicable', 'is_active' => true]);
         $second->governmentChargeItems()->create(['name' => 'Mutation Fee', 'amount' => 100, 'is_active' => true]);
-        $first->requiredDocuments()->create(['name_en' => 'Property Card', 'name_gu' => 'પ્રોપર્ટી કાર્ડ', 'is_mandatory' => true]);
+        $propertyCard = $first->requiredDocuments()->create(['name_en' => 'Property Card', 'name_gu' => 'પ્રોપર્ટી કાર્ડ', 'is_mandatory' => true]);
 
         Storage::fake('local');
         $payload = $this->payload([$first->id, $second->id]);
-        $payload['documents'] = [UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())];
+        $payload['document_uploads'] = [$propertyCard->id => UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())];
         $response = $this->post(route('request.store'), $payload);
 
         $request = CustomerRequest::query()->with('requestServices')->sole();
@@ -55,9 +55,9 @@ class FinalCustomerRequestFormTest extends TestCase
 
         Storage::fake('local');
         $payload = $this->payload([$service->id]);
-        $payload['documents'] = [
-            UploadedFile::fake()->createWithContent('required-record.pdf', $this->pdfContent()),
-            UploadedFile::fake()->createWithContent('any-one-record.pdf', $this->pdfContent()."\n% distinct"),
+        $payload['document_uploads'] = [
+            $required->id => UploadedFile::fake()->createWithContent('required-record.pdf', $this->pdfContent()),
+            $anyOne->id => UploadedFile::fake()->createWithContent('any-one-record.pdf', $this->pdfContent()."\n% distinct"),
         ];
         $this->post(route('request.store'), $payload)
             ->assertRedirect(route('request.success'));
@@ -78,16 +78,18 @@ class FinalCustomerRequestFormTest extends TestCase
     {
         Storage::fake('local');
         $service = $this->service('title-search', 100, 18, 3);
+        $first = $service->requiredDocuments()->create(['name_en' => 'First Record', 'name_gu' => 'First Record', 'is_active' => true]);
+        $second = $service->requiredDocuments()->create(['name_en' => 'Second Record', 'name_gu' => 'Second Record', 'is_active' => true]);
         $payload = $this->payload([$service->id]);
-        $payload['documents'] = [
-            UploadedFile::fake()->createWithContent('one.pdf', $this->pdfContent()),
-            UploadedFile::fake()->createWithContent('two.pdf', $this->pdfContent()),
+        $payload['document_uploads'] = [
+            $first->id => UploadedFile::fake()->createWithContent('one.pdf', $this->pdfContent()),
+            $second->id => UploadedFile::fake()->createWithContent('two.pdf', $this->pdfContent()),
         ];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors('document_uploads');
         $this->assertDatabaseCount('requests', 0);
 
-        unset($payload['documents']);
+        unset($payload['document_uploads']);
         $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
         $this->post(route('request.store'), $payload)->assertSessionHasErrors('request');
         $this->assertDatabaseCount('requests', 1);

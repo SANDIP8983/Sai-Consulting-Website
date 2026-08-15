@@ -11,7 +11,5 @@
         <div class="col-lg-4 document-optional"><h3 class="h5 text-secondary">Optional Documents</h3><ul id="optional-documents" class="document-review-list"></ul></div>
     </div>
     <div class="alert alert-danger"><strong>Public KYC uploads are prohibited.</strong><div class="small">Never upload Aadhaar, PAN, Passport, Driving Licence, Voter ID, bank documents, income proof, identity/address proof, or any KYC document.</div></div>
-    <label for="documents" class="upload-drop-card"><i class="bi bi-cloud-arrow-up"></i><strong>Choose available property documents</strong><span>PDF/JPG/PNG, maximum 10 files, 10 MB each</span><input id="documents" name="documents[]" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"></label>
-    <div class="progress mt-3 d-none" id="upload-progress"><div class="progress-bar"></div></div>
-    <ul id="selected-file-list" class="list-group mt-3"></ul>
+    <p class="small text-muted mb-0">Attach each file to its correct configured document type. PDF/JPG/PNG, maximum 10 files, 10 MB each.</p>
 </section>

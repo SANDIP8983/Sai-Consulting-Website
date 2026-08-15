@@ -96,14 +96,14 @@ class CentralRequiredDocumentsMasterTest extends TestCase
         $this->post(route('request.store'), [
             'service_ids' => [$service->id], 'name' => 'No Upload Customer', 'mobile' => '9999999999', 'declaration' => 1,
             'property_village' => 'Village', 'property_taluka' => 'Taluka', 'property_district' => 'District',
-        ])->assertSessionHasErrors('documents');
+        ])->assertSessionHasErrors('document_uploads');
         $this->assertDatabaseCount('requests', 0);
 
         Storage::fake('local');
         $this->post(route('request.store'), [
             'service_ids' => [$service->id], 'name' => 'Upload Customer', 'mobile' => '9999999999', 'declaration' => 1,
             'property_village' => 'Village', 'property_taluka' => 'Taluka', 'property_district' => 'District',
-            'documents' => [UploadedFile::fake()->createWithContent('land-record.pdf', $this->pdfContent())],
+            'document_uploads' => [$service->activeRequiredDocuments()->where('requirement_type', 'any_one_required')->firstOrFail()->id => UploadedFile::fake()->createWithContent('land-record.pdf', $this->pdfContent())],
         ])->assertRedirect(route('request.success'));
         $this->assertDatabaseCount('requests', 1);
         $snapshot = CustomerRequest::query()->sole()->requestServices()->sole()->required_documents_snapshot;
@@ -138,10 +138,11 @@ class CentralRequiredDocumentsMasterTest extends TestCase
             'property_village' => 'Village', 'property_taluka' => 'Taluka', 'property_district' => 'District',
         ];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors('document_uploads');
         $this->assertDatabaseCount('requests', 0);
 
-        $payload['documents'] = [UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())];
+        $mapping = $property->activeRequiredDocuments()->where('requirement_type', 'any_one_required')->firstOrFail();
+        $payload['document_uploads'] = [$mapping->id => UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())];
         $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
 
         $request = CustomerRequest::query()->with('requestServices')->sole();
@@ -150,6 +151,59 @@ class CentralRequiredDocumentsMasterTest extends TestCase
         $this->assertSame(3, $propertySnapshot->where('requirement_type', 'any_one_required')->count());
         $this->assertSame(0, $legalSnapshot->where('requirement_type', 'any_one_required')->count());
         $this->assertSame(18, $legalSnapshot->where('requirement_type', 'optional')->count());
+    }
+
+    public function test_each_sale_deed_land_record_type_satisfies_the_any_one_group_only_with_a_file(): void
+    {
+        Storage::fake('local');
+        $service = Service::query()->where('slug', 'sale-deed')->sole();
+        $mappings = $service->activeRequiredDocuments()->where('requirement_type', 'any_one_required')->get();
+
+        foreach ($mappings->values() as $index => $mapping) {
+            $payload = $this->propertyPayload($service, '900000000'.($index + 1));
+            $payload['document_uploads'] = [$mapping->id => UploadedFile::fake()->createWithContent("record-{$index}.pdf", $this->pdfContent()."\n% {$index}")];
+            $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
+            $this->assertDatabaseHas('request_documents', ['service_required_document_id' => $mapping->id]);
+        }
+
+        $withoutFile = $this->propertyPayload($service, '9000000009');
+        $withoutFile['document_uploads'] = [$mappings->first()->id => null];
+        $this->post(route('request.store'), $withoutFile)->assertSessionHasErrors('document_uploads');
+    }
+
+    public function test_unknown_mapping_is_rejected_and_an_applicable_optional_mapping_is_accepted(): void
+    {
+        Storage::fake('local');
+        $saleDeed = Service::query()->where('slug', 'sale-deed')->sole();
+        $legal = Service::query()->where('slug', 'legal-consulting')->sole();
+        $forgedMapping = $legal->activeRequiredDocuments()->firstOrFail();
+        $payload = $this->propertyPayload($saleDeed, '9111111111');
+        $payload['document_uploads'] = [$forgedMapping->id => UploadedFile::fake()->createWithContent('forged.pdf', $this->pdfContent())];
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors('document_uploads');
+
+        $optional = $legal->activeRequiredDocuments()->where('requirement_type', 'optional')->firstOrFail();
+        $payload = ['service_ids' => [$legal->id], 'name' => 'Optional Customer', 'mobile' => '9222222222', 'declaration' => 1,
+            'document_uploads' => [$optional->id => UploadedFile::fake()->createWithContent('optional.pdf', $this->pdfContent())]];
+        $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
+        $this->assertDatabaseHas('request_documents', ['service_required_document_id' => $optional->id, 'file_name' => 'optional.pdf']);
+    }
+
+    public function test_review_and_admin_views_show_mapped_names_while_historical_uploads_remain_readable(): void
+    {
+        $this->get(route('request.create'))->assertOk()
+            ->assertSee('Documents Selected')
+            ->assertSee('document_uploads[', false);
+
+        $service = Service::query()->where('slug', 'legal-consulting')->sole();
+        $request = CustomerRequest::query()->create([
+            'reference_no' => 'SC/2026/999998', 'service_id' => $service->id, 'name' => 'Historical Customer',
+            'mobile' => '9333333333', 'status' => 'submitted', 'request_origin' => 'online',
+        ]);
+        $request->documents()->create(['file_name' => 'legacy.pdf', 'file_path' => 'customer-requests/legacy.pdf']);
+
+        $admin = User::factory()->create();
+        $this->actingAs($admin)->get(route('admin.requests.show', $request))
+            ->assertOk()->assertSee('Historical / Unmapped Document')->assertSee('legacy.pdf');
     }
 
     public function test_data_correction_preserves_mappings_and_only_scopes_seeded_land_record_requirements(): void
@@ -193,5 +247,13 @@ class CentralRequiredDocumentsMasterTest extends TestCase
     private function pdfContent(): string
     {
         return "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF";
+    }
+
+    private function propertyPayload(Service $service, string $mobile): array
+    {
+        return [
+            'service_ids' => [$service->id], 'name' => 'Property Customer', 'mobile' => $mobile, 'declaration' => 1,
+            'property_village' => 'Village', 'property_taluka' => 'Taluka', 'property_district' => 'District',
+        ];
     }
 }

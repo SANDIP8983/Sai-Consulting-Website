@@ -21,7 +21,7 @@ class PublicRequestUploadSecurityTest extends TestCase
         Storage::fake('local');
         $service = $this->service();
         $payload = $this->payload($service);
-        $payload['documents'] = [$this->approvedFile($extension)];
+        $payload['document_uploads'] = [$this->mappingId($service) => $this->approvedFile($extension)];
 
         $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
 
@@ -51,13 +51,14 @@ class PublicRequestUploadSecurityTest extends TestCase
         foreach (['doc', 'docx'] as $extension) {
             $payload = $this->payload($service);
             $payload['mobile'] = $extension === 'doc' ? '9111111111' : '9222222222';
-            $payload['documents'] = [UploadedFile::fake()->create(
+            $mappingId = $this->mappingId($service);
+            $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->create(
                 "property-record.{$extension}",
                 20,
                 $extension === 'doc' ? 'application/msword' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             )];
 
-            $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
+            $this->post(route('request.store'), $payload)->assertSessionHasErrors("document_uploads.{$mappingId}");
         }
 
         $this->assertDatabaseCount('requests', 0);
@@ -69,9 +70,10 @@ class PublicRequestUploadSecurityTest extends TestCase
         Storage::fake('local');
         $service = $this->service(['pdf'], 51200);
         $payload = $this->payload($service);
-        $payload['documents'] = [UploadedFile::fake()->create('large-property-record.pdf', 10241, 'application/pdf')];
+        $mappingId = $this->mappingId($service);
+        $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->create('large-property-record.pdf', 10241, 'application/pdf')];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors("document_uploads.{$mappingId}");
         $this->assertDatabaseCount('requests', 0);
         Storage::disk('local')->assertDirectoryEmpty('/');
     }
@@ -79,10 +81,12 @@ class PublicRequestUploadSecurityTest extends TestCase
     public function test_extension_and_detected_mime_must_be_consistent(): void
     {
         Storage::fake('local');
-        $payload = $this->payload($this->service());
-        $payload['documents'] = [UploadedFile::fake()->createWithContent('property-photo.jpg', $this->pdfContent())];
+        $service = $this->service();
+        $payload = $this->payload($service);
+        $mappingId = $this->mappingId($service);
+        $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->createWithContent('property-photo.jpg', $this->pdfContent())];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors("document_uploads.{$mappingId}");
         $this->assertDatabaseCount('requests', 0);
         Storage::disk('local')->assertDirectoryEmpty('/');
     }
@@ -94,10 +98,12 @@ class PublicRequestUploadSecurityTest extends TestCase
             && $context['reason'] === 'prohibited_filename'
             && isset($context['filename_fingerprint'], $context['request_ip_fingerprint'])
             && ! array_key_exists('content', $context));
-        $payload = $this->payload($this->service());
-        $payload['documents'] = [UploadedFile::fake()->createWithContent('customer-aadhaar-card.pdf', $this->pdfContent())];
+        $service = $this->service();
+        $payload = $this->payload($service);
+        $mappingId = $this->mappingId($service);
+        $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->createWithContent('customer-aadhaar-card.pdf', $this->pdfContent())];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors("document_uploads.{$mappingId}");
 
         $this->assertDatabaseCount('requests', 0);
         $this->assertDatabaseCount('request_documents', 0);
@@ -107,10 +113,12 @@ class PublicRequestUploadSecurityTest extends TestCase
     public function test_path_like_filename_is_rejected_and_cannot_escape_private_request_storage(): void
     {
         Storage::fake('local');
-        $payload = $this->payload($this->service());
-        $payload['documents'] = [UploadedFile::fake()->createWithContent('../../outside.pdf', $this->pdfContent())];
+        $service = $this->service();
+        $payload = $this->payload($service);
+        $mappingId = $this->mappingId($service);
+        $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->createWithContent('../../outside.pdf', $this->pdfContent())];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors("document_uploads.{$mappingId}");
         $this->assertDatabaseCount('requests', 0);
         Storage::disk('local')->assertDirectoryEmpty('/');
     }
@@ -118,10 +126,12 @@ class PublicRequestUploadSecurityTest extends TestCase
     public function test_executable_content_disguised_with_an_approved_extension_is_rejected(): void
     {
         Storage::fake('local');
-        $payload = $this->payload($this->service());
-        $payload['documents'] = [UploadedFile::fake()->createWithContent('property-record.pdf', "MZ\x90\x00executable")];
+        $service = $this->service();
+        $payload = $this->payload($service);
+        $mappingId = $this->mappingId($service);
+        $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->createWithContent('property-record.pdf', "MZ\x90\x00executable")];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors("document_uploads.{$mappingId}");
         $this->assertDatabaseCount('requests', 0);
         Storage::disk('local')->assertDirectoryEmpty('/');
     }
@@ -193,6 +203,11 @@ class PublicRequestUploadSecurityTest extends TestCase
             'mobile' => '9999999999',
             'declaration' => '1',
         ];
+    }
+
+    private function mappingId(Service $service): int
+    {
+        return $service->requiredDocuments()->firstOrFail()->id;
     }
 
     private function approvedFile(string $extension): UploadedFile

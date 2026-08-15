@@ -24,8 +24,8 @@ class CustomerRequestController extends Controller
     public function store(StoreCustomerRequestRequest $request, RequestWorkflowService $workflow): RedirectResponse
     {
         $customerRequest = $workflow->submit(
-            $request->safe()->except(['documents', 'declaration']),
-            $request->file('documents', []),
+            $request->safe()->except(['document_uploads', 'declaration']),
+            $request->file('document_uploads', []),
         );
 
         return redirect()->route('request.success')->with('submitted_request', [

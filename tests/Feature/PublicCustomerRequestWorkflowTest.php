@@ -42,7 +42,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
 
         $response->assertRedirect(route('request.create'));
         $response->assertSessionHasErrors(['service_id', 'name', 'mobile', 'declaration']);
-        $response->assertSessionDoesntHaveErrors('documents');
+        $response->assertSessionDoesntHaveErrors('document_uploads');
         $this->assertDatabaseCount('requests', 0);
     }
 
@@ -93,11 +93,13 @@ class PublicCustomerRequestWorkflowTest extends TestCase
     public function test_submission_rejects_an_invalid_file_type(): void
     {
         Storage::fake('local');
-        $payload = $this->validPayload($this->createService());
-        $payload['documents'] = [UploadedFile::fake()->create('identity.docx', 20, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')];
+        $service = $this->createService();
+        $payload = $this->validPayload($service);
+        $mappingId = $service->requiredDocuments()->firstOrFail()->id;
+        $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->create('identity.docx', 20, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')];
 
         $this->post(route('request.store'), $payload)
-            ->assertSessionHasErrors('documents.0');
+            ->assertSessionHasErrors("document_uploads.{$mappingId}");
         $this->assertDatabaseCount('requests', 0);
     }
 
@@ -105,7 +107,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
     {
         Storage::fake('local');
         $payload = $this->validPayload($this->createService());
-        unset($payload['documents']);
+        unset($payload['document_uploads']);
 
         $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
         $this->assertDatabaseCount('requests', 1);
@@ -115,23 +117,28 @@ class PublicCustomerRequestWorkflowTest extends TestCase
     public function test_public_submission_rejects_personal_kyc_documents(): void
     {
         Storage::fake('local');
-        $payload = $this->validPayload($this->createService());
-        $payload['documents'] = [UploadedFile::fake()->create('aadhaar-card.pdf', 20, 'application/pdf')];
+        $service = $this->createService();
+        $payload = $this->validPayload($service);
+        $mappingId = $service->requiredDocuments()->firstOrFail()->id;
+        $payload['document_uploads'] = [$mappingId => UploadedFile::fake()->create('aadhaar-card.pdf', 20, 'application/pdf')];
 
-        $this->post(route('request.store'), $payload)->assertSessionHasErrors('documents.0');
+        $this->post(route('request.store'), $payload)->assertSessionHasErrors("document_uploads.{$mappingId}");
         $this->assertDatabaseCount('requests', 0);
     }
 
     public function test_submission_rejects_more_than_ten_files(): void
     {
         Storage::fake('local');
-        $payload = $this->validPayload($this->createService());
-        $payload['documents'] = collect(range(1, 11))
-            ->map(fn (int $number) => UploadedFile::fake()->create("record-{$number}.pdf", 20, 'application/pdf'))
-            ->all();
+        $service = $this->createService();
+        $payload = $this->validPayload($service);
+        $payload['document_uploads'] = collect(range(1, 11))->mapWithKeys(function (int $number) use ($service): array {
+            $mapping = $service->requiredDocuments()->create(['name_en' => "Record {$number}", 'name_gu' => "Record {$number}", 'is_active' => true]);
+
+            return [$mapping->id => UploadedFile::fake()->create("record-{$number}.pdf", 20, 'application/pdf')];
+        })->all();
 
         $this->post(route('request.store'), $payload)
-            ->assertSessionHasErrors('documents');
+            ->assertSessionHasErrors('document_uploads');
         $this->assertDatabaseCount('requests', 0);
     }
 
@@ -389,6 +396,11 @@ class PublicCustomerRequestWorkflowTest extends TestCase
 
     private function validPayload(Service $service): array
     {
+        $mapping = $service->requiredDocuments()->firstOrCreate(
+            ['name_en' => 'Property Card'],
+            ['name_gu' => 'Property Card', 'is_active' => true],
+        );
+
         return [
             'service_id' => $service->id,
             'name' => 'Test Customer',
@@ -401,7 +413,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
             'survey_numbers' => '12/1, Block 15',
             'khata_number' => 'KH-100',
             'details' => 'Please review the land record.',
-            'documents' => [UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())],
+            'document_uploads' => [$mapping->id => UploadedFile::fake()->createWithContent('property-card.pdf', $this->pdfContent())],
             'declaration' => '1',
         ];
     }
@@ -443,7 +455,7 @@ class PublicCustomerRequestWorkflowTest extends TestCase
         $service = $this->createService();
         $service->update(['requires_property_documents' => false]);
         $payload = $this->validPayload($service);
-        unset($payload['documents']);
+        unset($payload['document_uploads']);
         $this->post(route('request.store'), $payload)->assertRedirect(route('request.success'));
         $this->assertDatabaseCount('requests', 1);
         $this->assertDatabaseCount('request_documents', 0);
