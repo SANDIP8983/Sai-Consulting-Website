@@ -14,6 +14,7 @@ use App\Models\RequestDispatch;
 use App\Models\RequestDispatchProof;
 use App\Services\DispatchManagementService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -23,7 +24,7 @@ class RequestDispatchController extends Controller
 
     public function store(StoreRequestDispatchRequest $request, CustomerRequest $customerRequest): RedirectResponse
     {
-        $this->dispatches->create($customerRequest, $request->safe()->except('proof'), $request->user(), $request->file('proof'));
+        $this->dispatches->create($customerRequest, Arr::except($request->validated(), 'proof'), $request->user(), $request->file('proof'));
 
         return back()->with('success', 'Dispatch record created successfully.');
     }
@@ -37,7 +38,8 @@ class RequestDispatchController extends Controller
 
     public function transition(TransitionRequestDispatchRequest $request, CustomerRequest $customerRequest, RequestDispatch $dispatch): RedirectResponse
     {
-        $this->dispatches->transition($customerRequest, $dispatch, $request->validated('dispatch_status'), $request->safe()->except('dispatch_status'), $request->user());
+        $validated = $request->validated();
+        $this->dispatches->transition($customerRequest, $dispatch, $validated['dispatch_status'], Arr::except($validated, 'dispatch_status'), $request->user());
 
         return back()->with('success', 'Dispatch status updated successfully.');
     }
@@ -66,7 +68,7 @@ class RequestDispatchController extends Controller
 
     public function close(CloseDispatchedCaseRequest $request, CustomerRequest $customerRequest): RedirectResponse
     {
-        $this->dispatches->close($customerRequest, $request->safe()->except('confirmed'), $request->user());
+        $this->dispatches->close($customerRequest, Arr::except($request->validated(), 'confirmed'), $request->user());
 
         return back()->with('success', 'Case closed successfully.');
     }

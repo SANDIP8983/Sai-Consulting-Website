@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Carbon\CarbonImmutable;
+use Closure;
 use DateTimeInterface;
 
 final class IndiaDateTime
@@ -34,5 +35,20 @@ final class IndiaDateTime
         return CarbonImmutable::parse($value, self::timezone())
             ->utc()
             ->format('Y-m-d H:i:s');
+    }
+
+    public static function notFutureRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            try {
+                $dateTime = CarbonImmutable::parse($value, self::timezone());
+            } catch (\Throwable) {
+                return;
+            }
+
+            if ($dateTime->isAfter(self::now())) {
+                $fail("The {$attribute} field must be a date before or equal to now.");
+            }
+        };
     }
 }

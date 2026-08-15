@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Enums\PdfDocumentType;
 use App\Models\CustomerRequest;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\Pdf\CustomerSafePdfDataFactory;
+use App\Support\IndiaDateTime;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +17,104 @@ use Tests\TestCase;
 class DispatchManagementTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_dispatch_delivery_and_closure_datetimes_use_ist_without_double_conversion(): void
+    {
+        config(['app.timezone' => 'UTC', 'app.display_timezone' => 'Asia/Kolkata']);
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-15 16:02:00', 'UTC'));
+
+        try {
+            $admin = User::factory()->create();
+            $request = $this->request(['completed_at' => '2026-08-15 23:59:59']);
+
+            $this->actingAs($admin)->get(route('admin.requests.show', $request))
+                ->assertOk()
+                ->assertSee('value="2026-08-15T21:32"', false)
+                ->assertSee('15 Aug 2026')
+                ->assertDontSee('15 Aug 2026, 11:59 PM');
+
+            $this->actingAs($admin)->post(route('admin.requests.dispatches.store', $request), $this->payload([
+                'dispatch_date' => '2026-08-15T21:24',
+            ]))->assertSessionHasNoErrors();
+
+            $dispatch = $request->dispatches()->firstOrFail();
+            $this->assertSame('2026-08-15 15:54:00', $dispatch->getRawOriginal('dispatch_date'));
+            $this->assertSame('15 Aug 2026, 9:24 PM', IndiaDateTime::format($dispatch->dispatch_date));
+            $this->assertSame('15 Aug 2026, 9:24 PM', IndiaDateTime::format(
+                CarbonImmutable::parse('2026-08-15 21:24:00', 'Asia/Kolkata')
+            ));
+
+            $dispatch->forceFill([
+                'created_at' => '2026-08-15 15:58:00',
+                'updated_at' => '2026-08-15 16:02:00',
+            ])->saveQuietly();
+
+            $this->actingAs($admin)->get(route('admin.requests.show', $request))
+                ->assertSee('15 Aug 2026, 9:24 PM IST')
+                ->assertSee('Created 15 Aug 2026, 9:28 PM IST')
+                ->assertSee('Updated 15 Aug 2026, 9:32 PM IST')
+                ->assertSee('value="2026-08-15T21:24"', false)
+                ->assertSee('name="delivered_at" value="2026-08-15T21:32"', false);
+
+            $this->actingAs($admin)->patch(route('admin.requests.dispatches.status', [$request, $dispatch]), [
+                'dispatch_status' => 'delivered',
+                'delivered_at' => '2026-08-15T21:31',
+            ])->assertSessionHasNoErrors();
+
+            $dispatch->refresh();
+            $this->assertSame('2026-08-15 16:01:00', $dispatch->getRawOriginal('delivered_at'));
+
+            $this->actingAs($admin)->get(route('admin.requests.show', $request->fresh()))
+                ->assertSee('name="closure_date" value="2026-08-15T21:32"', false);
+
+            $this->actingAs($admin)->patch(route('admin.requests.closure.close', $request), [
+                'closure_date' => '2026-08-15T21:32',
+                'customer_remark' => 'Case finished',
+                'internal_note' => 'Verified closure',
+                'confirmed' => '1',
+            ])->assertSessionHasNoErrors();
+
+            $request->refresh();
+            $this->assertSame('2026-08-15 16:02:00', $request->getRawOriginal('closed_at'));
+            $this->actingAs($admin)->get(route('admin.requests.show', $request))
+                ->assertSee('Case Closed:</strong> 15 Aug 2026, 9:32 PM IST', false);
+
+            $dispatchPdf = app(CustomerSafePdfDataFactory::class)->make(PdfDocumentType::DispatchSlip, $request);
+            $casePdf = app(CustomerSafePdfDataFactory::class)->make(PdfDocumentType::CaseSummary, $request);
+            $this->assertSame('15 Aug 2026, 9:24 PM', $dispatchPdf->content['dispatches'][0]['dispatch_date']);
+            $this->assertSame('15 Aug 2026, 9:31 PM', $dispatchPdf->content['dispatches'][0]['delivered_at']);
+            $this->assertSame('15 Aug 2026, 9:32 PM', $casePdf->content['closure']['date']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_collection_datetime_is_converted_from_ist_to_utc_once(): void
+    {
+        config(['app.timezone' => 'UTC', 'app.display_timezone' => 'Asia/Kolkata']);
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-15 16:02:00', 'UTC'));
+
+        try {
+            $admin = User::factory()->create();
+            $request = $this->request();
+
+            $this->actingAs($admin)->post(route('admin.requests.dispatches.store', $request), $this->payload([
+                'dispatch_status' => 'collected',
+                'dispatch_method' => 'office_collection',
+                'dispatch_date' => '2026-08-15T21:24',
+                'collected_at' => '2026-08-15T21:31',
+                'carrier_name' => null,
+                'delivery_address' => null,
+                'tracking_number' => null,
+            ]))->assertSessionHasNoErrors();
+
+            $dispatch = $request->dispatches()->firstOrFail();
+            $this->assertSame('2026-08-15 16:01:00', $dispatch->getRawOriginal('collected_at'));
+            $this->assertSame('15 Aug 2026, 9:31 PM', IndiaDateTime::format($dispatch->collected_at));
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
 
     public function test_dispatch_is_unavailable_before_completed_and_completed_enables_it(): void
     {
