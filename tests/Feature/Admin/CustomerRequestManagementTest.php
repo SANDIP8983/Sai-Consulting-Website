@@ -6,6 +6,7 @@ use App\Models\CustomerRequest;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -62,12 +63,44 @@ class CustomerRequestManagementTest extends TestCase
         $admin = User::factory()->create();
         $request = $this->customerRequest();
         $other = $this->customerRequest(['reference_no' => 'SC/2026/000002']);
-        Storage::disk('local')->put('customer-requests/record.pdf', 'private content');
+        $content = "%PDF-1.4\nprivate content\n%%EOF";
+        Storage::disk('local')->put('customer-requests/record.pdf', $content);
         $document = $request->documents()->create(['file_name' => 'record.pdf', 'file_path' => 'customer-requests/record.pdf', 'file_type' => 'application/pdf']);
 
-        $this->actingAs($admin)->get(route('admin.requests.documents.download', [$request, $document]))->assertOk()->assertDownload('record.pdf');
+        $response = $this->actingAs($admin)->get(route('admin.requests.documents.download', [$request, $document]));
+        $response->assertOk()->assertDownload('record.pdf')->assertHeader('content-type', 'application/pdf')->assertHeader('x-content-type-options', 'nosniff');
+        $this->assertSame($content, $response->baseResponse->getFile()->getContent());
         $this->actingAs($admin)->get(route('admin.requests.documents.download', [$other, $document]))->assertNotFound();
         $this->actingAs($admin)->get(route('admin.requests.show', $request))->assertDontSee('customer-requests/record.pdf');
+    }
+
+    public function test_private_image_documents_download_with_detected_safe_content_types(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create();
+        $request = $this->customerRequest();
+
+        foreach (['jpg' => 'image/jpeg', 'png' => 'image/png'] as $extension => $mimeType) {
+            $file = UploadedFile::fake()->image("property.{$extension}", 20, 20);
+            $path = "customer-requests/{$request->id}/property.{$extension}";
+            Storage::disk('local')->put($path, $file->getContent());
+            $document = $request->documents()->create(['file_name' => "../property.{$extension}", 'file_path' => $path, 'file_type' => 'application/octet-stream']);
+
+            $this->actingAs($admin)->get(route('admin.requests.documents.download', [$request, $document]))
+                ->assertOk()->assertDownload("property.{$extension}")->assertHeader('content-type', $mimeType);
+        }
+    }
+
+    public function test_private_document_download_returns_not_found_for_missing_or_unsafe_paths(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create();
+        $request = $this->customerRequest();
+        $missing = $request->documents()->create(['file_name' => 'missing.pdf', 'file_path' => 'customer-requests/missing.pdf']);
+        $unsafe = $request->documents()->create(['file_name' => 'unsafe.pdf', 'file_path' => '../unsafe.pdf']);
+
+        $this->actingAs($admin)->get(route('admin.requests.documents.download', [$request, $missing]))->assertNotFound();
+        $this->actingAs($admin)->get(route('admin.requests.documents.download', [$request, $unsafe]))->assertNotFound();
     }
 
     public function test_approval_generates_one_unique_file_number_and_history(): void
