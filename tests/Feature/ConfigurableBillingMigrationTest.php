@@ -31,6 +31,12 @@ class ConfigurableBillingMigrationTest extends TestCase
             $this->assertStringContainsString("'{$name}'", $source);
         }
         $this->assertStringNotContainsString('request_billing_government_charges_government_charge_type_id_foreign', $source);
+        $this->assertStringContainsString('information_schema.tables', $source);
+        $this->assertStringContainsString('information_schema.columns', $source);
+        $this->assertStringContainsString('information_schema.statistics', $source);
+        $this->assertStringContainsString('information_schema.key_column_usage', $source);
+        $this->assertStringContainsString('createTableSafely', $source);
+        $this->assertStringContainsString('addColumnSafely', $source);
     }
 
     public function test_clean_schema_contains_the_complete_configurable_billing_schema(): void
