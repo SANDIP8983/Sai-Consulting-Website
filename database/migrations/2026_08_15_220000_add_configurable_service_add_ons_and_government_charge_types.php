@@ -2,46 +2,165 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    private const SERVICE_FK = 'svc_addons_service_fk';
+
+    private const ADD_ON_FK = 'svc_addons_addon_fk';
+
+    private const SERVICE_INDEX = 'svc_addons_service_idx';
+
+    private const ADD_ON_INDEX = 'svc_addons_addon_idx';
+
+    private const ACTIVE_INDEX = 'svc_addons_active_idx';
+
+    private const SERVICE_ADD_ON_UNIQUE = 'svc_addons_pair_uq';
+
+    private const CHARGE_NAME_UNIQUE = 'gov_charge_types_name_uq';
+
+    private const CHARGE_ACTIVE_INDEX = 'gov_charge_types_active_idx';
+
+    private const REQUEST_CHARGE_TYPE_INDEX = 'rb_gov_charges_type_idx';
+
+    private const REQUEST_CHARGE_TYPE_FK = 'rb_gov_charges_type_fk';
+
     public function up(): void
     {
-        Schema::create('service_add_ons', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('service_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('add_on_service_id')->constrained('services')->cascadeOnDelete();
-            $table->boolean('is_active')->default(true)->index();
-            $table->unsignedSmallInteger('sort_order')->default(0);
-            $table->timestamps();
-            $table->unique(['service_id', 'add_on_service_id']);
-        });
-
-        Schema::create('government_charge_types', function (Blueprint $table): void {
-            $table->id();
-            $table->string('name_en', 150)->unique();
-            $table->string('name_gu', 150)->nullable();
-            $table->decimal('default_amount', 12, 2)->default(0);
-            $table->string('description', 500)->nullable();
-            $table->boolean('is_active')->default(true)->index();
-            $table->unsignedSmallInteger('sort_order')->default(0);
-            $table->timestamps();
-        });
-
-        Schema::table('request_billing_government_charges', function (Blueprint $table): void {
-            $table->foreignId('government_charge_type_id')->nullable()->after('request_billing_id')->constrained('government_charge_types')->nullOnDelete();
-            $table->string('name_gu', 150)->nullable()->after('name');
-        });
+        $this->ensureServiceAddOnsTable();
+        $this->ensureGovernmentChargeTypesTable();
+        $this->ensureRequestChargeColumns();
     }
 
     public function down(): void
     {
-        Schema::table('request_billing_government_charges', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('government_charge_type_id');
-            $table->dropColumn('name_gu');
-        });
+        if (Schema::hasTable('request_billing_government_charges')) {
+            $foreign = $this->foreignKey('request_billing_government_charges', ['government_charge_type_id']);
+            if ($foreign) {
+                Schema::table('request_billing_government_charges', fn (Blueprint $table) => $table->dropForeign(DB::getDriverName() === 'sqlite' ? ['government_charge_type_id'] : $foreign['name']));
+            }
+            $index = $this->index('request_billing_government_charges', ['government_charge_type_id']);
+            if ($index) {
+                Schema::table('request_billing_government_charges', fn (Blueprint $table) => $table->dropIndex($index['name']));
+            }
+            if (Schema::hasColumn('request_billing_government_charges', 'government_charge_type_id')) {
+                Schema::table('request_billing_government_charges', fn (Blueprint $table) => $table->dropColumn('government_charge_type_id'));
+            }
+            if (Schema::hasColumn('request_billing_government_charges', 'name_gu')) {
+                Schema::table('request_billing_government_charges', fn (Blueprint $table) => $table->dropColumn('name_gu'));
+            }
+        }
         Schema::dropIfExists('government_charge_types');
         Schema::dropIfExists('service_add_ons');
+    }
+
+    private function ensureServiceAddOnsTable(): void
+    {
+        if (! Schema::hasTable('service_add_ons')) {
+            Schema::create('service_add_ons', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('service_id');
+                $table->foreignId('add_on_service_id');
+                $table->boolean('is_active')->default(true);
+                $table->unsignedSmallInteger('sort_order')->default(0);
+                $table->timestamps();
+                $table->index('service_id', self::SERVICE_INDEX);
+                $table->index('add_on_service_id', self::ADD_ON_INDEX);
+                $table->index('is_active', self::ACTIVE_INDEX);
+                $table->unique(['service_id', 'add_on_service_id'], self::SERVICE_ADD_ON_UNIQUE);
+                $table->foreign('service_id', self::SERVICE_FK)->references('id')->on('services')->cascadeOnDelete();
+                $table->foreign('add_on_service_id', self::ADD_ON_FK)->references('id')->on('services')->cascadeOnDelete();
+            });
+
+            return;
+        }
+
+        $this->ensureIndex('service_add_ons', ['service_id'], self::SERVICE_INDEX);
+        $this->ensureIndex('service_add_ons', ['add_on_service_id'], self::ADD_ON_INDEX);
+        $this->ensureIndex('service_add_ons', ['is_active'], self::ACTIVE_INDEX);
+        $this->ensureIndex('service_add_ons', ['service_id', 'add_on_service_id'], self::SERVICE_ADD_ON_UNIQUE, true);
+        $this->ensureForeignKey('service_add_ons', ['service_id'], 'services', self::SERVICE_FK, true);
+        $this->ensureForeignKey('service_add_ons', ['add_on_service_id'], 'services', self::ADD_ON_FK, true);
+    }
+
+    private function ensureGovernmentChargeTypesTable(): void
+    {
+        if (! Schema::hasTable('government_charge_types')) {
+            Schema::create('government_charge_types', function (Blueprint $table): void {
+                $table->id();
+                $table->string('name_en', 150);
+                $table->string('name_gu', 150)->nullable();
+                $table->decimal('default_amount', 12, 2)->default(0);
+                $table->string('description', 500)->nullable();
+                $table->boolean('is_active')->default(true);
+                $table->unsignedSmallInteger('sort_order')->default(0);
+                $table->timestamps();
+                $table->unique('name_en', self::CHARGE_NAME_UNIQUE);
+                $table->index('is_active', self::CHARGE_ACTIVE_INDEX);
+            });
+
+            return;
+        }
+
+        $this->ensureIndex('government_charge_types', ['name_en'], self::CHARGE_NAME_UNIQUE, true);
+        $this->ensureIndex('government_charge_types', ['is_active'], self::CHARGE_ACTIVE_INDEX);
+    }
+
+    private function ensureRequestChargeColumns(): void
+    {
+        if (! Schema::hasColumn('request_billing_government_charges', 'government_charge_type_id')) {
+            Schema::table('request_billing_government_charges', fn (Blueprint $table) => $table->foreignId('government_charge_type_id')->nullable()->after('request_billing_id'));
+        }
+        if (! Schema::hasColumn('request_billing_government_charges', 'name_gu')) {
+            Schema::table('request_billing_government_charges', fn (Blueprint $table) => $table->string('name_gu', 150)->nullable()->after('name'));
+        }
+
+        $this->ensureIndex('request_billing_government_charges', ['government_charge_type_id'], self::REQUEST_CHARGE_TYPE_INDEX);
+        $this->ensureForeignKey('request_billing_government_charges', ['government_charge_type_id'], 'government_charge_types', self::REQUEST_CHARGE_TYPE_FK, false);
+    }
+
+    private function ensureIndex(string $table, array $columns, string $name, bool $unique = false): void
+    {
+        $exists = $this->hasIndex($table, $columns, $unique);
+        if (! $exists) {
+            Schema::table($table, fn (Blueprint $blueprint) => $unique ? $blueprint->unique($columns, $name) : $blueprint->index($columns, $name));
+        }
+    }
+
+    private function hasIndex(string $table, array $columns, bool $unique = false): bool
+    {
+        return $this->index($table, $columns, $unique) !== null;
+    }
+
+    private function index(string $table, array $columns, bool $unique = false): ?array
+    {
+        return collect(Schema::getIndexes($table))->first(
+            fn (array $index): bool => $index['columns'] === $columns && (! $unique || $index['unique'])
+        );
+    }
+
+    private function ensureForeignKey(string $table, array $columns, string $foreignTable, string $name, bool $cascade): void
+    {
+        if ($this->hasForeignKey($table, $columns, $foreignTable)) {
+            return;
+        }
+        Schema::table($table, function (Blueprint $blueprint) use ($columns, $foreignTable, $name, $cascade): void {
+            $foreign = $blueprint->foreign($columns, $name)->references('id')->on($foreignTable);
+            $cascade ? $foreign->cascadeOnDelete() : $foreign->nullOnDelete();
+        });
+    }
+
+    private function hasForeignKey(string $table, array $columns, ?string $foreignTable = null): bool
+    {
+        return $this->foreignKey($table, $columns, $foreignTable) !== null;
+    }
+
+    private function foreignKey(string $table, array $columns, ?string $foreignTable = null): ?array
+    {
+        return collect(Schema::getForeignKeys($table))->first(
+            fn (array $key): bool => $key['columns'] === $columns && ($foreignTable === null || $key['foreign_table'] === $foreignTable)
+        );
     }
 };
