@@ -17,7 +17,7 @@ class PublicRequestPdfController extends Controller
 
         $type = PdfDocumentType::tryFrom($documentType);
         abort_unless($type, 404);
-        abort_if($type === PdfDocumentType::DispatchSlip && ! $customerRequest->dispatches()->exists(), 404);
+        abort_unless($type->isCustomerAvailable($customerRequest), 404);
 
         return $pdf->download($type, $customerRequest);
     }

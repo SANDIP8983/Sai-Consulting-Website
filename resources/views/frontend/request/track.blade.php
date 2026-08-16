@@ -49,10 +49,10 @@
             $publicDispatchStatuses = ['completed', 'dispatched', 'delivered', 'closed', 'archived'];
             $pdfTypes = [
                 \App\Enums\PdfDocumentType::RequestAcknowledgement,
-                \App\Enums\PdfDocumentType::CaseSummary,
             ];
-            if (! $isRejected) $pdfTypes[] = \App\Enums\PdfDocumentType::PaymentSummary;
-            if ($customerRequest->dispatches->isNotEmpty()) $pdfTypes[] = \App\Enums\PdfDocumentType::DispatchSlip;
+            foreach ([\App\Enums\PdfDocumentType::PaymentSummary, \App\Enums\PdfDocumentType::CaseSummary, \App\Enums\PdfDocumentType::DispatchSlip] as $pdfType) {
+                if (! $isRejected && $pdfType->isCustomerAvailable($customerRequest)) $pdfTypes[] = $pdfType;
+            }
             $publicStatusHistory = $isRejected
                 ? $customerRequest->statusHistory->where('to_status', 'rejected')
                 : $customerRequest->statusHistory;
