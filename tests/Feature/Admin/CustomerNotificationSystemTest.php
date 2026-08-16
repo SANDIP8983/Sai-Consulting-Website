@@ -14,6 +14,7 @@ use App\Services\Notifications\DisabledWhatsAppChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class CustomerNotificationSystemTest extends TestCase
@@ -70,6 +71,33 @@ class CustomerNotificationSystemTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_disabled_email_and_whatsapp_are_logged_as_channel_disabled_without_sending(): void
+    {
+        Queue::fake();
+        Mail::fake();
+        foreach (['email', 'whatsapp'] as $channel) {
+            Setting::query()->create([
+                'setting_key' => "notifications.request_received.{$channel}",
+                'setting_value' => '0',
+                'value_type' => 'boolean',
+                'setting_group' => 'customer_notifications',
+                'is_public' => false,
+            ]);
+        }
+
+        app(CustomerNotificationService::class)->record($this->request(), NotificationMilestone::RequestReceived);
+
+        foreach (['email', 'whatsapp'] as $channel) {
+            $this->assertDatabaseHas('customer_notification_deliveries', [
+                'channel' => $channel,
+                'status' => 'skipped',
+                'failure_category' => 'channel_disabled',
+            ]);
+        }
+        Queue::assertNothingPushed();
+        Mail::assertNothingSent();
+    }
+
     public function test_email_sends_once_and_job_retry_is_idempotent(): void
     {
         Queue::fake();
@@ -111,10 +139,12 @@ class CustomerNotificationSystemTest extends TestCase
 
     public function test_message_is_customer_safe_and_tracking_url_has_no_private_credentials(): void
     {
+        URL::forceRootUrl('https://saiconsultingchanasma.in');
+        URL::forceScheme('https');
         $request = $this->request(['details' => 'INTERNAL Aadhaar PAN password staff@example.com']);
         $message = app(CustomerMessageFactory::class)->make($request, NotificationMilestone::Rejected);
         $this->assertStringContainsString($request->reference_no, $message['body']);
-        $this->assertStringContainsString(route('request.track'), $message['body']);
+        $this->assertStringContainsString('https://saiconsultingchanasma.in/request/track', $message['body']);
         foreach (['Aadhaar', 'PAN', 'password', 'staff@example.com', $request->mobile] as $private) {
             $this->assertStringNotContainsString($private, $message['body']);
         }
