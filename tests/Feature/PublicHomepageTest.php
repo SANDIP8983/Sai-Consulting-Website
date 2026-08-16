@@ -20,6 +20,14 @@ class PublicHomepageTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_public_office_status_shows_closed_on_an_automatic_closed_day(): void
+    {
+        CarbonImmutable::setTestNow('2026-09-12 10:30:00 Asia/Kolkata');
+        OfficeTiming::query()->create(['day_of_week' => 6, 'opens_at' => '09:00', 'closes_at' => '18:00', 'is_closed' => false]);
+
+        $this->get(route('home'))->assertOk()->assertSee('આજે ઓફિસ બંધ છે');
+    }
+
     public function test_homepage_loads_dynamic_public_data_without_exposing_phone_number(): void
     {
         CarbonImmutable::setTestNow('2026-07-31 10:30:00');

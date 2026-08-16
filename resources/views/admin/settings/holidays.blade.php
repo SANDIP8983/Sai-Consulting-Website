@@ -9,7 +9,8 @@
 
 @section('content')
 <div class="container py-5"><div class="row justify-content-center"><div class="col-xl-10">
-    <h1 class="h2 mb-4">Holidays</h1>
+    <h1 class="h2 mb-2">Holidays</h1>
+    <p class="text-muted mb-4">Office is automatically closed every Sunday and on the 2nd &amp; 4th Saturday. Add Government/Public Holidays below; no weekend entries are required.</p>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @php($isEditing = $editingHoliday !== null)
     <div class="card shadow-sm mb-4"><div class="card-body p-4"><h2 class="h5 mb-3">{{ $isEditing ? 'Edit Holiday' : 'Add Holiday' }}</h2>

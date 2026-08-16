@@ -5,21 +5,22 @@ namespace App\Services;
 use App\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\AppointmentBlock;
-use App\Models\Holiday;
 use App\Models\OfficeTiming;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 class AppointmentAvailabilityService
 {
-    public const TIMEZONE = 'Asia/Kolkata';
+    public const TIMEZONE = BusinessCalendarService::TIMEZONE;
 
     public const SLOT_MINUTES = 30;
+
+    public function __construct(private readonly BusinessCalendarService $calendar) {}
 
     public function slots(string $date, ?int $excludingAppointmentId = null): array
     {
         $day = CarbonImmutable::parse($date, self::TIMEZONE)->startOfDay();
-        if ($day->lt(now(self::TIMEZONE)->startOfDay()) || $day->gt(now(self::TIMEZONE)->addMonths(6)->endOfDay()) || $this->closedHoliday($day)) {
+        if ($day->lt(now(self::TIMEZONE)->startOfDay()) || $day->gt(now(self::TIMEZONE)->addMonths(6)->endOfDay()) || ! $this->calendar->isWorkingDay($day)) {
             return [];
         }
         $timing = OfficeTiming::query()->where('day_of_week', $day->dayOfWeek)->first();
@@ -50,11 +51,6 @@ class AppointmentAvailabilityService
         }
 
         return $at;
-    }
-
-    private function closedHoliday(CarbonImmutable $day): bool
-    {
-        return Holiday::query()->where('is_closed', true)->get()->contains(fn (Holiday $h) => $h->is_recurring ? $h->holiday_date->format('m-d') === $day->format('m-d') : $h->holiday_date->isSameDay($day));
     }
 
     private function overlapsAppointments($start, $end, Collection $items): bool

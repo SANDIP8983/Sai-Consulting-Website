@@ -34,6 +34,7 @@ class RequestWorkflowService
         private readonly RequestDecisionNormalizer $decisionNormalizer,
         private readonly CustomerNotificationService $notifications,
         private readonly AdminNewRequestNotificationService $adminNotifications,
+        private readonly BusinessCalendarService $calendar,
     ) {}
 
     public function transitions(CustomerRequest $request): array
@@ -97,7 +98,7 @@ class RequestWorkflowService
                         'case_planning_version' => CustomerRequest::CURRENT_CASE_PLANNING_VERSION,
                         'status' => 'received',
                         'amount_due' => $amountDue,
-                        'estimated_completion_date' => $estimatedDays ? now()->addDays($estimatedDays)->toDateString() : null,
+                        'estimated_completion_date' => $estimatedDays ? $this->calendar->addWorkingDays(now(BusinessCalendarService::TIMEZONE), $estimatedDays)->toDateString() : null,
                         'last_status_changed_at' => now(),
                     ]);
 

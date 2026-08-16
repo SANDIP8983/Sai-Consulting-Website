@@ -169,6 +169,7 @@ class AppointmentBookingTest extends TestCase
         $this->post(route('appointments.store'), $this->payload())->assertStatus(422);
         Holiday::create(['holiday_date' => $this->date, 'title' => 'Closed', 'is_closed' => true]);
         $this->getJson(route('appointments.availability', ['date' => $this->date, 'service_id' => $this->service->id]))->assertJsonCount(0, 'slots');
+        $this->post(route('appointments.store'), $this->payload())->assertStatus(422);
     }
 
     public function test_closed_weekday_and_outside_hours_are_rejected(): void
@@ -177,6 +178,28 @@ class AppointmentBookingTest extends TestCase
         $this->post(route('appointments.store'), $this->payload())->assertStatus(422);
         OfficeTiming::where('day_of_week', 1)->update(['is_closed' => false]);
         $this->post(route('appointments.store'), $this->payload(['appointment_time' => '09:30']))->assertStatus(422);
+    }
+
+    public function test_automatic_closed_days_override_configured_appointment_hours(): void
+    {
+        OfficeTiming::query()->create(['day_of_week' => 0, 'opens_at' => '10:00', 'closes_at' => '17:00', 'is_closed' => false]);
+        OfficeTiming::query()->create(['day_of_week' => 6, 'opens_at' => '10:00', 'closes_at' => '17:00', 'is_closed' => false]);
+
+        foreach (['2026-09-13', '2026-09-12', '2026-09-26'] as $closedDate) {
+            $this->getJson(route('appointments.availability', ['date' => $closedDate, 'service_id' => $this->service->id]))
+                ->assertOk()->assertJsonCount(0, 'slots');
+            $this->post(route('appointments.store'), $this->payload(['appointment_date' => $closedDate]))->assertStatus(422);
+        }
+    }
+
+    public function test_first_third_and_fifth_saturdays_remain_bookable_when_configured(): void
+    {
+        OfficeTiming::query()->create(['day_of_week' => 6, 'opens_at' => '10:00', 'closes_at' => '17:00', 'is_closed' => false]);
+
+        foreach (['2026-09-05', '2026-09-19', '2026-10-31'] as $openDate) {
+            $this->getJson(route('appointments.availability', ['date' => $openDate, 'service_id' => $this->service->id]))
+                ->assertOk()->assertJsonFragment(['value' => '10:30']);
+        }
     }
 
     public function test_admin_can_create_confirm_reschedule_cancel_and_complete_with_history(): void

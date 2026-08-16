@@ -11,6 +11,8 @@ use Illuminate\Support\Collection;
 
 class HomepageService
 {
+    public function __construct(private readonly BusinessCalendarService $calendar) {}
+
     private const FEATURED_SERVICE_SLUGS = [
         'sale-deed',
         'relinquishment-deed',
@@ -56,8 +58,7 @@ class HomepageService
             ->where('is_public', true)
             ->pluck('setting_value', 'setting_key');
         $branding = Setting::query()->whereIn('setting_key', ['branding.primary_logo_path', 'branding.dark_logo_path', 'branding.favicon_path'])->pluck('setting_value', 'setting_key');
-        $timezone = Setting::query()->where('setting_key', 'office.timezone')->value('setting_value') ?: config('app.timezone');
-        $now = CarbonImmutable::now($timezone);
+        $now = CarbonImmutable::now(BusinessCalendarService::TIMEZONE);
         $timings = OfficeTiming::query()->orderBy('day_of_week')->get();
         $holidays = Holiday::query()->where('is_closed', true)->orderBy('holiday_date')->get();
 
@@ -70,6 +71,10 @@ class HomepageService
             'address' => $this->address($settings),
             'timings' => $timings,
             'workingHoursLabel' => $this->workingHoursLabel($timings),
+            'officeStatus' => [
+                'isOpen' => $this->calendar->isWorkingDay($now),
+                'closedReason' => $this->calendar->closureReason($now),
+            ],
             'holidayNotice' => $this->holidayNotice($now, $holidays),
             'primaryLogoUrl' => $branding->get('branding.primary_logo_path') ? route('branding.asset', 'primary-logo') : null,
             'darkLogoUrl' => $branding->get('branding.dark_logo_path') ? route('branding.asset', 'dark-logo') : null,

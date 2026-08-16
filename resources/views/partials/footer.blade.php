@@ -17,7 +17,7 @@
                 @if($site['email'])<div class="footer-info-row"><x-public-icon name="mail" size="21" /><div><small>Email</small><strong><a href="mailto:{{ $site['email'] }}">{{ $site['email'] }}</a></strong></div></div>@endif
                 @if($site['whatsappUrl'])<div class="footer-info-row"><x-public-icon name="message" size="21" /><div><small>WhatsApp</small><strong><a href="{{ $site['whatsappUrl'] }}" target="_blank" rel="noopener">{{ $site['whatsappNumber'] }}</a></strong></div></div>@endif
                 @if($site['address'])<div class="footer-info-row"><x-public-icon name="location" size="21" /><div><small>Office Address</small><strong>{{ $site['address'] }}</strong></div></div>@endif
-                @if($site['workingHoursLabel'])<div class="footer-info-row"><x-public-icon name="clock" size="21" /><div><small>કાર્ય સમય</small><strong>{{ str($site['workingHoursLabel'])->after('Working Hours: ') }}</strong></div></div>@endif
+                @if(!($site['officeStatus']['isOpen'] ?? false))<div class="footer-info-row"><x-public-icon name="clock" size="21" /><div><small>કાર્ય સમય</small><strong>આજે ઓફિસ બંધ છે</strong></div></div>@elseif($site['workingHoursLabel'])<div class="footer-info-row"><x-public-icon name="clock" size="21" /><div><small>કાર્ય સમય</small><strong>{{ str($site['workingHoursLabel'])->after('Working Hours: ') }}</strong></div></div>@endif
             </div>@endif
         </div>
         <div class="footer-disclaimer"><x-public-icon name="shield" size="20" /><span>Sai Consulting provides documentation and advisory services but does not practice as an advocate.</span></div>

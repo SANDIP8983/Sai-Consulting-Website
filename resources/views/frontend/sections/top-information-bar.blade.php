@@ -9,7 +9,9 @@
                 @if($site['whatsappUrl'])
                     <a href="{{ $site['whatsappUrl'] }}" target="_blank" rel="noopener"><x-public-icon name="message" size="16" /> WhatsApp</a>
                 @endif
-                @if($site['workingHoursLabel'])<span class="working-hours-pill"><x-public-icon name="clock" size="16" /> <span>કાર્ય સમય: {{ str($site['workingHoursLabel'])->after('Working Hours: ') }}</span></span>@endif
+                @if(!($site['officeStatus']['isOpen'] ?? false))
+                    <span class="working-hours-pill"><x-public-icon name="clock" size="16" /> <span>આજે ઓફિસ બંધ છે</span></span>
+                @elseif($site['workingHoursLabel'])<span class="working-hours-pill"><x-public-icon name="clock" size="16" /> <span>કાર્ય સમય: {{ str($site['workingHoursLabel'])->after('Working Hours: ') }}</span></span>@endif
             </div>
         </div>
     </div>

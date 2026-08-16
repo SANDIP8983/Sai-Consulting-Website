@@ -3,8 +3,10 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\CustomerRequest;
+use App\Models\Holiday;
 use App\Models\Service;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +15,18 @@ use Tests\TestCase;
 class OfflineCustomerRequestEntryTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Carbon::setTestNow('2026-08-17 10:00:00 Asia/Kolkata');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
 
     public function test_offline_entry_routes_are_admin_only(): void
     {
@@ -34,7 +48,7 @@ class OfflineCustomerRequestEntryTest extends TestCase
         $this->assertSame('received', $request->status);
         $this->assertMatchesRegularExpression('/^SC\/\d{4}\/000001$/', $request->reference_no);
         $this->assertSame('750.00', $request->amount_due);
-        $this->assertSame(now()->addDays(5)->toDateString(), $request->estimated_completion_date->toDateString());
+        $this->assertSame('2026-08-24', $request->estimated_completion_date->toDateString());
         $document = $request->documents()->sole();
         $this->assertSame('admin', $document->source);
         Storage::disk('local')->assertExists($document->file_path);
@@ -43,6 +57,19 @@ class OfflineCustomerRequestEntryTest extends TestCase
             'to_status' => 'received',
             'changed_by' => $admin->id,
         ]);
+    }
+
+    public function test_request_estimate_skips_configured_holiday_and_automatic_closed_days(): void
+    {
+        Carbon::setTestNow('2026-05-08 10:00:00 Asia/Kolkata');
+        Storage::fake('local');
+        Holiday::query()->create(['holiday_date' => '2026-05-11', 'title' => 'Government Holiday', 'is_closed' => true]);
+        $service = $this->service();
+        $service->update(['estimated_days' => 1]);
+
+        $this->actingAs(User::factory()->create())->post(route('admin.requests.store'), $this->payload($service))->assertRedirect();
+
+        $this->assertSame('2026-05-12', CustomerRequest::query()->sole()->estimated_completion_date->toDateString());
     }
 
     public function test_offline_entry_reuses_public_validation_without_requiring_declaration(): void
