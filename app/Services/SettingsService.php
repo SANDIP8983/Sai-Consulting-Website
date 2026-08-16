@@ -87,9 +87,16 @@ class SettingsService
         })->all()])->all();
     }
 
-    public function updateCustomerNotificationSettings(array $milestones): void
+    public function adminNewRequestEmailEnabled(): bool
     {
-        DB::transaction(function () use ($milestones): void {
+        $stored = Setting::query()->where('setting_key', 'notifications.admin_new_online_request.email')->value('setting_value');
+
+        return $stored === null ? false : filter_var($stored, FILTER_VALIDATE_BOOL);
+    }
+
+    public function updateCustomerNotificationSettings(array $milestones, bool $adminNewRequestEmail): void
+    {
+        DB::transaction(function () use ($milestones, $adminNewRequestEmail): void {
             foreach (NotificationMilestone::cases() as $milestone) {
                 foreach (['email', 'whatsapp'] as $channel) {
                     Setting::query()->updateOrCreate(
@@ -98,6 +105,10 @@ class SettingsService
                     );
                 }
             }
+            Setting::query()->updateOrCreate(
+                ['setting_key' => 'notifications.admin_new_online_request.email'],
+                ['setting_value' => $adminNewRequestEmail ? '1' : '0', 'value_type' => 'boolean', 'setting_group' => 'admin_notifications', 'is_public' => false],
+            );
         });
     }
 

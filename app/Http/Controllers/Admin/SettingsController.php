@@ -84,12 +84,19 @@ class SettingsController extends Controller
 
     public function customerNotifications(): View
     {
-        return view('admin.settings.customer-notifications', ['settings' => $this->settingsService->customerNotificationSettings(), 'milestones' => NotificationMilestone::cases()]);
+        return view('admin.settings.customer-notifications', [
+            'settings' => $this->settingsService->customerNotificationSettings(),
+            'milestones' => NotificationMilestone::cases(),
+            'adminNewRequestEmailEnabled' => $this->settingsService->adminNewRequestEmailEnabled(),
+        ]);
     }
 
     public function updateCustomerNotifications(UpdateCustomerNotificationSettingsRequest $request): RedirectResponse
     {
-        $this->settingsService->updateCustomerNotificationSettings($request->validated('milestones'));
+        $this->settingsService->updateCustomerNotificationSettings(
+            $request->validated('milestones'),
+            $request->boolean('admin_new_request_email'),
+        );
 
         return to_route('admin.settings.customer-notifications')->with('success', 'Customer notification settings updated successfully.');
     }

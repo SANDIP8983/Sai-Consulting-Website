@@ -73,11 +73,12 @@ class ProductionBootstrapSeederTest extends TestCase
         $this->assertDatabaseCount('work_scope_items', 14);
         $this->assertEqualsCanonicalizing(self::CURRENT_SCOPES, WorkScopeItem::query()->pluck('normalized_name')->all());
         $this->assertDatabaseCount('service_work_scope_defaults', 54);
-        $this->assertDatabaseCount('settings', 54);
+        $this->assertDatabaseCount('settings', 55);
         $this->assertSame(32, Setting::query()->where('setting_group', 'customer_notifications')->count());
-        $this->assertSame(22, Setting::query()->where('setting_group', '!=', 'customer_notifications')->count());
-        $this->assertSame(0, Setting::query()->where('setting_group', 'customer_notifications')->where('setting_value', '!=', '0')->count());
-        $this->assertEqualsCanonicalizing(self::BASE_SETTING_KEYS, Setting::query()->where('setting_group', '!=', 'customer_notifications')->pluck('setting_key')->all());
+        $this->assertSame(1, Setting::query()->where('setting_group', 'admin_notifications')->count());
+        $this->assertSame(22, Setting::query()->whereNotIn('setting_group', ['customer_notifications', 'admin_notifications'])->count());
+        $this->assertSame(0, Setting::query()->whereIn('setting_group', ['customer_notifications', 'admin_notifications'])->where('setting_value', '!=', '0')->count());
+        $this->assertEqualsCanonicalizing(self::BASE_SETTING_KEYS, Setting::query()->whereNotIn('setting_group', ['customer_notifications', 'admin_notifications'])->pluck('setting_key')->all());
         $expectedNotificationKeys = collect(NotificationMilestone::cases())->flatMap(
             fn (NotificationMilestone $milestone): array => ["notifications.{$milestone->value}.email", "notifications.{$milestone->value}.whatsapp"],
         )->all();
@@ -109,6 +110,7 @@ class ProductionBootstrapSeederTest extends TestCase
         $this->seed(ProductionBootstrapSeeder::class);
         Setting::query()->where('setting_key', 'contact.email')->update(['setting_value' => 'owner@example.test']);
         Setting::query()->where('setting_key', 'notifications.completed.email')->update(['setting_value' => '1']);
+        Setting::query()->where('setting_key', 'notifications.admin_new_online_request.email')->update(['setting_value' => '1']);
         OfficeTiming::query()->where('day_of_week', 1)->update(['opens_at' => '09:30', 'closes_at' => '17:30', 'is_closed' => false]);
         $customScope = WorkScopeItem::query()->create(['name_en' => 'Owner Custom Scope', 'name_gu' => 'Owner Custom Scope', 'normalized_name' => 'owner-custom-scope', 'is_active' => true]);
         $service = Service::query()->where('slug', 'sale-deed')->sole();
@@ -120,6 +122,7 @@ class ProductionBootstrapSeederTest extends TestCase
 
         $this->assertSame('owner@example.test', Setting::query()->where('setting_key', 'contact.email')->value('setting_value'));
         $this->assertSame('1', Setting::query()->where('setting_key', 'notifications.completed.email')->value('setting_value'));
+        $this->assertSame('1', Setting::query()->where('setting_key', 'notifications.admin_new_online_request.email')->value('setting_value'));
         $monday = OfficeTiming::query()->where('day_of_week', 1)->sole();
         $this->assertSame('09:30', substr((string) $monday->opens_at, 0, 5));
         $this->assertSame('17:30', substr((string) $monday->closes_at, 0, 5));

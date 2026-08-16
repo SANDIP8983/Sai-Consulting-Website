@@ -33,6 +33,7 @@ class RequestWorkflowService
         private readonly RequestChecklistInitializer $checklistInitializer,
         private readonly RequestDecisionNormalizer $decisionNormalizer,
         private readonly CustomerNotificationService $notifications,
+        private readonly AdminNewRequestNotificationService $adminNotifications,
     ) {}
 
     public function transitions(CustomerRequest $request): array
@@ -159,6 +160,10 @@ class RequestWorkflowService
                             'file_size' => $file->getSize(),
                             'source' => $documentSource,
                         ]);
+                    }
+
+                    if ($origin === 'online') {
+                        $this->adminNotifications->afterCommit($request);
                     }
 
                     return $request->load(['service', 'requestServices.service']);

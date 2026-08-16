@@ -45,6 +45,26 @@ class CustomerNotificationSystemTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'admin']))->get(route('admin.notifications.index'))->assertOk();
     }
 
+    public function test_super_admin_can_enable_admin_new_online_request_email(): void
+    {
+        $milestones = collect(NotificationMilestone::cases())->mapWithKeys(fn (NotificationMilestone $milestone) => [
+            $milestone->value => ['email' => false, 'whatsapp' => false],
+        ])->all();
+
+        $this->actingAs(User::factory()->create(['role' => 'super_admin']))
+            ->put(route('admin.settings.customer-notifications.update'), [
+                'admin_new_request_email' => true,
+                'milestones' => $milestones,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('settings', [
+            'setting_key' => 'notifications.admin_new_online_request.email',
+            'setting_value' => '1',
+            'setting_group' => 'admin_notifications',
+        ]);
+    }
+
     public function test_idempotent_event_creates_only_one_delivery_per_channel_and_masks_recipients(): void
     {
         Queue::fake();
