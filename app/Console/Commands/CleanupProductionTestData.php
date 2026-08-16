@@ -26,6 +26,8 @@ class CleanupProductionTestData extends Command
 
     private const DIRECT_REQUEST_TABLES = [
         'request_documents',
+        'request_final_documents',
+        'request_final_document_deliveries',
         'request_payments',
         'request_status_histories',
         'request_dispatches',
@@ -226,6 +228,8 @@ class CleanupProductionTestData extends Command
         $dispatchIds = DB::table('request_dispatches')->whereIn('request_id', $requestIds)->pluck('id')->all();
         $notificationIds = DB::table('customer_notification_events')->whereIn('request_id', $requestIds)->pluck('id')->all();
         $deliveryIds = DB::table('customer_notification_deliveries')->whereIn('notification_event_id', $notificationIds)->pluck('id')->all();
+        $finalDocumentIds = DB::table('request_final_documents')->whereIn('request_id', $requestIds)->pluck('id')->all();
+        $finalDeliveryIds = DB::table('request_final_document_deliveries')->whereIn('request_id', $requestIds)->pluck('id')->all();
 
         return [
             'services' => $serviceIds,
@@ -233,6 +237,8 @@ class CleanupProductionTestData extends Command
             'dispatches' => $dispatchIds,
             'notifications' => $notificationIds,
             'deliveries' => $deliveryIds,
+            'finalDocuments' => $finalDocumentIds,
+            'finalDeliveries' => $finalDeliveryIds,
             'scopes' => DB::table('request_service_work_scopes')->whereIn('request_service_id', $serviceIds)->pluck('id')->all(),
         ];
     }
@@ -247,8 +253,11 @@ class CleanupProductionTestData extends Command
         $counts['request_billing_government_charges'] = DB::table('request_billing_government_charges')->whereIn('request_billing_id', $ids['billings'])->count();
         $counts['request_dispatch_proofs'] = DB::table('request_dispatch_proofs')->whereIn('request_dispatch_id', $ids['dispatches'])->count();
         $counts['customer_notification_deliveries'] = count($ids['deliveries']);
+        $counts['request_final_document_delivery_items'] = DB::table('request_final_document_delivery_items')->whereIn('delivery_id', $ids['finalDeliveries'])->count();
         $counts['queued_notification_jobs'] = $this->notificationJobIds('jobs', $ids['deliveries'])->count();
         $counts['failed_notification_jobs'] = $this->notificationJobIds('failed_jobs', $ids['deliveries'])->count();
+        $counts['queued_final_document_jobs'] = $this->finalDocumentJobIds('jobs', $ids['finalDeliveries'])->count();
+        $counts['failed_final_document_jobs'] = $this->finalDocumentJobIds('failed_jobs', $ids['finalDeliveries'])->count();
 
         return $counts;
     }
@@ -257,16 +266,18 @@ class CleanupProductionTestData extends Command
     {
         $documentPaths = DB::table('request_documents')->whereIn('request_id', $requestIds)->pluck('file_path');
         $proofPaths = DB::table('request_dispatch_proofs')->whereIn('request_dispatch_id', $dispatchIds)->pluck('file_path');
+        $finalDocumentPaths = DB::table('request_final_documents')->whereIn('request_id', $requestIds)->pluck('storage_path');
 
-        return $documentPaths->merge($proofPaths)->filter()->unique()->sort()->values()->map(function (string $path) use ($requestIds, $dispatchIds): array {
+        return $documentPaths->merge($proofPaths)->merge($finalDocumentPaths)->filter()->unique()->sort()->values()->map(function (string $path) use ($requestIds, $dispatchIds): array {
             $safe = $this->isSafeRelativePath($path);
             $sharedDocument = DB::table('request_documents')->where('file_path', $path)->whereNotIn('request_id', $requestIds)->exists();
             $sharedProof = DB::table('request_dispatch_proofs')->where('file_path', $path)->whereNotIn('request_dispatch_id', $dispatchIds)->exists();
+            $sharedFinalDocument = DB::table('request_final_documents')->where('storage_path', $path)->whereNotIn('request_id', $requestIds)->exists();
 
             return [
                 'path' => $path,
                 'safe' => $safe,
-                'shared' => $sharedDocument || $sharedProof,
+                'shared' => $sharedDocument || $sharedProof || $sharedFinalDocument,
                 'exists' => $safe && Storage::disk('local')->exists($path),
             ];
         })->all();
@@ -282,7 +293,14 @@ class CleanupProductionTestData extends Command
             if ($jobIds->isNotEmpty()) {
                 DB::table($table)->whereIn('id', $jobIds)->delete();
             }
+            $finalJobIds = $this->finalDocumentJobIds($table, $ids['finalDeliveries']);
+            if ($finalJobIds->isNotEmpty()) {
+                DB::table($table)->whereIn('id', $finalJobIds)->delete();
+            }
         }
+        DB::table('request_final_document_delivery_items')->whereIn('delivery_id', $ids['finalDeliveries'])->delete();
+        DB::table('request_final_document_deliveries')->whereIn('id', $ids['finalDeliveries'])->delete();
+        DB::table('request_final_documents')->whereIn('id', $ids['finalDocuments'])->delete();
         DB::table('customer_notification_deliveries')->whereIn('notification_event_id', $ids['notifications'])->delete();
         DB::table('customer_notification_events')->whereIn('request_id', $requestIds)->delete();
         DB::table('request_assignment_histories')->whereIn('request_id', $requestIds)->delete();
@@ -299,6 +317,22 @@ class CleanupProductionTestData extends Command
 
         return DB::table($table)
             ->where('payload', 'like', '%SendCustomerNotificationJob%')
+            ->where(function ($query) use ($deliveryIds): void {
+                foreach ($deliveryIds as $deliveryId) {
+                    $query->orWhere('payload', 'like', '%deliveryId";i:'.(int) $deliveryId.';%');
+                }
+            })
+            ->pluck('id');
+    }
+
+    private function finalDocumentJobIds(string $table, array $deliveryIds): Collection
+    {
+        if ($deliveryIds === [] || ! Schema::hasTable($table) || ! Schema::hasColumn($table, 'payload')) {
+            return collect();
+        }
+
+        return DB::table($table)
+            ->where('payload', 'like', '%SendFinalDocumentDeliveryJob%')
             ->where(function ($query) use ($deliveryIds): void {
                 foreach ($deliveryIds as $deliveryId) {
                     $query->orWhere('payload', 'like', '%deliveryId";i:'.(int) $deliveryId.';%');

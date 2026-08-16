@@ -138,6 +138,7 @@ class ProductionBootstrapSeederTest extends TestCase
     {
         return [
             'requests', 'request_services', 'request_documents', 'request_status_histories',
+            'request_final_documents', 'request_final_document_deliveries', 'request_final_document_delivery_items',
             'request_payments', 'request_processing_details', 'request_processing_histories',
             'request_service_work_scopes', 'request_service_work_scope_histories',
             'request_service_approval_histories', 'request_case_action_histories',

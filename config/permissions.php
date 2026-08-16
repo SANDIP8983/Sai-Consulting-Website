@@ -21,6 +21,8 @@ return [
     'user_reference_columns' => [
         'requests' => ['fee_updated_by', 'case_approved_by', 'closed_by', 'assigned_user_id', 'assigned_by'],
         'request_documents' => ['verified_by'],
+        'request_final_documents' => ['uploaded_by'],
+        'request_final_document_deliveries' => ['initiated_by'],
         'request_payments' => ['received_by'],
         'request_status_histories' => ['changed_by'],
         'request_services' => ['added_by', 'decided_by', 'pricing_unlocked_by'],

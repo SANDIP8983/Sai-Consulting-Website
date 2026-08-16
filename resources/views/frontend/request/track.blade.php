@@ -103,6 +103,7 @@
                 @if($customerRequest->closure_customer_remark)<div class="alert alert-secondary mt-3 mb-0">{{ $customerRequest->closure_customer_remark }}</div>@endif
                 </div>
 
+                @if($customerRequest->finalDocuments->isNotEmpty())<div class="premium-card p-4 mb-4"><h3 class="h5">Final Documents</h3><p class="small text-muted">Only documents released by Sai Consulting are shown. Downloads require this verified tracking session.</p><div class="d-grid d-sm-flex flex-wrap gap-2">@foreach($customerRequest->finalDocuments as $document)<a class="btn btn-primary" href="{{ route('request.track.final-documents.download', [$customerRequest, $document]) }}"><i class="bi bi-file-earmark-arrow-down me-1"></i>{{ $document->original_name }}</a>@endforeach</div></div>@endif
                 <div class="premium-card p-4"><h3 class="h5">Customer-safe PDFs</h3><p class="small text-muted">Links are available only in this verified tracking session.</p><div class="d-grid d-sm-flex flex-wrap gap-2">@foreach($pdfTypes as $pdfType)<a class="btn btn-outline-primary" href="{{ route('request.track.pdf', [$customerRequest, $pdfType->value]) }}"><i class="bi bi-file-earmark-pdf me-1"></i>{{ $pdfType->title() }}</a>@endforeach</div></div>
             </div><aside class="col-lg-4">
                 @unless($isRejected)@include('frontend.request.partials.payment-details')

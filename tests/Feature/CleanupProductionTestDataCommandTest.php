@@ -33,6 +33,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->assertStringContainsString('SC/2026/000001', $output);
         $this->assertStringContainsString('request_billing_government_charges', $output);
         $this->assertStringContainsString('customer_notification_deliveries', $output);
+        $this->assertStringContainsString('request_final_document_deliveries', $output);
         $this->assertDatabaseCount('requests', 4);
         $this->assertDatabaseHas('request_documents', ['request_id' => $fixture['targets'][0]->id]);
         $this->assertDatabaseHas('services', ['id' => $fixture['service']->id]);
@@ -62,11 +63,14 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->assertDatabaseHas('settings', ['setting_key' => 'cleanup.preserve']);
         $this->assertDatabaseMissing('request_documents', ['request_id' => $fixture['targets'][0]->id]);
         $this->assertDatabaseMissing('customer_notification_events', ['request_id' => $fixture['targets'][0]->id]);
+        $this->assertDatabaseMissing('request_final_documents', ['request_id' => $fixture['targets'][0]->id]);
         $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_job_id']]);
+        $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_final_job_id']]);
         $this->assertDatabaseHas('jobs', ['id' => $fixture['unrelated_job_id']]);
         $this->assertDatabaseMissing('file_number_sequences', ['year' => 2026]);
         Storage::disk('local')->assertMissing($fixture['target_file']);
         Storage::disk('local')->assertMissing($fixture['proof_file']);
+        Storage::disk('local')->assertMissing($fixture['final_file']);
         Storage::disk('local')->assertExists($fixture['unrelated_file']);
 
         $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
@@ -200,17 +204,25 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $eventId = DB::table('customer_notification_events')->insertGetId(['request_id' => $target->id, 'milestone' => 'request_received', 'event_key' => 'cleanup-test-event', 'occurred_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         $deliveryId = DB::table('customer_notification_deliveries')->insertGetId(['notification_event_id' => $eventId, 'channel' => 'email', 'status' => 'skipped', 'template_key' => 'test', 'attempt_count' => 0, 'created_at' => now(), 'updated_at' => now()]);
         $targetJobId = DB::table('jobs')->insertGetId(['queue' => 'default', 'payload' => 'SendCustomerNotificationJob deliveryId";i:'.$deliveryId.';', 'attempts' => 0, 'available_at' => now()->timestamp, 'created_at' => now()->timestamp]);
+        $finalFile = 'customer-requests/'.$target->id.'/final-documents/final.pdf';
+        Storage::disk('local')->put($finalFile, '%PDF-final');
+        $finalDocumentId = DB::table('request_final_documents')->insertGetId(['request_id' => $target->id, 'original_name' => 'final.pdf', 'storage_path' => $finalFile, 'mime_type' => 'application/pdf', 'file_size' => 10, 'uploaded_by' => $user->id, 'created_at' => now(), 'updated_at' => now()]);
+        $finalDeliveryId = DB::table('request_final_document_deliveries')->insertGetId(['request_id' => $target->id, 'channel' => 'email', 'status' => 'pending', 'recipient_masked' => 't***@example.com', 'recipient_hash' => hash('sha256', 'test@example.com'), 'idempotency_key' => hash('sha256', 'cleanup-final-delivery'), 'initiated_by' => $user->id, 'queued_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('request_final_document_delivery_items')->insert(['delivery_id' => $finalDeliveryId, 'final_document_id' => $finalDocumentId, 'created_at' => now(), 'updated_at' => now()]);
+        $targetFinalJobId = DB::table('jobs')->insertGetId(['queue' => 'customer-notifications', 'payload' => 'SendFinalDocumentDeliveryJob deliveryId";i:'.$finalDeliveryId.';', 'attempts' => 0, 'available_at' => now()->timestamp, 'created_at' => now()->timestamp]);
         $unrelatedJobId = DB::table('jobs')->insertGetId(['queue' => 'default', 'payload' => 'UnrelatedJob deliveryId";i:'.$deliveryId.';', 'attempts' => 0, 'available_at' => now()->timestamp, 'created_at' => now()->timestamp]);
 
         $unrelatedFile = 'customer-requests/'.$unrelated->id.'/keep.pdf';
         Storage::disk('local')->put($unrelatedFile, '%PDF-keep');
         DB::table('request_documents')->insert(['request_id' => $unrelated->id, 'file_name' => 'keep.pdf', 'file_path' => $unrelatedFile, 'file_type' => 'application/pdf', 'created_at' => now(), 'updated_at' => now()]);
 
-        return compact('service', 'user', 'targets', 'unrelated', 'targetFile', 'proofFile', 'unrelatedFile') + [
+        return compact('service', 'user', 'targets', 'unrelated', 'targetFile', 'proofFile', 'finalFile', 'unrelatedFile') + [
             'target_file' => $targetFile,
             'proof_file' => $proofFile,
+            'final_file' => $finalFile,
             'unrelated_file' => $unrelatedFile,
             'target_job_id' => $targetJobId,
+            'target_final_job_id' => $targetFinalJobId,
             'unrelated_job_id' => $unrelatedJobId,
         ];
     }

@@ -22,6 +22,10 @@ class PublicRequestTrackingService
                 'requestServices.service:id,name_en,name_gu',
                 'requestServices.workScopes' => fn ($query) => $query->select(['id', 'request_service_id', 'status', 'customer_remark']),
                 'documents' => fn ($query) => $query->select(['id', 'request_id', 'service_required_document_id']),
+                'finalDocuments' => fn ($query) => $query
+                    ->select(['id', 'request_id', 'original_name', 'mime_type', 'file_size', 'created_at'])
+                    ->whereHas('deliveries', fn ($delivery) => $delivery->whereColumn('request_final_document_deliveries.request_id', 'request_final_documents.request_id')->where('status', 'sent'))
+                    ->latest(),
                 'billing' => fn ($query) => $query->select(['id', 'request_id', 'total_original_professional_fee', 'discount_amount', 'net_professional_fee', 'gst_rate', 'gst_amount', 'government_charges_total', 'grand_total', 'pricing_locked_at']),
                 'billing.charges' => fn ($query) => $query->select(['id', 'request_billing_id', 'name', 'amount', 'display_order'])->orderBy('display_order')->orderBy('id'),
                 'payments' => fn ($query) => $query

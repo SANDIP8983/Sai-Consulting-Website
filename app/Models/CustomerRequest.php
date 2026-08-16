@@ -75,6 +75,16 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestDocument::class, 'request_id');
     }
 
+    public function finalDocuments(): HasMany
+    {
+        return $this->hasMany(RequestFinalDocument::class, 'request_id');
+    }
+
+    public function finalDocumentDeliveries(): HasMany
+    {
+        return $this->hasMany(RequestFinalDocumentDelivery::class, 'request_id');
+    }
+
     /**
      * Status History
      */

@@ -84,6 +84,8 @@ class AdminRequestManagementService
             'billing.history' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'feeUpdatedBy:id,name',
             'documents.requiredDocument',
+            'finalDocuments' => fn ($q) => $q->with('uploadedBy:id,name')->withCount('deliveries')->latest(),
+            'finalDocumentDeliveries' => fn ($q) => $q->with(['documents:id,original_name', 'initiatedBy:id,name'])->latest(),
             'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at'),
             'dispatches' => fn ($q) => $q->with(['performedBy:id,name', 'updatedBy:id,name', 'proofs', 'history.changedBy:id,name'])->latest('dispatch_date'),

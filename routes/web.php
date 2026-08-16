@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\RequestAssignmentController;
 use App\Http\Controllers\Admin\RequestDispatchController;
 use App\Http\Controllers\Admin\RequestDocumentController;
+use App\Http\Controllers\Admin\RequestFinalDocumentController;
 use App\Http\Controllers\Admin\RequestPdfController;
 use App\Http\Controllers\Admin\RequestProcessingController;
 use App\Http\Controllers\Admin\ServiceController;
@@ -26,6 +27,8 @@ use App\Http\Controllers\PublicInformationController;
 use App\Http\Controllers\PublicRequestPdfController;
 use App\Http\Controllers\PublicServiceController;
 use App\Http\Controllers\SeoController;
+use App\Http\Controllers\SignedFinalDocumentController;
+use App\Http\Controllers\TrackedFinalDocumentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
@@ -66,6 +69,14 @@ Route::post('/request/track', [CustomerRequestController::class, 'lookup'])
 Route::get('/request/track/{customerRequest}/pdf/{documentType}', PublicRequestPdfController::class)
     ->middleware('throttle:10,1')
     ->name('request.track.pdf');
+
+Route::get('/request/track/{customerRequest}/final-documents/{finalDocument}', TrackedFinalDocumentController::class)
+    ->middleware('throttle:10,1')
+    ->name('request.track.final-documents.download');
+
+Route::get('/request/final-documents/{customerRequest}/{finalDocument}', SignedFinalDocumentController::class)
+    ->middleware(['signed', 'throttle:20,1'])
+    ->name('request.final-documents.signed');
 
 Route::get('/branding/{asset}', [BrandingAssetController::class, 'publicAsset'])->name('branding.asset');
 Route::get('/appointments', [AppointmentController::class, 'create'])->name('appointments.create');
@@ -130,6 +141,10 @@ Route::middleware(['auth', 'active', 'can:requests.view', 'request.assigned'])
         Route::patch('/{customerRequest}/fee', 'fee')->middleware('can:billing.manage')->name('fee.update');
         Route::put('/{customerRequest}/assignment', RequestAssignmentController::class)->middleware('can:requests.assign')->name('assignment.update');
         Route::get('/{customerRequest}/documents/{document}', RequestDocumentController::class)->name('documents.download');
+        Route::post('/{customerRequest}/final-documents', [RequestFinalDocumentController::class, 'store'])->middleware('can:requests.manage')->name('final-documents.store');
+        Route::post('/{customerRequest}/final-documents/send', [RequestFinalDocumentController::class, 'send'])->middleware('can:requests.manage')->name('final-documents.send');
+        Route::delete('/{customerRequest}/final-documents/{finalDocument}', [RequestFinalDocumentController::class, 'destroy'])->middleware('can:requests.manage')->name('final-documents.destroy');
+        Route::get('/{customerRequest}/final-documents/{finalDocument}', [RequestFinalDocumentController::class, 'download'])->name('final-documents.download');
         Route::get('/{customerRequest}/pdf/{documentType}', RequestPdfController::class)->name('pdf.download');
     });
 
