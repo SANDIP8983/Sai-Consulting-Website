@@ -64,6 +64,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->assertDatabaseMissing('request_documents', ['request_id' => $fixture['targets'][0]->id]);
         $this->assertDatabaseMissing('customer_notification_events', ['request_id' => $fixture['targets'][0]->id]);
         $this->assertDatabaseMissing('request_final_documents', ['request_id' => $fixture['targets'][0]->id]);
+        $this->assertDatabaseMissing('request_payment_submissions', ['request_id' => $fixture['targets'][0]->id]);
         $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_job_id']]);
         $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_final_job_id']]);
         $this->assertDatabaseHas('jobs', ['id' => $fixture['unrelated_job_id']]);
@@ -71,6 +72,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
         Storage::disk('local')->assertMissing($fixture['target_file']);
         Storage::disk('local')->assertMissing($fixture['proof_file']);
         Storage::disk('local')->assertMissing($fixture['final_file']);
+        Storage::disk('local')->assertMissing($fixture['payment_proof_file']);
         Storage::disk('local')->assertExists($fixture['unrelated_file']);
 
         $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
@@ -186,6 +188,9 @@ class CleanupProductionTestDataCommandTest extends TestCase
         DB::table('request_billing_government_charges')->insert(['request_billing_id' => $billingId, 'name' => 'Test charge', 'amount' => 100, 'display_order' => 0, 'created_at' => now(), 'updated_at' => now()]);
         DB::table('request_billing_histories')->insert(['request_billing_id' => $billingId, 'request_id' => $target->id, 'action' => 'frozen', 'pricing_snapshot' => '{}', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('request_payments')->insert(['request_id' => $target->id, 'amount' => 1280, 'payment_status' => 'received', 'payment_method' => 'cash', 'received_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $paymentProofFile = 'payment-proofs/'.$target->id.'/proof.pdf';
+        Storage::disk('local')->put($paymentProofFile, '%PDF-payment-proof');
+        DB::table('request_payment_submissions')->insert(['request_id' => $target->id, 'utr_reference' => 'UTR-CLEANUP-TEST', 'amount' => 1280, 'proof_path' => $paymentProofFile, 'proof_original_name' => 'payment-proof.pdf', 'proof_mime_type' => 'application/pdf', 'proof_file_size' => 18, 'status' => 'pending', 'submitted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         DB::table('request_status_histories')->insert(['request_id' => $target->id, 'to_status' => 'completed', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('request_processing_details')->insert(['request_id' => $target->id, 'processing_stage' => 'completed', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('request_processing_histories')->insert(['request_id' => $target->id, 'to_stage' => 'completed', 'created_at' => now(), 'updated_at' => now()]);
@@ -220,6 +225,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
             'target_file' => $targetFile,
             'proof_file' => $proofFile,
             'final_file' => $finalFile,
+            'payment_proof_file' => $paymentProofFile,
             'unrelated_file' => $unrelatedFile,
             'target_job_id' => $targetJobId,
             'target_final_job_id' => $targetFinalJobId,

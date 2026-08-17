@@ -422,7 +422,15 @@ class RequestWorkflowService
                 throw ValidationException::withMessages(['amount' => 'Confirmed payments cannot exceed the frozen billing Grand Total.']);
             }
 
-            $lockedRequest->payments()->create([...$attributes, 'received_by' => $user->id]);
+            $payment = $lockedRequest->payments()->create([...$attributes, 'received_by' => $user->id]);
+            if ($paymentStatus === 'received') {
+                $lockedRequest->paymentSubmission()->where('status', 'pending')->update([
+                    'status' => 'verified',
+                    'reviewed_at' => now(),
+                    'reviewed_by' => $user->id,
+                    'payment_id' => $payment->id,
+                ]);
+            }
             $received = (float) $lockedRequest->payments()->where('payment_status', 'received')->sum('amount');
             $refunded = (float) $lockedRequest->payments()->where('payment_status', 'refunded')->sum('amount');
             $netPaid = max(0, $received - $refunded);

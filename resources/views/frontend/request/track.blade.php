@@ -29,6 +29,7 @@
 </section>
 
 <div class="tracking-page-body py-5"><div class="container"><div class="row justify-content-center"><div class="col-xl-10">
+    @if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger d-flex gap-2" role="alert" tabindex="-1"><i class="bi bi-exclamation-circle-fill"></i><span>{{ $errors->first() }}</span></div>@endif
 
     <form method="POST" action="{{ route('request.track.lookup') }}" class="tracking-lookup-card premium-card mb-5">@csrf

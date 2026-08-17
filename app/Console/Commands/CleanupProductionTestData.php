@@ -28,6 +28,7 @@ class CleanupProductionTestData extends Command
         'request_documents',
         'request_final_documents',
         'request_final_document_deliveries',
+        'request_payment_submissions',
         'request_payments',
         'request_status_histories',
         'request_dispatches',
@@ -266,18 +267,20 @@ class CleanupProductionTestData extends Command
     {
         $documentPaths = DB::table('request_documents')->whereIn('request_id', $requestIds)->pluck('file_path');
         $proofPaths = DB::table('request_dispatch_proofs')->whereIn('request_dispatch_id', $dispatchIds)->pluck('file_path');
+        $paymentProofPaths = DB::table('request_payment_submissions')->whereIn('request_id', $requestIds)->pluck('proof_path');
         $finalDocumentPaths = DB::table('request_final_documents')->whereIn('request_id', $requestIds)->pluck('storage_path');
 
-        return $documentPaths->merge($proofPaths)->merge($finalDocumentPaths)->filter()->unique()->sort()->values()->map(function (string $path) use ($requestIds, $dispatchIds): array {
+        return $documentPaths->merge($proofPaths)->merge($paymentProofPaths)->merge($finalDocumentPaths)->filter()->unique()->sort()->values()->map(function (string $path) use ($requestIds, $dispatchIds): array {
             $safe = $this->isSafeRelativePath($path);
             $sharedDocument = DB::table('request_documents')->where('file_path', $path)->whereNotIn('request_id', $requestIds)->exists();
             $sharedProof = DB::table('request_dispatch_proofs')->where('file_path', $path)->whereNotIn('request_dispatch_id', $dispatchIds)->exists();
+            $sharedPaymentProof = DB::table('request_payment_submissions')->where('proof_path', $path)->whereNotIn('request_id', $requestIds)->exists();
             $sharedFinalDocument = DB::table('request_final_documents')->where('storage_path', $path)->whereNotIn('request_id', $requestIds)->exists();
 
             return [
                 'path' => $path,
                 'safe' => $safe,
-                'shared' => $sharedDocument || $sharedProof || $sharedFinalDocument,
+                'shared' => $sharedDocument || $sharedProof || $sharedPaymentProof || $sharedFinalDocument,
                 'exists' => $safe && Storage::disk('local')->exists($path),
             ];
         })->all();

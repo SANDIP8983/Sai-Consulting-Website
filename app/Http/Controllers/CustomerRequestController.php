@@ -6,10 +6,12 @@ use App\Http\Requests\StoreCustomerRequestRequest;
 use App\Http\Requests\TrackCustomerRequestRequest;
 use App\Models\Service;
 use App\Services\HomepageService;
+use App\Services\PaymentSubmissionService;
 use App\Services\PublicRequestTrackingService;
 use App\Services\RequestWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class CustomerRequestController extends Controller
 {
@@ -44,19 +46,30 @@ class CustomerRequestController extends Controller
             : redirect()->route('request.create');
     }
 
-    public function track(HomepageService $homepage): View
+    public function track(Request $request, PublicRequestTrackingService $tracking, HomepageService $homepage, PaymentSubmissionService $payments): View
     {
-        return view('frontend.request.track', ['whatsappUrl' => $homepage->publicSiteData()['whatsappUrl']]);
+        $verified = $request->session()->get('public_tracking.last_verified');
+        $customerRequest = null;
+        if (is_array($verified) && isset($verified['reference_no'], $verified['mobile'], $verified['verified_at']) && now()->timestamp - $verified['verified_at'] <= 1800) {
+            $customerRequest = $tracking->find($verified['reference_no'], $verified['mobile']);
+        }
+
+        return view('frontend.request.track', [
+            'customerRequest' => $customerRequest,
+            'upiPayment' => $customerRequest ? $payments->options($customerRequest) : null,
+            'whatsappUrl' => $homepage->publicSiteData()['whatsappUrl'],
+        ]);
     }
 
-    public function lookup(TrackCustomerRequestRequest $request, PublicRequestTrackingService $tracking, HomepageService $homepage): View
+    public function lookup(TrackCustomerRequestRequest $request, PublicRequestTrackingService $tracking, HomepageService $homepage, PaymentSubmissionService $payments): View
     {
         $customerRequest = $tracking->find(
             $request->validated('reference_no'),
             $request->validated('mobile'),
         );
         $request->session()->put('public_tracking.verified_requests.'.$customerRequest->id, now()->timestamp);
+        $request->session()->put('public_tracking.last_verified', ['reference_no' => $customerRequest->reference_no, 'mobile' => $request->validated('mobile'), 'verified_at' => now()->timestamp]);
 
-        return view('frontend.request.track', ['customerRequest' => $customerRequest, 'whatsappUrl' => $homepage->publicSiteData()['whatsappUrl']]);
+        return view('frontend.request.track', ['customerRequest' => $customerRequest, 'upiPayment' => $payments->options($customerRequest), 'whatsappUrl' => $homepage->publicSiteData()['whatsappUrl']]);
     }
 }

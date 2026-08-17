@@ -16,3 +16,29 @@
         <div class="tracking-document-note mt-2"><i class="bi bi-chat-left-text"></i> {{ $payment->customer_remark }}</div>
     @endforeach
 </div>
+@if(($upiPayment ?? null) && $customerRequest->paymentSubmission?->status === 'pending')
+    <div class="tracking-side-card premium-card mb-4 border border-warning"><div class="tracking-card-title"><span class="icon-box"><i class="bi bi-hourglass-split"></i></span><div><h3>ચકાસણી બાકી</h3><p>Awaiting Payment Verification</p></div></div><p class="mb-0">Payment details submitted. Our team will verify the payment. This does not mean payment is confirmed yet.</p></div>
+@elseif($upiPayment ?? null)
+    <div class="tracking-side-card premium-card mb-4 border border-primary">
+        <div class="tracking-card-title"><span class="icon-box"><i class="bi bi-qr-code"></i></span><div><h3>UPI દ્વારા ચૂકવણી</h3><p>Pay via UPI</p></div></div>
+        @if($customerRequest->paymentSubmission?->status === 'rejected')<div class="alert alert-warning">The previous payment details could not be verified. Please submit corrected UTR/proof.</div>@endif
+        <div class="text-center mb-3"><img src="{{ $upiPayment['qr_url'] }}" alt="Sai Consulting UPI QR code" class="img-fluid border rounded p-2" style="max-width:240px"></div>
+        <dl>
+            <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>Reference</dt><dd class="mb-0 text-end">{{ $customerRequest->reference_no }}</dd></div>
+            @if($customerRequest->file_number)<div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>File Number</dt><dd class="mb-0 text-end">{{ $customerRequest->file_number }}</dd></div>@endif
+            <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>Frozen Grand Total</dt><dd class="mb-0 fw-semibold">₹{{ number_format($upiPayment['grand_total'], 2) }}</dd></div>
+            <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>Exact Amount to Pay</dt><dd class="mb-0 fw-bold text-primary">₹{{ number_format($upiPayment['amount_to_pay'], 2) }}</dd></div>
+            <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>UPI ID</dt><dd class="mb-0 text-break text-end">{{ $upiPayment['upi_id'] }}</dd></div>
+            <div class="d-flex justify-content-between gap-3 py-2"><dt>Payee</dt><dd class="mb-0 text-end">{{ $upiPayment['payee_name'] }}</dd></div>
+        </dl>
+        <p class="small">{{ $upiPayment['instructions'] ?: 'Scan the QR code or pay using the UPI ID. Then enter your UTR / Transaction ID below.' }}</p>
+        <form method="POST" action="{{ route('request.track.payment-submission', $customerRequest) }}" enctype="multipart/form-data">
+            @csrf
+            <div class="mb-3"><label class="form-label" for="utr_reference">UTR / Transaction ID</label><input class="form-control" id="utr_reference" name="utr_reference" value="{{ old('utr_reference') }}" required minlength="6" maxlength="100" autocomplete="off"></div>
+            @if($upiPayment['proof_upload_allowed'])<div class="mb-3"><label class="form-label" for="proof">Payment Screenshot / Proof <span class="text-muted">(optional)</span></label><input class="form-control" type="file" id="proof" name="proof" accept="image/jpeg,image/png,application/pdf"><div class="form-text">JPG, JPEG, PNG or PDF; maximum 5 MB.</div></div>@endif
+            <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="declaration" value="1" id="payment_declaration" required><label class="form-check-label" for="payment_declaration">I confirm that the payment details entered are correct.</label></div>
+            <button class="btn btn-primary w-100" type="submit">Submit Payment Details</button>
+        </form>
+        <div class="form-text mt-2">Payment will be marked Paid only after manual verification by Sai Consulting.</div>
+    </div>
+@endif

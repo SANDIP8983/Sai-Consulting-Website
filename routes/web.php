@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\CustomerNotificationLogController;
 use App\Http\Controllers\Admin\CustomerRequestController as AdminCustomerRequestController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\GovernmentChargeTypeController;
+use App\Http\Controllers\Admin\PaymentSubmissionController as AdminPaymentSubmissionController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\RequestAssignmentController;
 use App\Http\Controllers\Admin\RequestDispatchController;
@@ -23,12 +24,14 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\CustomerRequestController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PaymentSubmissionController;
 use App\Http\Controllers\PublicInformationController;
 use App\Http\Controllers\PublicRequestPdfController;
 use App\Http\Controllers\PublicServiceController;
 use App\Http\Controllers\SeoController;
 use App\Http\Controllers\SignedFinalDocumentController;
 use App\Http\Controllers\TrackedFinalDocumentController;
+use App\Http\Controllers\UpiQrController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
@@ -65,6 +68,12 @@ Route::get('/request/track', [CustomerRequestController::class, 'track'])
 Route::post('/request/track', [CustomerRequestController::class, 'lookup'])
     ->middleware('throttle:10,1')
     ->name('request.track.lookup');
+
+Route::post('/request/track/{customerRequest}/payment-submission', PaymentSubmissionController::class)
+    ->middleware('throttle:5,1')
+    ->name('request.track.payment-submission');
+
+Route::get('/payment/upi-qr', UpiQrController::class)->name('payments.upi-qr');
 
 Route::get('/request/track/{customerRequest}/pdf/{documentType}', PublicRequestPdfController::class)
     ->middleware('throttle:10,1')
@@ -146,6 +155,8 @@ Route::middleware(['auth', 'active', 'can:requests.view', 'request.assigned'])
         Route::delete('/{customerRequest}/final-documents/{finalDocument}', [RequestFinalDocumentController::class, 'destroy'])->middleware('can:requests.manage')->name('final-documents.destroy');
         Route::get('/{customerRequest}/final-documents/{finalDocument}', [RequestFinalDocumentController::class, 'download'])->name('final-documents.download');
         Route::get('/{customerRequest}/pdf/{documentType}', RequestPdfController::class)->name('pdf.download');
+        Route::get('/{customerRequest}/payment-submission/proof', [AdminPaymentSubmissionController::class, 'proof'])->name('payment-submission.proof');
+        Route::patch('/{customerRequest}/payment-submission/reject', [AdminPaymentSubmissionController::class, 'reject'])->middleware('can:payments.manage')->name('payment-submission.reject');
     });
 
 Route::middleware(['auth', 'active', 'can:settings.manage'])->get('/admin/settings/branding/{asset}', [BrandingAssetController::class, 'privateAsset'])->name('admin.settings.branding.asset');
@@ -244,6 +255,8 @@ Route::middleware(['auth', 'active', 'can:settings.manage'])
         Route::put('/office', 'updateOffice')->name('office.update');
         Route::get('/contact', 'contact')->name('contact');
         Route::put('/contact', 'updateContact')->name('contact.update');
+        Route::get('/payments', 'payments')->name('payments');
+        Route::put('/payments', 'updatePayments')->name('payments.update');
         Route::get('/office-timings', 'officeTimings')->name('office-timings');
         Route::put('/office-timings', 'updateOfficeTimings')->name('office-timings.update');
         Route::get('/holidays', 'holidays')->name('holidays');

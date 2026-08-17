@@ -11,9 +11,11 @@ use App\Http\Requests\Admin\UpdateCustomerNotificationSettingsRequest;
 use App\Http\Requests\Admin\UpdateHolidayRequest;
 use App\Http\Requests\Admin\UpdateOfficeSettingsRequest;
 use App\Http\Requests\Admin\UpdateOfficeTimingsRequest;
+use App\Http\Requests\Admin\UpdatePaymentSettingsRequest;
 use App\Http\Requests\Admin\UpdateWebsiteSettingsRequest;
 use App\Models\Holiday;
 use App\Services\BrandingAssetService;
+use App\Services\PaymentSettingsService;
 use App\Services\SettingsService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -80,6 +82,18 @@ class SettingsController extends Controller
         $this->settingsService->updateContactSettings($request->validated());
 
         return to_route('admin.settings.contact')->with('success', 'Contact settings updated successfully.');
+    }
+
+    public function payments(PaymentSettingsService $payments): View
+    {
+        return view('admin.settings.payments', ['settings' => $payments->settings()]);
+    }
+
+    public function updatePayments(UpdatePaymentSettingsRequest $request, PaymentSettingsService $payments): RedirectResponse
+    {
+        $payments->update($request->validated());
+
+        return to_route('admin.settings.payments')->with('success', 'UPI payment settings updated successfully.');
     }
 
     public function customerNotifications(): View

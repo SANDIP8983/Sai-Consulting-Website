@@ -98,6 +98,11 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestPayment::class, 'request_id');
     }
 
+    public function paymentSubmission(): HasOne
+    {
+        return $this->hasOne(RequestPaymentSubmission::class, 'request_id');
+    }
+
     public function dispatches(): HasMany
     {
         return $this->hasMany(RequestDispatch::class, 'request_id')->latest('dispatch_date');

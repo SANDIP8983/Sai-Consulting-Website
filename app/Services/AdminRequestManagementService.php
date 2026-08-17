@@ -88,6 +88,7 @@ class AdminRequestManagementService
             'finalDocumentDeliveries' => fn ($q) => $q->with(['documents:id,original_name', 'initiatedBy:id,name'])->latest(),
             'statusHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'payments' => fn ($q) => $q->with('receivedBy:id,name')->latest('received_at'),
+            'paymentSubmission.reviewedBy:id,name',
             'dispatches' => fn ($q) => $q->with(['performedBy:id,name', 'updatedBy:id,name', 'proofs', 'history.changedBy:id,name'])->latest('dispatch_date'),
             'processing.fileInCharge:id,name',
             'assignedUser:id,name,role,is_active',
