@@ -6,8 +6,10 @@ use App\Models\CustomerRequest;
 use App\Models\RequestPaymentSubmission;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\DynamicUpiQrService;
 use App\Services\PaymentSettingsService;
 use App\Services\PaymentSubmissionService;
+use App\Services\UpiPaymentUriService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -59,6 +61,92 @@ class ManualUpiPaymentTest extends TestCase
             $this->post(route('request.track.lookup'), ['reference_no' => $ineligible->reference_no, 'mobile' => $ineligible->mobile])
                 ->assertOk()->assertDontSee('Submit Payment Details');
         }
+    }
+
+    public function test_dynamic_upi_uri_uses_configured_encoded_values_and_exact_frozen_total(): void
+    {
+        $this->enableUpi();
+        $request = $this->eligibleRequest(3486.50);
+        $options = app(PaymentSubmissionService::class)->options($request);
+
+        $uri = app(UpiPaymentUriService::class)->build($request, $options);
+        parse_str((string) parse_url($uri, PHP_URL_QUERY), $query);
+
+        $this->assertStringStartsWith('upi://pay?', $uri);
+        $this->assertSame('configured@sai-bank', $query['pa']);
+        $this->assertSame('Sai Consulting', $query['pn']);
+        $this->assertSame('3486.50', $query['am']);
+        $this->assertSame('INR', $query['cu']);
+        $this->assertSame($request->reference_no.' / '.$request->file_number, $query['tn']);
+        $this->assertStringContainsString('pa=configured%40sai-bank', $uri);
+        $this->assertStringContainsString('tn=SC%2F2026%2F000950%20%2F%20SC%2F2026%2FF000950', $uri);
+    }
+
+    public function test_dynamic_qr_is_session_authorized_ignores_customer_amount_and_has_private_headers(): void
+    {
+        $this->enableUpi();
+        $request = $this->eligibleRequest(1250.75);
+        $this->verifyTracking($request);
+
+        $this->mock(DynamicUpiQrService::class, function ($mock): void {
+            $mock->shouldReceive('render')->once()->withArgs(function (string $uri): bool {
+                parse_str((string) parse_url($uri, PHP_URL_QUERY), $query);
+                $this->assertSame('1250.75', $query['am']);
+
+                return true;
+            })->andReturn('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+        });
+
+        $this->get(route('request.track.dynamic-upi-qr', $request).'?amount=0.01')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/svg+xml; charset=UTF-8')
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        $this->assertDatabaseCount('request_payments', 0);
+        $this->assertSame('payment_pending', $request->fresh()->status);
+    }
+
+    public function test_dynamic_qr_failure_redirects_to_existing_static_qr_fallback(): void
+    {
+        $this->enableUpi();
+        $request = $this->eligibleRequest();
+        $this->verifyTracking($request);
+        $this->mock(DynamicUpiQrService::class, fn ($mock) => $mock->shouldReceive('render')->once()->andThrow(new \RuntimeException('QR rendering unavailable')));
+
+        $this->get(route('request.track.dynamic-upi-qr', $request))
+            ->assertRedirect(route('payments.upi-qr'));
+        $this->get(route('payments.upi-qr'))->assertOk();
+    }
+
+    public function test_dynamic_qr_and_submission_controls_are_unavailable_when_disabled_unverified_or_paid(): void
+    {
+        $request = $this->eligibleRequest();
+        $this->post(route('request.track.lookup'), ['reference_no' => $request->reference_no, 'mobile' => $request->mobile])
+            ->assertOk()->assertDontSee('Dynamic UPI QR');
+
+        $this->enableUpi();
+        $this->app['session']->flush();
+        $this->get(route('request.track.dynamic-upi-qr', $request))->assertForbidden();
+
+        $request->update(['status' => 'payment_received', 'payment_status' => 'received']);
+        $this->verifyTracking($request);
+        $this->get(route('request.track.dynamic-upi-qr', $request))->assertNotFound();
+        $this->get(route('request.track'))->assertOk()->assertDontSee('Submit Payment Details');
+    }
+
+    public function test_utr_remains_required_and_qr_display_does_not_submit_or_confirm_payment(): void
+    {
+        $this->enableUpi();
+        $request = $this->eligibleRequest();
+        $this->verifyTracking($request);
+
+        $this->get(route('request.track.dynamic-upi-qr', $request))->assertOk();
+        $this->post(route('request.track.payment-submission', $request), ['declaration' => '1'])
+            ->assertSessionHasErrors('utr_reference');
+
+        $this->assertDatabaseCount('request_payment_submissions', 0);
+        $this->assertDatabaseCount('request_payments', 0);
+        $this->assertSame('pending', $request->fresh()->payment_status);
     }
 
     public function test_verified_customer_can_submit_utr_and_optional_private_proof_without_becoming_paid(): void

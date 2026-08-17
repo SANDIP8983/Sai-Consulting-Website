@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\StaffUserController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\CustomerRequestController;
+use App\Http\Controllers\DynamicUpiQrController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PaymentSubmissionController;
 use App\Http\Controllers\PublicInformationController;
@@ -72,6 +73,10 @@ Route::post('/request/track', [CustomerRequestController::class, 'lookup'])
 Route::post('/request/track/{customerRequest}/payment-submission', PaymentSubmissionController::class)
     ->middleware('throttle:5,1')
     ->name('request.track.payment-submission');
+
+Route::get('/request/track/{customerRequest}/upi-qr', DynamicUpiQrController::class)
+    ->middleware('throttle:30,1')
+    ->name('request.track.dynamic-upi-qr');
 
 Route::get('/payment/upi-qr', UpiQrController::class)->name('payments.upi-qr');
 

@@ -22,7 +22,11 @@
     <div class="tracking-side-card premium-card mb-4 border border-primary">
         <div class="tracking-card-title"><span class="icon-box"><i class="bi bi-qr-code"></i></span><div><h3>UPI દ્વારા ચૂકવણી</h3><p>Pay via UPI</p></div></div>
         @if($customerRequest->paymentSubmission?->status === 'rejected')<div class="alert alert-warning">The previous payment details could not be verified. Please submit corrected UTR/proof.</div>@endif
-        <div class="text-center mb-3"><img src="{{ $upiPayment['qr_url'] }}" alt="Sai Consulting UPI QR code" class="img-fluid border rounded p-2" style="max-width:240px"></div>
+        <div class="text-center mb-3">
+            <div class="fw-semibold mb-2">Dynamic UPI QR / ચોક્કસ રકમ માટે QR</div>
+            <img src="{{ $upiPayment['dynamic_qr_url'] }}" data-static-qr="{{ $upiPayment['static_qr_url'] }}" onerror="this.onerror=null;this.src=this.dataset.staticQr" alt="Request-specific UPI QR code for the exact frozen amount" class="img-fluid border rounded p-2" style="max-width:240px">
+            <p class="small text-muted mt-2 mb-0">આ QR સ્કેન કરતાં ચુકવણીની રકમ આપમેળે ભરાઈ આવશે. ચુકવણી કરતાં પહેલાં રકમ અને Payee ચકાસો.</p>
+        </div>
         <dl>
             <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>Reference</dt><dd class="mb-0 text-end">{{ $customerRequest->reference_no }}</dd></div>
             @if($customerRequest->file_number)<div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>File Number</dt><dd class="mb-0 text-end">{{ $customerRequest->file_number }}</dd></div>@endif

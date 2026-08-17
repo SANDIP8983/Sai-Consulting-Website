@@ -37,7 +37,8 @@ class PaymentSubmissionService
             ...$settings,
             'grand_total' => $billing->grandTotal,
             'amount_to_pay' => max(0, round($billing->grandTotal - $billing->confirmedPaidAmount, 2)),
-            'qr_url' => route('payments.upi-qr'),
+            'dynamic_qr_url' => route('request.track.dynamic-upi-qr', $request),
+            'static_qr_url' => route('payments.upi-qr'),
         ];
     }
 
