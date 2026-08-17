@@ -11,6 +11,9 @@ use Illuminate\Support\Collection;
 
 class HomepageService
 {
+    /** @var array<string, mixed>|null */
+    private ?array $publicSiteData = null;
+
     public function __construct(private readonly BusinessCalendarService $calendar) {}
 
     private const FEATURED_SERVICE_SLUGS = [
@@ -54,6 +57,10 @@ class HomepageService
     /** @return array<string, mixed> */
     public function publicSiteData(): array
     {
+        if ($this->publicSiteData !== null) {
+            return $this->publicSiteData;
+        }
+
         $settings = Setting::query()
             ->where('is_public', true)
             ->pluck('setting_value', 'setting_key');
@@ -62,7 +69,7 @@ class HomepageService
         $timings = OfficeTiming::query()->orderBy('day_of_week')->get();
         $holidays = Holiday::query()->where('is_closed', true)->orderBy('holiday_date')->get();
 
-        return [
+        return $this->publicSiteData = [
             'businessName' => $settings->get('website.name') ?: 'Sai Consulting',
             'tagline' => $settings->get('business.tagline') ?: 'Documentation & Consulting',
             'email' => $settings->get('contact.email') ?: null,

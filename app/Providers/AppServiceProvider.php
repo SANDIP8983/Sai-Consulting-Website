@@ -20,6 +20,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->scoped(HomepageService::class);
         $this->app->bind(WhatsAppChannelInterface::class, DisabledWhatsAppChannel::class);
     }
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AddSecurityHeaders;
 use App\Http\Middleware\EnsureStaffCanAccessAssignedRequest;
 use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Foundation\Application;
@@ -13,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->appendToGroup('web', AddSecurityHeaders::class);
         $middleware->alias(['active' => EnsureUserIsActive::class, 'request.assigned' => EnsureStaffCanAccessAssignedRequest::class]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
