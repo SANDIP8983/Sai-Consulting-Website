@@ -1,5 +1,7 @@
 @extends('layouts.app')
 @section('title','Book Appointment | Sai Consulting')
+@section('description', 'Sai Consulting સાથે દસ્તાવેજીકરણ અથવા મિલકત માર્ગદર્શન માટે મુલાકાતની વિનંતી મોકલો.')
+@section('robots', 'noindex, nofollow, noarchive')
 @section('content')
 <section class="py-5"><div class="container" style="max-width:850px"><div class="card shadow-sm border-0"><div class="card-body p-4 p-lg-5"><h1 class="h2">Book Appointment <small class="d-block text-muted fs-5">મુલાકાતનો સમય લો</small></h1><p class="text-muted">Your request remains pending until our team confirms it.</p>
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>@endif

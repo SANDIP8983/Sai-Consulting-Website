@@ -31,7 +31,6 @@ class SeoController extends Controller
             'User-agent: *',
             'Allow: /',
             'Disallow: /admin',
-            'Disallow: /request',
             '',
             'Sitemap: '.Seo::route('sitemap'),
             '',

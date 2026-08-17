@@ -23,7 +23,9 @@ class AppointmentController extends Controller
         $data = $request->validate(['date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'before_or_equal:'.now('Asia/Kolkata')->addMonths(6)->toDateString()], 'service_id' => ['required', 'exists:services,id']]);
         abort_unless(Service::whereKey($data['service_id'])->where('is_active', true)->exists(), 422);
 
-        return response()->json(['slots' => $service->slots($data['date'])]);
+        return response()
+            ->json(['slots' => $service->slots($data['date'])])
+            ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
     public function store(StoreAppointmentRequest $request, AppointmentWorkflowService $workflow): RedirectResponse

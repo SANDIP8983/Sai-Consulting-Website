@@ -36,6 +36,7 @@ class FinalDocumentDownloadService
         return response()->download($absolutePath, $this->safeFilename($document), [
             'Content-Type' => $mimeType,
             'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
             'Cache-Control' => 'private, no-store, max-age=0',
         ]);
     }

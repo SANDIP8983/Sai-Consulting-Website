@@ -86,7 +86,9 @@ class FinalDocumentDeliveryTest extends TestCase
         $this->get(route('admin.requests.final-documents.download', [$request, $document]))->assertRedirect(route('login'));
         $this->actingAs(User::factory()->create(['role' => 'staff']))->get(route('admin.requests.final-documents.download', [$request, $document]))->assertForbidden();
         $this->actingAs($this->admin())->get(route('admin.requests.final-documents.download', [$other, $document]))->assertNotFound();
-        $this->actingAs($this->admin())->get(route('admin.requests.final-documents.download', [$request, $document]))->assertOk();
+        $this->actingAs($this->admin())->get(route('admin.requests.final-documents.download', [$request, $document]))
+            ->assertOk()
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
     public function test_missing_customer_email_blocks_delivery_gracefully(): void

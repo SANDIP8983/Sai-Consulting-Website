@@ -81,7 +81,7 @@ class PublicSeoTest extends TestCase
         $this->assertStringContainsString("/services/{$active->slug}", $xml);
         $this->assertStringNotContainsString("/services/{$inactive->slug}", $xml);
 
-        foreach (['/admin', '/login', '/request', '/track', '/payment', '/pdf'] as $excluded) {
+        foreach (['/admin', '/login', '/request', '/appointments', '/track', '/payment', '/pdf'] as $excluded) {
             $this->assertStringNotContainsString('<loc>https://saiconsultingchanasma.in'.$excluded, $xml);
         }
     }
@@ -117,10 +117,31 @@ class PublicSeoTest extends TestCase
 
         $this->assertStringContainsString('Sitemap: https://saiconsultingchanasma.in/sitemap.xml', $content);
         $this->assertStringContainsString('Disallow: /admin', $content);
-        $this->assertStringContainsString('Disallow: /request', $content);
-        foreach (['/', '/services', '/required-documents', '/about', '/faq', '/contact'] as $path) {
+        $this->assertStringNotContainsString('Disallow: /request', $content);
+        foreach (['/', '/services', '/required-documents', '/about', '/faq', '/contact', '/appointments'] as $path) {
             $this->assertStringNotContainsString("Disallow: {$path}\n", $content);
         }
+
+        $this->assertSame(trim($content), trim((string) file_get_contents(public_path('robots.txt'))));
+    }
+
+    public function test_appointment_pages_and_internal_availability_are_not_indexable(): void
+    {
+        $service = Service::query()->where('is_active', true)->firstOrFail();
+
+        $this->get(route('appointments.create'))->assertOk()
+            ->assertSee('<title>Book Appointment | Sai Consulting</title>', false)
+            ->assertSee('<meta name="description"', false)
+            ->assertSee('<meta name="robots" content="noindex, nofollow, noarchive">', false)
+            ->assertDontSee('rel="canonical"', false);
+
+        $this->get(route('appointments.success'))->assertRedirect(route('appointments.create'));
+
+        $this->getJson(route('appointments.availability', [
+            'date' => now('Asia/Kolkata')->addDay()->toDateString(),
+            'service_id' => $service->id,
+        ]))->assertOk()
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
     public function test_open_graph_and_conservative_organization_schema_are_safe(): void
