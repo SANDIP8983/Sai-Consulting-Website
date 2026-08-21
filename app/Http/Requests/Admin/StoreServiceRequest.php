@@ -41,6 +41,7 @@ class StoreServiceRequest extends FormRequest
             'estimated_days' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'sort_order' => ['required', 'integer', 'min:0'],
             'is_active' => ['required', 'boolean'],
+            'show_on_public_website' => ['nullable', 'boolean'],
             'available_online' => ['nullable', 'boolean'],
             'available_offline' => ['nullable', 'boolean'],
             'requires_property_documents' => ['nullable', 'boolean'],

@@ -17,7 +17,7 @@ class CustomerRequestController extends Controller
 {
     public function create(): View
     {
-        $services = Service::query()->where('is_active', true)->where('available_online', true)->with(['activeRequiredDocuments', 'activeGovernmentChargeItems'])
+        $services = Service::query()->visibleOnPublicWebsite()->where('available_online', true)->with(['activeRequiredDocuments', 'activeGovernmentChargeItems'])
             ->orderBy('sort_order')->orderBy('name_en')->get();
 
         return view('frontend.request.create', compact('services'));

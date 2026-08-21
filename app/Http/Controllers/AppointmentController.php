@@ -15,13 +15,13 @@ class AppointmentController extends Controller
 {
     public function create(): View
     {
-        return view('frontend.appointments.create', ['services' => Service::where('is_active', true)->orderBy('sort_order')->orderBy('name_en')->get()]);
+        return view('frontend.appointments.create', ['services' => Service::query()->visibleOnPublicWebsite()->orderBy('sort_order')->orderBy('name_en')->get()]);
     }
 
     public function availability(Request $request, AppointmentAvailabilityService $service): JsonResponse
     {
         $data = $request->validate(['date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'before_or_equal:'.now('Asia/Kolkata')->addMonths(6)->toDateString()], 'service_id' => ['required', 'exists:services,id']]);
-        abort_unless(Service::whereKey($data['service_id'])->where('is_active', true)->exists(), 422);
+        abort_unless(Service::query()->visibleOnPublicWebsite()->whereKey($data['service_id'])->exists(), 422);
 
         return response()
             ->json(['slots' => $service->slots($data['date'])])

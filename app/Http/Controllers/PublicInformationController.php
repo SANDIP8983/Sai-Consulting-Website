@@ -11,7 +11,7 @@ class PublicInformationController extends Controller
     public function requiredDocuments(): View
     {
         $services = Service::query()
-            ->where('is_active', true)
+            ->visibleOnPublicWebsite()
             ->with('activeRequiredDocuments')
             ->orderBy('sort_order')
             ->orderBy('name_en')

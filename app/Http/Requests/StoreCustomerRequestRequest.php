@@ -19,7 +19,7 @@ class StoreCustomerRequestRequest extends FormRequest
 
     public function rules(): array
     {
-        $services = Service::query()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
+        $services = $this->eligibleServicesQuery()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
         $requiresProperty = $services->contains('requires_property_documents', true);
         $publicRestrictions = PublicDocumentPolicy::restrictionsForServices($services);
         $configuredTypes = $services->flatMap->activeRequiredDocuments->flatMap(fn ($document) => $document->allowed_file_types ?? [])->unique()->values()->all() ?: PublicDocumentPolicy::ALLOWED_EXTENSIONS;
@@ -30,9 +30,9 @@ class StoreCustomerRequestRequest extends FormRequest
             : ['mimes:'.implode(',', $configuredTypes), 'max:'.$configuredMaximumSize];
 
         return [
-            'service_id' => ['required', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true))],
+            'service_id' => ['required', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true)->when($online, fn ($query) => $query->where('show_on_public_website', true)))],
             'service_ids' => ['required', 'array', 'min:1', 'max:20'],
-            'service_ids.*' => ['required', 'integer', 'distinct', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true))],
+            'service_ids.*' => ['required', 'integer', 'distinct', Rule::exists('services', 'id')->where(fn ($query) => $query->where('is_active', true)->where($this->availabilityColumn(), true)->when($online, fn ($query) => $query->where('show_on_public_website', true)))],
             'name' => ['required', 'string', 'max:100'],
             'mobile' => ['required', 'digits:10'],
             'whatsapp' => ['nullable', 'digits:10'],
@@ -121,7 +121,15 @@ class StoreCustomerRequestRequest extends FormRequest
 
     private function selectedServices()
     {
-        return Service::query()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
+        return $this->eligibleServicesQuery()->with('activeRequiredDocuments')->whereIn('id', $this->input('service_ids', []))->get();
+    }
+
+    private function eligibleServicesQuery()
+    {
+        return Service::query()
+            ->where('is_active', true)
+            ->where($this->availabilityColumn(), true)
+            ->when($this->availabilityColumn() === 'available_online', fn ($query) => $query->where('show_on_public_website', true));
     }
 
     private function documentKey(ServiceRequiredDocument $document): string

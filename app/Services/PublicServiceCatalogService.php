@@ -11,7 +11,7 @@ class PublicServiceCatalogService
     public function paginate(?string $search): LengthAwarePaginator
     {
         return Service::query()
-            ->where('is_active', true)
+            ->visibleOnPublicWebsite()
             ->withCount(['activeRequiredDocuments as required_documents_count'])
             ->when($search, fn ($query, string $term) => $query->where(function ($query) use ($term): void {
                 $query->where('name_gu', 'like', "%{$term}%")
@@ -29,7 +29,7 @@ class PublicServiceCatalogService
     public function findActiveBySlug(string $slug): Service
     {
         return Service::query()
-            ->where('is_active', true)
+            ->visibleOnPublicWebsite()
             ->where('slug', $slug)
             ->with('activeRequiredDocuments')
             ->withCount(['activeRequiredDocuments as required_documents_count'])
@@ -40,7 +40,7 @@ class PublicServiceCatalogService
     public function relatedTo(Service $service): Collection
     {
         return Service::query()
-            ->where('is_active', true)
+            ->visibleOnPublicWebsite()
             ->whereKeyNot($service->id)
             ->withCount(['activeRequiredDocuments as required_documents_count'])
             ->orderBy('sort_order')

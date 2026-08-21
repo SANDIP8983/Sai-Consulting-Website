@@ -73,7 +73,7 @@ class RequestWorkflowService
                     $serviceIds = array_values(array_unique(array_map('intval', $attributes['service_ids'] ?? [$attributes['service_id']])));
                     $services = Service::query()->with(['activeRequiredDocuments', 'activeGovernmentChargeItems'])->whereIn('id', $serviceIds)->get()->keyBy('id');
                     $availabilityColumn = $origin === 'offline' ? 'available_offline' : 'available_online';
-                    if ($services->count() !== count($serviceIds) || collect($serviceIds)->contains(fn ($id) => ! $services[$id]->is_active || ! $services[$id]->{$availabilityColumn})) {
+                    if ($services->count() !== count($serviceIds) || collect($serviceIds)->contains(fn ($id) => ! $services[$id]->is_active || ! $services[$id]->{$availabilityColumn} || ($origin !== 'offline' && ! $services[$id]->show_on_public_website))) {
                         throw ValidationException::withMessages(['service_ids' => 'One or more selected services are not available for this request channel.']);
                     }
                     $orderedServices = collect($serviceIds)->map(fn ($id) => $services[$id]);

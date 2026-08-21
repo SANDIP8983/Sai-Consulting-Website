@@ -98,6 +98,7 @@ class ServiceManagementService
                 'estimated_days',
                 'sort_order',
                 'is_active',
+                'show_on_public_website',
             ]),
             'description' => $attributes['description_en'] ?? $attributes['description'] ?? null,
             'description_en' => $attributes['description_en'] ?? $attributes['description'] ?? null,

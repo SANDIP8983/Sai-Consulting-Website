@@ -29,12 +29,12 @@ class HomepageService
     public function data(): array
     {
         $activeServicesCount = Service::query()
-            ->where('is_active', true)
+            ->visibleOnPublicWebsite()
             ->where('available_online', true)
             ->count();
 
         $services = Service::query()
-            ->where('is_active', true)
+            ->visibleOnPublicWebsite()
             ->where('available_online', true)
             ->whereIn('slug', self::FEATURED_SERVICE_SLUGS)
             ->withCount(['activeRequiredDocuments as required_documents_count'])

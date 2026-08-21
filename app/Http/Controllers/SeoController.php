@@ -14,7 +14,7 @@ class SeoController extends Controller
             ->map(fn (string $route): string => Seo::route($route));
 
         $serviceUrls = Service::query()
-            ->where('is_active', true)
+            ->visibleOnPublicWebsite()
             ->orderBy('sort_order')
             ->orderBy('id')
             ->pluck('slug')

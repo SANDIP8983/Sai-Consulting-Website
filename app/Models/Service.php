@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\PublicDocumentPolicy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -39,6 +40,7 @@ class Service extends Model
         'required_documents',
         'notes',
         'is_active',
+        'show_on_public_website',
         'sort_order',
         'available_online',
         'available_offline',
@@ -60,6 +62,7 @@ class Service extends Model
             'advance_percentage' => 'integer',
             'estimated_days' => 'integer',
             'is_active' => 'boolean',
+            'show_on_public_website' => 'boolean',
             'sort_order' => 'integer',
             'available_online' => 'boolean',
             'available_offline' => 'boolean',
@@ -71,6 +74,11 @@ class Service extends Model
             'requires_registration' => 'boolean',
             'requires_certified_copy' => 'boolean',
         ];
+    }
+
+    public function scopeVisibleOnPublicWebsite(Builder $query): Builder
+    {
+        return $query->where('is_active', true)->where('show_on_public_website', true);
     }
 
     public function requests(): HasMany
