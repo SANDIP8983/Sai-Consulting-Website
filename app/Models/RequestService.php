@@ -16,11 +16,13 @@ class RequestService extends Model
 
     public function billingProfessionalFee(): float
     {
-        if ($this->is_admin_added) {
-            return (float) ($this->professional_fee ?? 0);
+        // Older base-service rows used zero as an unset placeholder. A deliberate
+        // zero adjustment is distinguishable because the required reason is saved.
+        if (! $this->is_admin_added && (float) $this->professional_fee === 0.0 && (float) $this->original_professional_fee > 0 && blank($this->internal_note)) {
+            return (float) $this->original_professional_fee;
         }
 
-        return (float) ($this->original_professional_fee ?? $this->professional_fee ?? 0);
+        return (float) ($this->professional_fee ?? $this->original_professional_fee ?? 0);
     }
 
     public function isAddOn(): bool

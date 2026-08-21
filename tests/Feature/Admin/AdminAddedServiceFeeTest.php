@@ -52,7 +52,7 @@ class AdminAddedServiceFeeTest extends TestCase
         $rejectedService = $this->service('Rejected Added', 4000);
         $reviewService = $this->service('Review Added', 5000);
         foreach ([[$acceptedService, 2000], [$rejectedService, 3750], [$reviewService, 4500]] as [$service, $fee]) {
-            $this->actingAs($admin)->post(route('admin.requests.services.add', $request), ['service_id' => $service->id, 'professional_fee' => $fee])->assertSessionHasNoErrors();
+            $this->actingAs($admin)->post(route('admin.requests.services.add', $request), ['service_id' => $service->id, 'professional_fee' => $fee, 'internal_note' => 'Request-specific scope'])->assertSessionHasNoErrors();
         }
         $accepted = $request->requestServices()->where('service_id', $acceptedService->id)->sole();
         $rejected = $request->requestServices()->where('service_id', $rejectedService->id)->sole();
@@ -120,7 +120,7 @@ class AdminAddedServiceFeeTest extends TestCase
 
         $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$request, $added]), ['professional_fee' => 1600])->assertSessionHasErrors('case');
         $this->actingAs($admin)->patch(route('admin.requests.billing.unlock', $request), ['unlock_reason' => 'Director-approved paid-case correction'])->assertSessionHasNoErrors();
-        $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$request, $added]), ['professional_fee' => 1600])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$request, $added]), ['professional_fee' => 1600, 'internal_note' => 'Paid-case correction'])->assertSessionHasNoErrors();
         $this->assertSame(1600.0, (float) $added->fresh()->professional_fee);
         $this->assertDatabaseCount('request_payments', 1);
     }
@@ -156,6 +156,72 @@ class AdminAddedServiceFeeTest extends TestCase
         $added->update(['status' => 'approved']);
         $this->actingAs($admin)->delete(route('admin.requests.services.remove', [$request, $added]))->assertSessionHasNoErrors();
         $this->assertDatabaseMissing('request_services', ['id' => $added->id]);
+    }
+
+    public function test_base_service_fee_is_request_specific_reasoned_audited_and_uses_final_fee_for_billing(): void
+    {
+        [$request, $primary] = $this->requestCase();
+        $admin = User::factory()->create();
+
+        $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$request, $primary]), [
+            'professional_fee' => 4000,
+        ])->assertSessionHasErrors('internal_note');
+
+        $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$request, $primary]), [
+            'professional_fee' => 'invalid',
+            'internal_note' => 'Complex title review',
+        ])->assertSessionHasErrors('professional_fee');
+
+        $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$request, $primary]), [
+            'professional_fee' => 4000,
+            'internal_note' => 'Additional Survey Numbers',
+        ])->assertSessionHasNoErrors();
+
+        $primary->refresh();
+        $this->assertSame(3500.0, (float) $primary->original_professional_fee);
+        $this->assertSame(4000.0, (float) $primary->professional_fee);
+        $this->assertSame(3500.0, (float) $primary->service->fresh()->service_fee);
+        $this->assertDatabaseHas('request_service_approval_histories', [
+            'request_service_id' => $primary->id,
+            'request_id' => $request->id,
+            'approved_by' => $admin->id,
+            'action' => 'fee_updated',
+            'note' => 'Additional Survey Numbers',
+        ]);
+
+        $scope = WorkScopeItem::query()->where('name_en', 'Drafting')->sole();
+        $this->actingAs($admin)->patch(route('admin.requests.case-planning.save', $request), ['services' => [
+            $primary->id => ['decision' => 'approved', 'work_scope_ids' => [$scope->id]],
+        ]])->assertSessionHasNoErrors();
+        $this->actingAs($admin)->patch(route('admin.requests.billing.finalize', $request), [
+            'discount_type' => 'none',
+            'discount_value' => 0,
+            'gst_rate' => 18,
+            'government_charges' => [['name' => 'Stamp Duty', 'amount' => 500]],
+        ])->assertSessionHasNoErrors();
+
+        $billing = $request->fresh()->billing;
+        $this->assertSame(4000.0, (float) $billing->total_original_professional_fee);
+        $this->assertSame(720.0, (float) $billing->gst_amount);
+        $this->assertSame(500.0, (float) $billing->government_charges_total);
+        $this->assertSame(5220.0, (float) $billing->grand_total);
+    }
+
+    public function test_base_fee_equal_to_snapshot_needs_no_reason_and_staff_cannot_change_pricing(): void
+    {
+        [$request, $primary] = $this->requestCase();
+        $admin = User::factory()->create();
+        $staff = User::factory()->create(['role' => 'staff']);
+
+        $this->actingAs($admin)->patch(route('admin.requests.services.fee.update', [$request, $primary]), [
+            'professional_fee' => 3500,
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($staff)->patch(route('admin.requests.services.fee.update', [$request, $primary]), [
+            'professional_fee' => 4000,
+            'internal_note' => 'Unauthorized attempt',
+        ])->assertForbidden();
+        $this->assertSame(3500.0, (float) $primary->fresh()->professional_fee);
     }
 
     private function requestCase(string $reference = 'SC/2026/810001', string $primaryName = 'Primary Service'): array

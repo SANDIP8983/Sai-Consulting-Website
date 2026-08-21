@@ -7,9 +7,10 @@
     @if($showDescription && ($service->short_description || $service->description_en || $service->description_gu || $service->description))<p>{{ \Illuminate\Support\Str::limit($service->short_description ?: ($service->description_en ?: $service->description_gu ?: $service->description), $compact ? 120 : 180) }}</p>@endif
     <div class="service-meta">
         @if($showProcessingTime && ($service->processing_time_label || $service->estimated_days))<span><i class="bi bi-clock" aria-hidden="true"></i> {{ $service->processing_time_label ?: $service->estimated_days.' days' }}</span>@endif
-        @if($showFee && !is_null($service->service_fee))<span><i class="bi bi-currency-rupee" aria-hidden="true"></i> {{ number_format((float) $service->service_fee, 2) }}</span>@endif
+        @if($showFee && !is_null($service->service_fee))<span><i class="bi bi-currency-rupee" aria-hidden="true"></i> Professional Fee: ₹{{ number_format((float) $service->service_fee, 2) }} થી શરૂ — શરતો લાગુ</span>@endif
         @if($service->required_documents_count)<span><i class="bi bi-files" aria-hidden="true"></i> {{ $service->required_documents_count }} documents</span>@endif
     </div>
+    @if($showFee && !is_null($service->service_fee))<p class="small text-muted mt-2">દર્શાવેલ ફી મૂળભૂત ફી છે. મિલકત, સર્વે નંબર તથા કામના વ્યાપ મુજબ ફીમાં ફેરફાર થઈ શકે છે.</p>@endif
     <div class="service-card-actions">
         <a class="btn btn-outline-primary rounded-pill" href="{{ route('services.show', $service->slug) }}">{{ $gujaratiActions ? 'વિગતો જુઓ' : 'View Details' }}</a>
         @if($service->available_online)<a class="btn btn-primary rounded-pill" href="{{ route('request.create', ['service' => $service->id]) }}">{{ $gujaratiActions ? 'ઓનલાઇન અરજી કરો' : 'Apply Online' }}</a>@endif

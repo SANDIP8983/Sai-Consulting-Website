@@ -24,6 +24,25 @@ class PublicServicesTest extends TestCase
             ->assertDontSee($inactive->name_en);
     }
 
+    public function test_index_presents_configured_fee_as_starting_fee_with_scope_note(): void
+    {
+        $service = $this->service(['service_fee' => 1999]);
+
+        $this->get(route('services.index'))
+            ->assertOk()
+            ->assertSee('Professional Fee: ₹1,999.00 થી શરૂ — શરતો લાગુ')
+            ->assertSee('દર્શાવેલ ફી મૂળભૂત ફી છે. મિલકત, સર્વે નંબર તથા કામના વ્યાપ મુજબ ફીમાં ફેરફાર થઈ શકે છે.');
+        $this->get(route('request.create'))
+            ->assertOk()
+            ->assertSee('₹1,999.00 થી શરૂ — શરતો લાગુ')
+            ->assertSee('દર્શાવેલ ફી મૂળભૂત ફી છે. મિલકત, સર્વે નંબર તથા કામના વ્યાપ મુજબ ફીમાં ફેરફાર થઈ શકે છે.');
+
+        $service->update(['service_fee' => null]);
+        $this->get(route('services.index'))
+            ->assertDontSee('થી શરૂ — શરતો લાગુ')
+            ->assertDontSee('દર્શાવેલ ફી મૂળભૂત ફી છે.');
+    }
+
     public function test_active_service_detail_loads_by_slug_with_documents_and_actions(): void
     {
         $service = $this->service([

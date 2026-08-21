@@ -72,7 +72,9 @@ class CasePlanningService
             }
             if ($locked->requestServices()->where('service_id', $service->id)->exists()) {
                 throw ValidationException::withMessages(['service_id' => 'This service is already part of the request.']);
-            }$row = $locked->requestServices()->create(['service_id' => $service->id, 'added_by' => $user->id, 'is_admin_added' => true, 'service_name_en_snapshot' => $service->name_en, 'service_name_gu_snapshot' => $service->name_gu, 'professional_fee' => round($professionalFee, 2), 'original_professional_fee' => $service->service_fee ?? 0, 'gst_rate' => $service->gst_rate ?? 0, 'government_charges' => 0, 'government_charges_snapshot' => [], 'estimated_days' => $service->estimated_days, 'required_documents_snapshot' => $service->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'requirement_type', 'is_mandatory', 'sort_order'])->values()->all(), 'status' => 'under_review', 'internal_note' => $internalNote]);
+            }
+            $this->assertAdjustmentReason($professionalFee, (float) ($service->service_fee ?? 0), $internalNote);
+            $row = $locked->requestServices()->create(['service_id' => $service->id, 'added_by' => $user->id, 'is_admin_added' => true, 'service_name_en_snapshot' => $service->name_en, 'service_name_gu_snapshot' => $service->name_gu, 'professional_fee' => round($professionalFee, 2), 'original_professional_fee' => $service->service_fee ?? 0, 'gst_rate' => $service->gst_rate ?? 0, 'government_charges' => 0, 'government_charges_snapshot' => [], 'estimated_days' => $service->estimated_days, 'required_documents_snapshot' => $service->activeRequiredDocuments->map->only(['id', 'name_en', 'name_gu', 'requirement_type', 'is_mandatory', 'sort_order'])->values()->all(), 'status' => 'under_review', 'internal_note' => $internalNote]);
             $row->approvalHistory()->create(['request_id' => $locked->id, 'approved_by' => $user->id, 'pricing_snapshot' => ['default_professional_fee' => (float) ($service->service_fee ?? 0), 'professional_fee' => round($professionalFee, 2), 'gst_rate' => (float) ($service->gst_rate ?? 0)], 'action' => 'added', 'note' => $internalNote]);
             $locked->update(['case_planning_version' => CustomerRequest::CURRENT_CASE_PLANNING_VERSION]);
 
@@ -86,9 +88,7 @@ class CasePlanningService
             $locked = CustomerRequest::query()->with('billing')->lockForUpdate()->findOrFail($request->id);
             $this->assertMutable($locked);
             $row = $locked->requestServices()->whereKey($requestService->id)->lockForUpdate()->firstOrFail();
-            if (! $row->is_admin_added) {
-                throw ValidationException::withMessages(['professional_fee' => 'Only services added by Admin can use this request-specific fee editor.']);
-            }
+            $this->assertAdjustmentReason($professionalFee, (float) ($row->original_professional_fee ?? $row->professional_fee ?? 0), $internalNote);
             $previousFee = $row->professional_fee;
             $row->update(['professional_fee' => round($professionalFee, 2), 'internal_note' => $internalNote]);
             $row->approvalHistory()->create(['request_id' => $locked->id, 'approved_by' => $user->id, 'pricing_snapshot' => ['previous_professional_fee' => (float) $previousFee, 'professional_fee' => round($professionalFee, 2), 'default_professional_fee' => (float) ($row->original_professional_fee ?? 0), 'gst_rate' => (float) $row->gst_rate], 'action' => 'fee_updated', 'note' => $internalNote]);
@@ -193,6 +193,13 @@ class CasePlanningService
         // audited pricing unlock deliberately makes the case editable again.
         if ($this->billingStateResolver->resolve($request)->pricingLocked) {
             throw ValidationException::withMessages(['case' => 'Payment-confirmed pricing is locked. Use the audited Unlock Pricing action before making changes.']);
+        }
+    }
+
+    private function assertAdjustmentReason(float $finalFee, float $baseFee, ?string $reason): void
+    {
+        if (round($finalFee, 2) !== round($baseFee, 2) && trim((string) $reason) === '') {
+            throw ValidationException::withMessages(['internal_note' => 'An adjustment reason is required when the request fee differs from the default fee.']);
         }
     }
 
