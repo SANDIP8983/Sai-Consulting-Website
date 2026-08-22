@@ -187,7 +187,7 @@ class RequestWorkflowService
         }
         $requiresPayment = $request->processing?->requires_payment_before_processing ?? $request->service?->requires_payment_before_processing ?? true;
         $billingState = $this->billingStateResolver->resolve($request);
-        if ($to === 'dispatched' && (($requiresPayment && $billingState->paymentStatus !== 'paid') || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {
+        if ($to === 'dispatched' && (($requiresPayment && ! in_array($billingState->paymentStatus, ['paid', 'not_required'], true)) || ! $request->dispatches()->where('dispatch_status', 'dispatched')->exists())) {
             throw ValidationException::withMessages([
                 'status' => 'Use Dispatch Management to record dispatch details before changing this status.',
             ]);
@@ -327,9 +327,6 @@ class RequestWorkflowService
                 $this->history($lockedRequest, 'approved', 'awaiting_staff_assignment', 'Awaiting staff assignment.', true, $user->id);
             }
             $this->notifications->afterCommit($lockedRequest, NotificationMilestone::Accepted, 'billing', $billing->id);
-            if ($calculation->paymentRequired) {
-                $this->notifications->afterCommit($lockedRequest, NotificationMilestone::PaymentPending, 'billing', $billing->id);
-            }
         });
     }
 

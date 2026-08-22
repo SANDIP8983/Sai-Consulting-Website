@@ -4,9 +4,12 @@ namespace App\Services\Notifications;
 
 use App\Enums\NotificationMilestone;
 use App\Models\CustomerRequest;
+use App\Services\RequestBillingStateResolver;
 
 class CustomerMessageFactory
 {
+    public function __construct(private readonly RequestBillingStateResolver $billingStateResolver) {}
+
     public function make(CustomerRequest $request, NotificationMilestone $milestone): array
     {
         $request->loadMissing(['requestServices', 'billing', 'dispatches']);
@@ -29,7 +32,9 @@ class CustomerMessageFactory
         };
         $tracking = route('request.track');
         $details = [];
+        $billingState = null;
         if ($milestone === NotificationMilestone::Accepted) {
+            $billingState = $this->billingStateResolver->resolve($request);
             $approved = $request->requestServices->where('status', 'approved')->pluck('service_name_en_snapshot')->filter()->implode(', ');
             $rejected = $request->requestServices->where('status', 'rejected')->pluck('service_name_en_snapshot')->filter()->implode(', ');
             if ($approved) {
@@ -59,6 +64,18 @@ class CustomerMessageFactory
         }
         $body = implode("\n", array_filter(["નમસ્તે {$request->name},", $status, ...$details, "Reference: {$reference}", "Tracking: {$tracking}"]));
 
-        return ['subject' => 'Sai Consulting — '.$milestone->label().' — '.$reference, 'body' => $body, 'template_key' => 'customer_'.$milestone->value, 'parameters' => [$request->name, $reference, $tracking]];
+        $subjectLabel = $milestone === NotificationMilestone::Accepted && $billingState?->paymentRequired
+            ? 'Accepted — Payment Pending'
+            : $milestone->label();
+
+        return [
+            'subject' => 'Sai Consulting — '.$subjectLabel.' — '.$reference,
+            'body' => $body,
+            'template_key' => 'customer_'.$milestone->value,
+            'parameters' => [$request->name, $reference, $tracking],
+            'tracking_url' => $tracking,
+            'accepted_payment_required' => $milestone === NotificationMilestone::Accepted ? $billingState?->paymentRequired : null,
+            'outstanding_amount' => $milestone === NotificationMilestone::Accepted ? $billingState?->balanceDue : null,
+        ];
     }
 }

@@ -51,7 +51,8 @@ class DispatchManagementService
         if (! $request->file_number) {
             $reasons[] = 'A file number is required before dispatch.';
         }
-        $paymentPending = $requiresPayment && $this->billingStateResolver->resolve($request)->paymentStatus !== 'paid';
+        $billingState = $this->billingStateResolver->resolve($request);
+        $paymentPending = $requiresPayment && ! in_array($billingState->paymentStatus, ['paid', 'not_required'], true);
         if ($paymentPending) {
             $reasons[] = 'Payment Pending: payment must be confirmed before dispatch.';
         }

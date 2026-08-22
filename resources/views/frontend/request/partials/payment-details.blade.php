@@ -12,6 +12,9 @@
             <div class="d-flex justify-content-between gap-3 py-2"><dt>Payment Date</dt><dd class="mb-0 fw-semibold">{{ \App\Support\IndiaDateTime::format($receivedPayment->received_at, 'd M Y') }}</dd></div>
         @endif
     </dl>
+    @if($customerRequest->public_billing_state->paymentStatus === 'not_required')
+        <div class="alert alert-success mt-3 mb-0"><strong>ચૂકવણી જરૂરી નથી.</strong><br>No payment is required. Your request can proceed to processing.</div>
+    @endif
     @foreach($publicPaymentRemarks as $payment)
         <div class="tracking-document-note mt-2"><i class="bi bi-chat-left-text"></i> {{ $payment->customer_remark }}</div>
     @endforeach

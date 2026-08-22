@@ -39,7 +39,8 @@ class ProcessingChecklistService
         if ($accepted->isNotEmpty() && $accepted->contains(fn ($service) => ! $service->isAddOn() && $service->workScopes->isEmpty())) {
             $reasons[] = 'Every accepted base service must have selected included work-scope items.';
         }
-        $paymentPending = $requiresPayment && $this->billingStateResolver->resolve($request)->paymentStatus !== 'paid';
+        $billingState = $this->billingStateResolver->resolve($request);
+        $paymentPending = $requiresPayment && ! in_array($billingState->paymentStatus, ['paid', 'not_required'], true);
         if ($paymentPending) {
             $reasons[] = 'Payment Pending: payment must be confirmed before processing can start.';
         }

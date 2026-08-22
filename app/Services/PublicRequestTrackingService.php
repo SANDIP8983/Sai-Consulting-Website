@@ -18,7 +18,7 @@ class PublicRequestTrackingService
             ->with([
                 'service:id,name_en,name_gu',
                 'service.activeRequiredDocuments:id,service_id,name_en,name_gu,sort_order,is_mandatory',
-                'requestServices:id,request_id,service_id,is_admin_added,service_name_en_snapshot,service_name_gu_snapshot,professional_fee,original_professional_fee,net_professional_fee,gst_rate,gst_amount,government_charges,government_charges_snapshot,final_total,pricing_locked_at,estimated_days,required_documents_snapshot,status,customer_decision_message',
+                'requestServices:id,request_id,service_id,is_admin_added,service_name_en_snapshot,service_name_gu_snapshot,professional_fee,original_professional_fee,net_professional_fee,gst_rate,gst_amount,government_charges,government_charges_snapshot,final_total,pricing_locked_at,estimated_days,required_documents_snapshot,status,internal_note,customer_decision_message',
                 'requestServices.service:id,name_en,name_gu',
                 'requestServices.workScopes' => fn ($query) => $query->select(['id', 'request_service_id', 'status', 'customer_remark']),
                 'documents' => fn ($query) => $query->select(['id', 'request_id', 'service_required_document_id']),

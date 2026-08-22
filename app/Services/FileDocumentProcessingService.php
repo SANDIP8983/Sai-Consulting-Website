@@ -216,7 +216,8 @@ class FileDocumentProcessingService
     private function enforceStageRules(CustomerRequest $request, RequestProcessingDetail $processing, string $to, array $attributes): void
     {
         $processingStages = ['drafting_started', 'draft_ready', 'customer_verification_pending', 'correction_required', 'final_draft_ready', 'token_booking_pending', 'token_booked', 'registration_pending', 'registered', 'certified_copy_pending', 'certified_copy_received', 'ready_for_dispatch', 'completed'];
-        if ($processing->requires_payment_before_processing && in_array($to, $processingStages, true) && $this->billingStateResolver->resolve($request)->paymentStatus !== 'paid') {
+        $billingState = $this->billingStateResolver->resolve($request);
+        if ($processing->requires_payment_before_processing && in_array($to, $processingStages, true) && ! in_array($billingState->paymentStatus, ['paid', 'not_required'], true)) {
             throw ValidationException::withMessages(['processing_stage' => 'Payment must be received before processing this service.']);
         }
         if ($to === 'final_draft_ready' && blank($attributes['customer_verification_at'] ?? $processing->customer_verification_at)) {
