@@ -27,6 +27,7 @@ class CustomerRequest extends Model
         'file_number',
         'request_origin',
         'case_planning_version',
+        'revenue_entry_required',
         'service_id',
         'name',
         'mobile',
@@ -46,7 +47,7 @@ class CustomerRequest extends Model
 
     protected function casts(): array
     {
-        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'completed_at' => 'datetime', 'closed_at' => 'datetime', 'last_status_changed_at' => 'datetime', 'case_approved_at' => 'datetime', 'assigned_at' => 'datetime', 'case_planning_version' => 'integer'];
+        return ['amount_due' => 'decimal:2', 'amount_paid' => 'decimal:2', 'fee_updated_at' => 'datetime', 'estimated_completion_date' => 'date', 'completed_at' => 'datetime', 'closed_at' => 'datetime', 'last_status_changed_at' => 'datetime', 'case_approved_at' => 'datetime', 'assigned_at' => 'datetime', 'case_planning_version' => 'integer', 'revenue_entry_required' => 'boolean'];
     }
 
     /**
@@ -83,6 +84,21 @@ class CustomerRequest extends Model
     public function finalDocumentDeliveries(): HasMany
     {
         return $this->hasMany(RequestFinalDocumentDelivery::class, 'request_id');
+    }
+
+    public function revenueEntries(): HasMany
+    {
+        return $this->hasMany(RequestRevenueEntry::class, 'request_id')->oldest();
+    }
+
+    public function pendingRevenueEntries(): bool
+    {
+        return $this->revenue_entry_required && (! $this->revenueEntries()->exists() || $this->revenueEntries()->whereNotIn('status', RequestRevenueEntry::COMPLETED_STATUSES)->exists());
+    }
+
+    public function revenueEntryHistory(): HasMany
+    {
+        return $this->hasMany(RequestRevenueEntryHistory::class, 'request_id');
     }
 
     /**

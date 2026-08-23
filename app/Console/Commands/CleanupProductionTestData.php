@@ -43,6 +43,8 @@ class CleanupProductionTestData extends Command
         'request_processing_histories',
         'request_assignment_histories',
         'request_contact_change_histories',
+        'request_revenue_entries',
+        'request_revenue_entry_histories',
         'customer_notification_events',
     ];
 
@@ -231,6 +233,7 @@ class CleanupProductionTestData extends Command
         $deliveryIds = DB::table('customer_notification_deliveries')->whereIn('notification_event_id', $notificationIds)->pluck('id')->all();
         $finalDocumentIds = DB::table('request_final_documents')->whereIn('request_id', $requestIds)->pluck('id')->all();
         $finalDeliveryIds = DB::table('request_final_document_deliveries')->whereIn('request_id', $requestIds)->pluck('id')->all();
+        $revenueEntryIds = DB::table('request_revenue_entries')->whereIn('request_id', $requestIds)->pluck('id')->all();
 
         return [
             'services' => $serviceIds,
@@ -240,6 +243,7 @@ class CleanupProductionTestData extends Command
             'deliveries' => $deliveryIds,
             'finalDocuments' => $finalDocumentIds,
             'finalDeliveries' => $finalDeliveryIds,
+            'revenueEntries' => $revenueEntryIds,
             'scopes' => DB::table('request_service_work_scopes')->whereIn('request_service_id', $serviceIds)->pluck('id')->all(),
         ];
     }
@@ -255,6 +259,7 @@ class CleanupProductionTestData extends Command
         $counts['request_dispatch_proofs'] = DB::table('request_dispatch_proofs')->whereIn('request_dispatch_id', $ids['dispatches'])->count();
         $counts['customer_notification_deliveries'] = count($ids['deliveries']);
         $counts['request_final_document_delivery_items'] = DB::table('request_final_document_delivery_items')->whereIn('delivery_id', $ids['finalDeliveries'])->count();
+        $counts['request_revenue_entry_documents'] = DB::table('request_revenue_entry_documents')->whereIn('request_revenue_entry_id', $ids['revenueEntries'])->count();
         $counts['queued_notification_jobs'] = $this->notificationJobIds('jobs', $ids['deliveries'])->count();
         $counts['failed_notification_jobs'] = $this->notificationJobIds('failed_jobs', $ids['deliveries'])->count();
         $counts['queued_final_document_jobs'] = $this->finalDocumentJobIds('jobs', $ids['finalDeliveries'])->count();
@@ -269,18 +274,20 @@ class CleanupProductionTestData extends Command
         $proofPaths = DB::table('request_dispatch_proofs')->whereIn('request_dispatch_id', $dispatchIds)->pluck('file_path');
         $paymentProofPaths = DB::table('request_payment_submissions')->whereIn('request_id', $requestIds)->pluck('proof_path');
         $finalDocumentPaths = DB::table('request_final_documents')->whereIn('request_id', $requestIds)->pluck('storage_path');
+        $revenueDocumentPaths = DB::table('request_revenue_entry_documents')->whereIn('request_revenue_entry_id', $this->ownedIds($requestIds)['revenueEntries'])->pluck('file_path');
 
-        return $documentPaths->merge($proofPaths)->merge($paymentProofPaths)->merge($finalDocumentPaths)->filter()->unique()->sort()->values()->map(function (string $path) use ($requestIds, $dispatchIds): array {
+        return $documentPaths->merge($proofPaths)->merge($paymentProofPaths)->merge($finalDocumentPaths)->merge($revenueDocumentPaths)->filter()->unique()->sort()->values()->map(function (string $path) use ($requestIds, $dispatchIds): array {
             $safe = $this->isSafeRelativePath($path);
             $sharedDocument = DB::table('request_documents')->where('file_path', $path)->whereNotIn('request_id', $requestIds)->exists();
             $sharedProof = DB::table('request_dispatch_proofs')->where('file_path', $path)->whereNotIn('request_dispatch_id', $dispatchIds)->exists();
             $sharedPaymentProof = DB::table('request_payment_submissions')->where('proof_path', $path)->whereNotIn('request_id', $requestIds)->exists();
             $sharedFinalDocument = DB::table('request_final_documents')->where('storage_path', $path)->whereNotIn('request_id', $requestIds)->exists();
+            $sharedRevenueDocument = DB::table('request_revenue_entry_documents')->where('file_path', $path)->whereNotIn('request_revenue_entry_id', $this->ownedIds($requestIds)['revenueEntries'])->exists();
 
             return [
                 'path' => $path,
                 'safe' => $safe,
-                'shared' => $sharedDocument || $sharedProof || $sharedPaymentProof || $sharedFinalDocument,
+                'shared' => $sharedDocument || $sharedProof || $sharedPaymentProof || $sharedFinalDocument || $sharedRevenueDocument,
                 'exists' => $safe && Storage::disk('local')->exists($path),
             ];
         })->all();

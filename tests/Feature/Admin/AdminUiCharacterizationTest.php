@@ -69,10 +69,10 @@ class AdminUiCharacterizationTest extends TestCase
             ->assertSee('Overall Progress')
             ->assertSee('6. Processing Checklist')
             ->assertSee('7. Final Documents / Customer Delivery')
-            ->assertSee('8. Dispatch')
-            ->assertSee('9. Activity History')
-            ->assertDontSee('Processing Timeline')
-            ->assertDontSee('10. Activity History');
+            ->assertSee('8. Revenue Entry / ફેરફાર નોંધ')
+            ->assertSee('9. Dispatch')
+            ->assertSee('10. Activity History')
+            ->assertDontSee('Processing Timeline');
         $this->assertSame(1, substr_count($response->getContent(), 'accordion-collapse collapse show'));
     }
 

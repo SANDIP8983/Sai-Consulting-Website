@@ -113,6 +113,9 @@ class AdminRequestPresentationService
         foreach ($request->caseActionHistory as $history) {
             $items->push($this->activityRow($history->created_at, $history->performedBy?->name, str($history->action)->headline()->toString(), $history->to_status, $history->reason ?: $history->internal_note, $this->highlight($history->action)));
         }
+        foreach ($request->revenueEntryHistory as $history) {
+            $items->push($this->activityRow($history->created_at, $history->changedBy?->name, 'Revenue Entry '.str($history->action)->headline(), $history->to_status, $history->reason, 'processing'));
+        }
 
         return $items->sortByDesc('date')->values();
     }

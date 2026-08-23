@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\RequestDocumentController;
 use App\Http\Controllers\Admin\RequestFinalDocumentController;
 use App\Http\Controllers\Admin\RequestPdfController;
 use App\Http\Controllers\Admin\RequestProcessingController;
+use App\Http\Controllers\Admin\RequestRevenueEntryController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\ServiceRequiredDocumentController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -210,6 +211,14 @@ Route::middleware(['auth', 'active', 'can:processing.manage', 'request.assigned'
     Route::patch('/registration', 'updateRegistration')->name('registration.update');
     Route::patch('/post-registration', 'updatePostRegistration')->name('post-registration.update');
     Route::post('/registered-scan', 'storeRegisteredScan')->name('registered-scan.store');
+});
+
+Route::middleware(['auth', 'active', 'can:requests.view', 'request.assigned'])->prefix('admin/requests/{customerRequest}/revenue-entries')->name('admin.requests.revenue-entries.')->controller(RequestRevenueEntryController::class)->group(function () {
+    Route::patch('/requirement', 'requirement')->middleware('can:requests.manage')->name('requirement');
+    Route::post('/', 'store')->middleware('can:requests.manage')->name('store');
+    Route::patch('/{revenueEntry}', 'update')->middleware('can:requests.manage')->name('update');
+    Route::post('/{revenueEntry}/documents', 'upload')->middleware('can:requests.manage')->name('documents.store');
+    Route::get('/{revenueEntry}/documents/{document}', 'download')->name('documents.download');
 });
 
 Route::middleware(['auth', 'active', 'can:services.manage'])

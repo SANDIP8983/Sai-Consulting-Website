@@ -5,7 +5,7 @@ return [
         'dashboard.view', 'requests.view', 'requests.manage', 'requests.approve',
         'billing.view', 'billing.manage', 'payments.manage', 'processing.manage',
         'dispatch.manage', 'requests.assign', 'services.manage', 'documents.manage', 'settings.manage',
-        'users.manage', 'notifications.view', 'notifications.manage', 'appointments.manage',
+        'users.manage', 'notifications.view', 'notifications.manage', 'appointments.manage', 'revenue-entries.override',
     ],
     'roles' => [
         'super_admin' => ['*'],
@@ -40,5 +40,8 @@ return [
         'request_dispatch_histories' => ['changed_by'],
         'request_assignment_histories' => ['previous_assigned_user_id', 'assigned_user_id', 'assigned_by'],
         'request_contact_change_histories' => ['changed_by'],
+        'request_revenue_entries' => ['created_by', 'updated_by'],
+        'request_revenue_entry_documents' => ['uploaded_by'],
+        'request_revenue_entry_histories' => ['changed_by'],
     ],
 ];

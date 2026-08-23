@@ -94,6 +94,8 @@
 
             @unless($isRejected)@include('frontend.request.partials.finalized-payment-summary')@endunless
 
+            @if($customerRequest->revenue_entry_required)@include('frontend.request.partials.revenue-entries')@endif
+
             <div class="row g-4 mt-1"><div class="col-lg-8">
                 <div class="tracking-timeline-card premium-card mb-4"><div class="tracking-card-title"><span class="icon-box"><i class="bi bi-signpost-split"></i></span><div><h3>ગ્રાહક અપડેટ્સ</h3><p>Customer-visible Remarks</p></div></div><div class="public-status-timeline">
                     @forelse($publicStatusHistory->sortBy('created_at') as $history)<article class="public-timeline-item"><span class="timeline-dot text-bg-{{ $statusColors[$history->to_status] ?? 'secondary' }}"><i class="bi bi-check2"></i></span><div><div class="d-flex flex-wrap justify-content-between gap-2"><h4>{{ $statusLabels[$history->to_status][0] ?? str($history->to_status)->headline() }} <small>{{ $statusLabels[$history->to_status][1] ?? '' }}</small></h4><time>{{ \App\Support\IndiaDateTime::format($history->created_at) }} IST</time></div>@if($history->remarks)<p>{{ $history->remarks }}</p>@endif</div></article>

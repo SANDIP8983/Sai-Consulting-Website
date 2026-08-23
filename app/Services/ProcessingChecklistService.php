@@ -141,6 +141,7 @@ class ProcessingChecklistService
             if ($scopes->isEmpty() || $scopes->contains(fn ($scope) => ! in_array($scope->status, self::RESOLVED, true))) {
                 throw ValidationException::withMessages(['work_scopes' => 'All selected work items must be Completed or Not Required.']);
             }
+            $this->assertRevenueEntryClosure($locked, $attributes, $user);
             $from = $locked->status;
             $completedAt = Carbon::parse($attributes['completion_date'])->endOfDay();
             $locked->update(['status' => 'completed', 'completed_at' => $completedAt, 'completion_customer_remark' => $attributes['customer_remark'] ?? null, 'completion_internal_note' => $attributes['internal_note'] ?? null, 'last_status_changed_at' => now()]);
@@ -148,6 +149,20 @@ class ProcessingChecklistService
             $locked->caseActionHistory()->create(['action' => 'completed', 'from_status' => $from, 'to_status' => 'completed', 'internal_note' => $attributes['internal_note'] ?? null, 'customer_remark' => $attributes['customer_remark'] ?? null, 'performed_by' => $user->id]);
             $this->notifications->afterCommit($locked, NotificationMilestone::Completed, 'request_status', $locked->id);
         });
+    }
+
+    private function assertRevenueEntryClosure(CustomerRequest $request, array $attributes, User $user): void
+    {
+        if (! $request->pendingRevenueEntries()) {
+            return;
+        }
+        if (! ($attributes['revenue_entry_override'] ?? false)) {
+            throw ValidationException::withMessages(['revenue_entry' => 'Revenue Entry work is still pending. Complete the Revenue Entry workflow before closing this case.']);
+        }
+        if (! $user->can('revenue-entries.override') || blank($attributes['revenue_entry_override_reason'] ?? null)) {
+            throw ValidationException::withMessages(['revenue_entry_override' => 'Only an authorized administrator may override pending Revenue Entry work, and a reason is required.']);
+        }
+        $request->caseActionHistory()->create(['action' => 'revenue_entry_closure_override', 'from_status' => $request->status, 'to_status' => 'completed', 'reason' => $attributes['revenue_entry_override_reason'], 'internal_note' => json_encode(['revenue_entry_required' => true, 'entries' => $request->revenueEntries()->get(['id', 'status'])->toArray()]), 'performed_by' => $user->id]);
     }
 
     public function reopenCase(CustomerRequest $request, string $reason, User $user): void

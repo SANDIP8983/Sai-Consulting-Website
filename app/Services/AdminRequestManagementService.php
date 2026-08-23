@@ -97,6 +97,8 @@ class AdminRequestManagementService
             'contactChangeHistory' => fn ($q) => $q->with('changedBy:id,name')->latest('changed_at'),
             'processingHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
             'caseActionHistory' => fn ($q) => $q->with('performedBy:id,name')->latest(),
+            'revenueEntries' => fn ($q) => $q->with(['documents', 'history.changedBy:id,name'])->oldest(),
+            'revenueEntryHistory' => fn ($q) => $q->with('changedBy:id,name')->latest(),
         ]);
     }
 

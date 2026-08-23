@@ -44,6 +44,7 @@ class DashboardController extends Controller
                 'delivered_today' => CustomerRequest::query()->whereHas('dispatches', fn ($q) => $q->where(fn ($q) => $q->whereDate('delivered_at', today())->orWhereDate('collected_at', today())))->count(),
                 'ready_to_close' => CustomerRequest::query()->where('status', 'delivered')->whereHas('dispatches', fn ($q) => $q->whereIn('dispatch_status', ['delivered', 'collected']))->whereDoesntHave('dispatches', fn ($q) => $q->whereIn('dispatch_status', ['prepared', 'not_dispatched', 'dispatched', 'in_transit', 'failed_returned']))->count(),
                 'closed_month' => CustomerRequest::query()->where('status', 'closed')->whereBetween('closed_at', [now()->startOfMonth(), now()->endOfMonth()])->count(),
+                'revenue_entry_pending' => CustomerRequest::query()->where('revenue_entry_required', true)->where(fn ($q) => $q->whereDoesntHave('revenueEntries')->orWhereHas('revenueEntries', fn ($entries) => $entries->whereNotIn('status', ['certified', 'cancelled'])))->count(),
             ],
             'summary' => [
                 'requests' => CustomerRequest::query()->count(),
