@@ -17,6 +17,9 @@ class NotificationSettingsSeeder extends Seeder
 
         foreach (NotificationMilestone::cases() as $milestone) {
             foreach (['email', 'whatsapp'] as $channel) {
+                if (! $milestone->supportsChannel($channel)) {
+                    continue;
+                }
                 Setting::query()->firstOrCreate(
                     ['setting_key' => "notifications.{$milestone->value}.{$channel}"],
                     [

@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\NotificationMilestone;
 use App\Models\CustomerRequest;
 use App\Models\RequestRevenueEntry;
 use App\Models\RequestRevenueEntryDocument;
 use App\Models\User;
+use App\Services\Notifications\CustomerNotificationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 class RevenueEntryService
 {
+    public function __construct(private readonly CustomerNotificationService $notifications) {}
+
     private const TRANSITIONS = [
         'not_started' => ['application_preparation', 'cancelled'],
         'application_preparation' => ['submitted', 'cancelled'],
@@ -51,6 +55,7 @@ class RevenueEntryService
             $attributes = $this->timestampsForStatus($attributes, null);
             $entry = $locked->revenueEntries()->create([...$attributes, 'created_by' => $user->id, 'updated_by' => $user->id]);
             $entry->history()->create(['request_id' => $locked->id, 'action' => 'created', 'to_status' => $entry->status, 'new_values' => $this->auditValues($entry), 'changed_by' => $user->id]);
+            $this->notifyMilestone($locked, $entry);
 
             return $entry;
         });
@@ -70,6 +75,9 @@ class RevenueEntryService
             $old = $this->auditValues($row);
             $row->update([...$this->timestampsForStatus($attributes, $from), 'updated_by' => $user->id]);
             $row->history()->create(['request_id' => $locked->id, 'action' => $to === $from ? 'updated' : 'status_changed', 'from_status' => $from, 'to_status' => $to, 'old_values' => $old, 'new_values' => $this->auditValues($row->fresh()), 'reason' => $to === 'rejected' ? $attributes['rejection_reason'] : null, 'changed_by' => $user->id]);
+            if ($to !== $from) {
+                $this->notifyMilestone($locked, $row->fresh());
+            }
 
             return $row->refresh();
         });
@@ -128,5 +136,39 @@ class RevenueEntryService
     private function auditValues(RequestRevenueEntry $entry): array
     {
         return Arr::only($entry->toArray(), ['entry_number', 'entry_date', 'application_number', 'application_date', 'village', 'taluka', 'district', 'survey_numbers', 'status', 'submitted_at', 'certified_at', 'rejected_at', 'rejection_reason', 'admin_notes', 'customer_note']);
+    }
+
+    private function notifyMilestone(CustomerRequest $request, RequestRevenueEntry $entry): void
+    {
+        $milestone = match ($entry->status) {
+            'submitted' => NotificationMilestone::RevenueEntrySubmitted,
+            'entry_number_received' => NotificationMilestone::RevenueEntryNumberReceived,
+            'certified' => NotificationMilestone::RevenueEntryCertified,
+            'rejected' => NotificationMilestone::RevenueEntryRejected,
+            default => null,
+        };
+        if (! $milestone) {
+            return;
+        }
+
+        $serviceNames = $request->requestServices()->where('status', 'approved')->where('is_admin_added', false)
+            ->pluck('service_name_gu_snapshot')->filter()->implode(', ');
+        $serviceName = $serviceNames ?: collect([$request->service?->name_gu, $request->service?->name_en])->filter()->implode(' / ');
+        $statusLabel = match ($entry->status) {
+            'submitted' => 'ફેરફાર નોંધ માટે અરજી દાખલ થઈ / Submitted',
+            'entry_number_received' => 'ફેરફાર નોંધ નંબર મળ્યો / Entry Number Received',
+            'certified' => 'ફેરફાર નોંધ પ્રમાણિત થઈ / Certified',
+            'rejected' => 'ફેરફાર નોંધ નામંજૂર / કાર્યવાહી જરૂરી / Action Required',
+        };
+
+        $this->notifications->afterCommit($request, $milestone, 'revenue_entry', $entry->id, [
+            'service_name' => $serviceName ?: 'Document Service',
+            'survey_numbers' => array_values($entry->survey_numbers ?? []),
+            'entry_number' => $entry->entry_number,
+            'entry_date' => $entry->entry_date?->format('d M Y'),
+            'certified_date' => $entry->certified_at?->format('d M Y'),
+            'status_label' => $statusLabel,
+            'customer_note' => $entry->customer_note,
+        ]);
     }
 }

@@ -10,7 +10,7 @@ class CustomerMessageFactory
 {
     public function __construct(private readonly RequestBillingStateResolver $billingStateResolver) {}
 
-    public function make(CustomerRequest $request, NotificationMilestone $milestone): array
+    public function make(CustomerRequest $request, NotificationMilestone $milestone, array $safeContext = []): array
     {
         $request->loadMissing(['requestServices', 'billing', 'dispatches']);
         $reference = $request->reference_no;
@@ -26,6 +26,10 @@ class CustomerMessageFactory
             NotificationMilestone::Completed => 'તમારી અરજીનું કામ પૂર્ણ થયું છે. / Request completed.',
             NotificationMilestone::Dispatched => 'તમારા દસ્તાવેજો મોકલવામાં આવ્યા છે. / Documents dispatched.',
             NotificationMilestone::DeliveredClosed => 'તમારા દસ્તાવેજોની ડિલિવરી પૂર્ણ થઈ છે અને કેસ પૂર્ણ થયો છે. / Delivery and case conclusion completed.',
+            NotificationMilestone::RevenueEntrySubmitted => 'તમારી ફેરફાર નોંધ માટેની અરજી દાખલ કરવામાં આવી છે. / Revenue Entry application submitted.',
+            NotificationMilestone::RevenueEntryNumberReceived => 'તમારી ફેરફાર નોંધ માટે નોંધ નંબર મળ્યો છે. / Revenue Entry number received.',
+            NotificationMilestone::RevenueEntryCertified => 'તમારી ફેરફાર નોંધ પ્રમાણિત થઈ ગઈ છે. / Revenue Entry certified.',
+            NotificationMilestone::RevenueEntryRejected => 'તમારી ફેરફાર નોંધ અંગે વધુ કાર્યવાહી જરૂરી છે. / Action is required for your Revenue Entry.',
             NotificationMilestone::AppointmentReceived, NotificationMilestone::AppointmentConfirmed,
             NotificationMilestone::AppointmentRescheduled, NotificationMilestone::AppointmentCancelled,
             NotificationMilestone::AppointmentReminder => throw new \LogicException('Appointment milestones require AppointmentMessageFactory.'),
@@ -62,11 +66,35 @@ class CustomerMessageFactory
                 $details[] = 'Tracking / Consignment: '.$dispatch->tracking_number;
             }
         }
+        if ($milestone->isRevenueEntry()) {
+            $details[] = 'Service / સેવા: '.($safeContext['service_name'] ?? 'Document Service');
+            if (! empty($safeContext['survey_numbers'])) {
+                $details[] = 'Survey No. / સર્વે નં.: '.implode(', ', $safeContext['survey_numbers']);
+            }
+            if (in_array($milestone, [NotificationMilestone::RevenueEntryNumberReceived, NotificationMilestone::RevenueEntryCertified], true) && ! empty($safeContext['entry_number'])) {
+                $details[] = 'Entry Number / ફેરફાર નોંધ નં.: '.$safeContext['entry_number'];
+            }
+            if ($milestone === NotificationMilestone::RevenueEntryNumberReceived && ! empty($safeContext['entry_date'])) {
+                $details[] = 'Entry Date / નોંધ તારીખ: '.$safeContext['entry_date'];
+            }
+            if ($milestone === NotificationMilestone::RevenueEntryCertified && ! empty($safeContext['certified_date'])) {
+                $details[] = 'Certified Date / પ્રમાણિત તારીખ: '.$safeContext['certified_date'];
+            }
+            $details[] = 'Status / સ્થિતિ: '.($safeContext['status_label'] ?? $milestone->label());
+            if (! empty($safeContext['customer_note'])) {
+                $details[] = 'ગ્રાહક માટે નોંધ / Customer Note: '.$safeContext['customer_note'];
+            }
+        }
         $body = implode("\n", array_filter(["નમસ્તે {$request->name},", $status, ...$details, "Reference: {$reference}", "Tracking: {$tracking}"]));
 
-        $subjectLabel = $milestone === NotificationMilestone::Accepted && $billingState?->paymentRequired
-            ? 'Accepted — Payment Pending'
-            : $milestone->label();
+        $subjectLabel = match ($milestone) {
+            NotificationMilestone::Accepted => $billingState?->paymentRequired ? 'Accepted — Payment Pending' : $milestone->label(),
+            NotificationMilestone::RevenueEntrySubmitted => 'ફેરફાર નોંધ માટે અરજી દાખલ થઈ',
+            NotificationMilestone::RevenueEntryNumberReceived => 'ફેરફાર નોંધ નંબર મળ્યો',
+            NotificationMilestone::RevenueEntryCertified => 'ફેરફાર નોંધ પ્રમાણિત થઈ',
+            NotificationMilestone::RevenueEntryRejected => 'ફેરફાર નોંધ અંગે કાર્યવાહી જરૂરી',
+            default => $milestone->label(),
+        };
 
         return [
             'subject' => 'Sai Consulting — '.$subjectLabel.' — '.$reference,

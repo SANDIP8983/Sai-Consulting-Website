@@ -15,6 +15,10 @@ enum NotificationMilestone: string
     case Completed = 'completed';
     case Dispatched = 'dispatched';
     case DeliveredClosed = 'delivered_closed';
+    case RevenueEntrySubmitted = 'revenue_entry_submitted';
+    case RevenueEntryNumberReceived = 'revenue_entry_number_received';
+    case RevenueEntryCertified = 'revenue_entry_certified';
+    case RevenueEntryRejected = 'revenue_entry_rejected';
     case AppointmentReceived = 'appointment_received';
     case AppointmentConfirmed = 'appointment_confirmed';
     case AppointmentRescheduled = 'appointment_rescheduled';
@@ -28,6 +32,8 @@ enum NotificationMilestone: string
             self::PaymentPending => 'Payment Pending', self::PaymentReceived => 'Payment Received / Awaiting Assignment',
             self::ProcessingStarted => 'Processing Started', self::DraftReady => 'Draft Ready', self::FinalDraftReady => 'Final Draft Ready',
             self::Completed => 'Completed', self::Dispatched => 'Dispatched', self::DeliveredClosed => 'Delivered / Closed',
+            self::RevenueEntrySubmitted => 'Revenue Entry Submitted', self::RevenueEntryNumberReceived => 'Revenue Entry Number Received',
+            self::RevenueEntryCertified => 'Revenue Entry Certified', self::RevenueEntryRejected => 'Revenue Entry Rejected / Action Required',
             self::AppointmentReceived => 'Appointment Booking Received', self::AppointmentConfirmed => 'Appointment Confirmed',
             self::AppointmentRescheduled => 'Appointment Rescheduled', self::AppointmentCancelled => 'Appointment Cancelled', self::AppointmentReminder => 'Appointment Reminder',
         };
@@ -35,6 +41,20 @@ enum NotificationMilestone: string
 
     public function defaults(): array
     {
+        if ($this->isRevenueEntry()) {
+            return ['email' => false, 'whatsapp' => false];
+        }
+
         return ['email' => ! in_array($this, [self::ProcessingStarted, self::DraftReady], true), 'whatsapp' => true];
+    }
+
+    public function isRevenueEntry(): bool
+    {
+        return in_array($this, [self::RevenueEntrySubmitted, self::RevenueEntryNumberReceived, self::RevenueEntryCertified, self::RevenueEntryRejected], true);
+    }
+
+    public function supportsChannel(string $channel): bool
+    {
+        return $channel === 'email' || ! $this->isRevenueEntry();
     }
 }

@@ -52,7 +52,7 @@ class SendCustomerNotificationJob implements ShouldQueue
         }
         $message = $appointment
             ? app(AppointmentMessageFactory::class)->make($appointment, $delivery->event->milestone)
-            : $messages->make($request, $delivery->event->milestone);
+            : $messages->make($request, $delivery->event->milestone, $delivery->event->safe_context ?? []);
         try {
             if ($delivery->channel === 'email') {
                 Mail::to($recipient)->send(new CustomerMilestoneMail($message));

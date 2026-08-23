@@ -28,7 +28,7 @@ class CustomerNotificationSystemTest extends TestCase
         foreach (NotificationMilestone::cases() as $milestone) {
             $response->assertSee($milestone->label());
             $this->assertIsBool(app(CustomerNotificationService::class)->enabled($milestone, 'email'));
-            $this->assertTrue(app(CustomerNotificationService::class)->enabled($milestone, 'whatsapp'));
+            $this->assertSame($milestone->supportsChannel('whatsapp'), app(CustomerNotificationService::class)->enabled($milestone, 'whatsapp'));
         }
         $this->assertFalse(app(CustomerNotificationService::class)->enabled(NotificationMilestone::ProcessingStarted, 'email'));
         $this->assertFalse(app(CustomerNotificationService::class)->enabled(NotificationMilestone::DraftReady, 'email'));

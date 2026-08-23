@@ -17,6 +17,9 @@ class UpdateCustomerNotificationSettingsRequest extends FormRequest
         $rules = ['admin_new_request_email' => ['required', 'boolean']];
         foreach (NotificationMilestone::cases() as $milestone) {
             foreach (['email', 'whatsapp'] as $channel) {
+                if (! $milestone->supportsChannel($channel)) {
+                    continue;
+                }
                 $rules["milestones.{$milestone->value}.{$channel}"] = ['required', 'boolean'];
             }
         }

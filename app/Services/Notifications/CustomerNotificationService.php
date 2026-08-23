@@ -28,7 +28,9 @@ class CustomerNotificationService
 
     public function record(CustomerRequest $request, NotificationMilestone $milestone, ?string $sourceType = null, ?int $sourceId = null, array $safeContext = []): CustomerNotificationEvent
     {
-        $eventKey = "request:{$request->id}:milestone:{$milestone->value}";
+        $eventKey = $sourceType === 'revenue_entry' && $sourceId
+            ? "request:{$request->id}:revenue-entry:{$sourceId}:milestone:{$milestone->value}"
+            : "request:{$request->id}:milestone:{$milestone->value}";
         try {
             $event = CustomerNotificationEvent::query()->create(['request_id' => $request->id, 'milestone' => $milestone, 'event_key' => $eventKey, 'source_type' => $sourceType, 'source_id' => $sourceId, 'safe_context' => $safeContext, 'occurred_at' => now()]);
         } catch (UniqueConstraintViolationException) {
@@ -57,6 +59,10 @@ class CustomerNotificationService
 
     public function enabled(NotificationMilestone $milestone, string $channel): bool
     {
+        if (! $milestone->supportsChannel($channel)) {
+            return false;
+        }
+
         $stored = Setting::query()->where('setting_key', "notifications.{$milestone->value}.{$channel}")->value('setting_value');
 
         return $stored === null ? $milestone->defaults()[$channel] : filter_var($stored, FILTER_VALIDATE_BOOL);
