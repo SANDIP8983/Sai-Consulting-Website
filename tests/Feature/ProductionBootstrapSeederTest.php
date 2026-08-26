@@ -73,8 +73,11 @@ class ProductionBootstrapSeederTest extends TestCase
         $this->assertDatabaseCount('work_scope_items', 14);
         $this->assertEqualsCanonicalizing(self::CURRENT_SCOPES, WorkScopeItem::query()->pluck('normalized_name')->all());
         $this->assertDatabaseCount('service_work_scope_defaults', 54);
-        $this->assertDatabaseCount('settings', 59);
-        $this->assertSame(36, Setting::query()->where('setting_group', 'customer_notifications')->count());
+        $expectedNotificationCount = collect(NotificationMilestone::cases())->sum(
+            fn (NotificationMilestone $milestone): int => collect(['email', 'whatsapp'])->filter(fn (string $channel): bool => $milestone->supportsChannel($channel))->count(),
+        );
+        $this->assertDatabaseCount('settings', 23 + $expectedNotificationCount);
+        $this->assertSame($expectedNotificationCount, Setting::query()->where('setting_group', 'customer_notifications')->count());
         $this->assertSame(1, Setting::query()->where('setting_group', 'admin_notifications')->count());
         $this->assertSame(22, Setting::query()->whereNotIn('setting_group', ['customer_notifications', 'admin_notifications'])->count());
         $this->assertSame(0, Setting::query()->whereIn('setting_group', ['customer_notifications', 'admin_notifications'])->where('setting_value', '!=', '0')->count());

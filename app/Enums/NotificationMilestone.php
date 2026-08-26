@@ -41,11 +41,10 @@ enum NotificationMilestone: string
 
     public function defaults(): array
     {
-        if ($this->isRevenueEntry()) {
-            return ['email' => false, 'whatsapp' => false];
-        }
-
-        return ['email' => ! in_array($this, [self::ProcessingStarted, self::DraftReady], true), 'whatsapp' => true];
+        return [
+            'email' => $this->isRevenueEntry() ? false : ! in_array($this, [self::ProcessingStarted, self::DraftReady], true),
+            'whatsapp' => false,
+        ];
     }
 
     public function isRevenueEntry(): bool
@@ -55,6 +54,14 @@ enum NotificationMilestone: string
 
     public function supportsChannel(string $channel): bool
     {
-        return $channel === 'email' || ! $this->isRevenueEntry();
+        if ($channel === 'email') {
+            return true;
+        }
+
+        return in_array($this, [
+            self::RequestReceived, self::Accepted, self::Rejected, self::PaymentReceived,
+            self::FinalDraftReady, self::Completed, self::Dispatched,
+            self::RevenueEntryNumberReceived, self::RevenueEntryCertified, self::RevenueEntryRejected,
+        ], true);
     }
 }

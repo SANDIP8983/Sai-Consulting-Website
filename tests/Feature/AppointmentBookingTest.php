@@ -240,7 +240,7 @@ class AppointmentBookingTest extends TestCase
         $this->assertNotNull($due->fresh()->reminder_sent_at);
         $this->assertDatabaseHas('customer_notification_events', ['appointment_id' => $due->id, 'milestone' => 'appointment_reminder', 'source_type' => 'appointment', 'source_id' => $due->id]);
         $this->assertSame(1, DB::table('customer_notification_events')->where('appointment_id', $due->id)->where('milestone', 'appointment_reminder')->count());
-        Queue::assertPushed(SendCustomerNotificationJob::class, 2);
+        Queue::assertPushed(SendCustomerNotificationJob::class, 1);
     }
 
     public function test_notification_log_identifies_and_filters_appointment_events(): void

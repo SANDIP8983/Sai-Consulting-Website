@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\Contracts\WhatsAppChannelInterface;
 use App\Models\User;
 use App\Services\HomepageService;
-use App\Services\Notifications\DisabledWhatsAppChannel;
+use App\Services\Notifications\Msg91WhatsAppChannel;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -21,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(HomepageService::class);
-        $this->app->bind(WhatsAppChannelInterface::class, DisabledWhatsAppChannel::class);
+        $this->app->bind(WhatsAppChannelInterface::class, Msg91WhatsAppChannel::class);
     }
 
     /**

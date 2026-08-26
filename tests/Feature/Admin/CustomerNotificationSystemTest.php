@@ -28,7 +28,7 @@ class CustomerNotificationSystemTest extends TestCase
         foreach (NotificationMilestone::cases() as $milestone) {
             $response->assertSee($milestone->label());
             $this->assertIsBool(app(CustomerNotificationService::class)->enabled($milestone, 'email'));
-            $this->assertSame($milestone->supportsChannel('whatsapp'), app(CustomerNotificationService::class)->enabled($milestone, 'whatsapp'));
+            $this->assertFalse(app(CustomerNotificationService::class)->enabled($milestone, 'whatsapp'));
         }
         $this->assertFalse(app(CustomerNotificationService::class)->enabled(NotificationMilestone::ProcessingStarted, 'email'));
         $this->assertFalse(app(CustomerNotificationService::class)->enabled(NotificationMilestone::DraftReady, 'email'));
@@ -77,7 +77,7 @@ class CustomerNotificationSystemTest extends TestCase
         $this->assertDatabaseCount('customer_notification_deliveries', 2);
         $this->assertDatabaseHas('customer_notification_deliveries', ['channel' => 'email', 'recipient_masked' => 'c***@example.com']);
         $this->assertDatabaseHas('customer_notification_deliveries', ['channel' => 'whatsapp', 'recipient_masked' => '********9999']);
-        Queue::assertPushed(SendCustomerNotificationJob::class, 2);
+        Queue::assertPushed(SendCustomerNotificationJob::class, 1);
     }
 
     public function test_missing_email_and_disabled_channel_skip_safely(): void
@@ -135,6 +135,8 @@ class CustomerNotificationSystemTest extends TestCase
     public function test_enabled_whatsapp_without_provider_is_skipped_not_sent(): void
     {
         Queue::fake();
+        config(['msg91-whatsapp.enabled' => true]);
+        Setting::query()->create(['setting_key' => 'notifications.payment_received_awaiting_assignment.whatsapp', 'setting_value' => '1', 'value_type' => 'boolean', 'setting_group' => 'customer_notifications', 'is_public' => false]);
         $event = app(CustomerNotificationService::class)->record($this->request(), NotificationMilestone::PaymentReceived);
         $delivery = $event->deliveries->firstWhere('channel', 'whatsapp');
         (new SendCustomerNotificationJob($delivery->id))->handle(app(CustomerNotificationService::class), app(CustomerMessageFactory::class), app(DisabledWhatsAppChannel::class));
