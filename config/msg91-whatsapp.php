@@ -19,7 +19,7 @@ return [
     'templates' => [
         NotificationMilestone::RequestReceived->value => $template('request_received', 'REQUEST_RECEIVED'),
         NotificationMilestone::Accepted->value => $template('request_accepted_payment_pending', 'REQUEST_ACCEPTED_PAYMENT_PENDING'),
-        NotificationMilestone::PaymentReceived->value => $template('payment_received', 'PAYMENT_RECEIVED'),
+        NotificationMilestone::PaymentReceived->value => $template('payment_received_awaiting_assignment', 'PAYMENT_RECEIVED_AWAITING_ASSIGNMENT'),
         NotificationMilestone::Rejected->value => $template('request_rejected', 'REQUEST_REJECTED'),
         NotificationMilestone::Completed->value => $template('work_completed', 'WORK_COMPLETED'),
         NotificationMilestone::FinalDraftReady->value => $template('document_ready', 'DOCUMENT_READY'),
