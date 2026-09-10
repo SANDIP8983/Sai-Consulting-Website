@@ -39,15 +39,16 @@ class AppointmentNotificationService
 
         foreach (['email', 'whatsapp'] as $channel) {
             $enabled = $this->enabled($milestone, $channel);
+            $masterDisabled = $channel === 'whatsapp' && ! config('msg91-whatsapp.enabled');
             $recipient = $this->recipient($appointment, $channel);
             $delivery = $event->deliveries()->create([
                 'channel' => $channel,
-                'status' => $enabled && $recipient ? 'pending' : 'skipped',
+                'status' => $enabled && ! $masterDisabled && $recipient ? 'pending' : 'skipped',
                 'recipient_masked' => $recipient ? $this->mask($recipient, $channel) : null,
                 'recipient_hash' => $recipient ? hash('sha256', strtolower($recipient)) : null,
-                'template_key' => 'customer_'.$milestone->value,
-                'failure_category' => ! $enabled ? 'channel_disabled' : ($recipient ? null : 'missing_or_invalid_recipient'),
-                'queued_at' => $enabled && $recipient ? now() : null,
+                'template_key' => $channel === 'whatsapp' ? (config("msg91-whatsapp.templates.{$milestone->value}.name") ?? 'unavailable') : 'customer_'.$milestone->value,
+                'failure_category' => ! $enabled ? 'channel_disabled' : ($masterDisabled ? 'master_disabled' : ($recipient ? null : 'missing_or_invalid_recipient')),
+                'queued_at' => $enabled && ! $masterDisabled && $recipient ? now() : null,
             ]);
             if ($delivery->status === 'pending') {
                 SendCustomerNotificationJob::dispatch($delivery->id)->onQueue(config('customer-notifications.queue'));
@@ -59,6 +60,9 @@ class AppointmentNotificationService
 
     public function enabled(NotificationMilestone $milestone, string $channel): bool
     {
+        if (! $milestone->supportsChannel($channel)) {
+            return false;
+        }
         $stored = Setting::query()->where('setting_key', "notifications.{$milestone->value}.{$channel}")->value('setting_value');
 
         return $stored === null ? $milestone->defaults()[$channel] : filter_var($stored, FILTER_VALIDATE_BOOL);

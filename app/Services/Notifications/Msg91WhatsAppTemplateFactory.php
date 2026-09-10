@@ -5,6 +5,7 @@ namespace App\Services\Notifications;
 use App\Enums\NotificationMilestone;
 use App\Models\CustomerNotificationDelivery;
 use App\Models\CustomerRequest;
+use App\Models\Appointment;
 use App\Models\RequestPayment;
 use App\Models\RequestRevenueEntry;
 use App\Services\RequestBillingStateResolver;
@@ -21,19 +22,54 @@ final class Msg91WhatsAppTemplateFactory
     public function make(CustomerNotificationDelivery $delivery): ?array
     {
         $event = $delivery->event;
+        $configuration = config("msg91-whatsapp.templates.{$event->milestone->value}");
+        if (! is_array($configuration)) {
+            return null;
+        }
+
+        if ($event->appointment) {
+            return $this->appointment($event->appointment, $event->milestone, $configuration);
+        }
+
         $request = $event->customerRequest;
         if (! $request) {
             return null;
         }
 
         $language = $this->languages->resolve($request);
-        $configuration = config("msg91-whatsapp.templates.{$event->milestone->value}");
-        if (! is_array($configuration) || ! ($configuration['languages'][$language] ?? false)) {
+        if (! ($configuration['languages'][$language] ?? false)) {
             return null;
         }
 
         $parameters = $this->parameters($request, $event->milestone, $event->source_type, $event->source_id, $language, $event->safe_context ?? []);
         if ($parameters === null || collect($parameters)->contains(fn (string $value): bool => trim($value) === '')) {
+            return null;
+        }
+
+        return $this->template($configuration, $language, $parameters);
+    }
+
+    /** @param array{name:string,languages:array<string,bool>,parameter_count:int} $configuration */
+    private function appointment(Appointment $appointment, NotificationMilestone $milestone, array $configuration): ?array
+    {
+        if (! in_array($milestone, [NotificationMilestone::AppointmentConfirmed, NotificationMilestone::AppointmentRescheduled, NotificationMilestone::AppointmentCancelled], true)) {
+            return null;
+        }
+
+        $language = $this->languages->resolveForAppointment($appointment);
+        if (! ($configuration['languages'][$language] ?? false)) {
+            return null;
+        }
+        $at = $appointment->scheduled_at;
+        $parameters = [(string) $appointment->customer_name, (string) $appointment->reference_no, $at->format('d M Y'), $at->format('g:i A')];
+
+        return $this->template($configuration, $language, $parameters);
+    }
+
+    /** @param array{name:string,parameter_count:int} $configuration @param list<string> $parameters */
+    private function template(array $configuration, string $language, array $parameters): ?array
+    {
+        if (count($parameters) !== ($configuration['parameter_count'] ?? null)) {
             return null;
         }
 

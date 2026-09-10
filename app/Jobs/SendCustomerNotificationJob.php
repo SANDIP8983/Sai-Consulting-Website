@@ -59,7 +59,13 @@ class SendCustomerNotificationJob implements ShouldQueue
                 $delivery->update(['status' => 'sent', 'provider' => config('mail.default'), 'sent_at' => now()]);
             } else {
                 $result = $whatsApp->send($delivery, $recipient, $message);
-                $delivery->update(['status' => $result['status'], 'provider' => $result['provider'], 'provider_message_id' => $result['provider_message_id'], 'failure_category' => $result['failure_category'], 'sent_at' => $result['status'] === 'sent' ? now() : null]);
+                $delivery->update([
+                    'status' => $result['status'], 'provider' => $result['provider'],
+                    'provider_message_id' => $result['provider_message_id'], 'failure_category' => $result['failure_category'],
+                    'failure_message' => $result['failure_message'], 'provider_response' => $result['provider_response'],
+                    'sent_at' => $result['status'] === 'sent' ? now() : null,
+                    'failed_at' => $result['status'] === 'failed' ? now() : null,
+                ]);
             }
         } catch (\Throwable $exception) {
             $delivery->update(['status' => 'failed', 'failure_category' => 'transport_failure', 'failure_message' => Str::limit($exception->getMessage(), 500), 'failed_at' => now()]);
