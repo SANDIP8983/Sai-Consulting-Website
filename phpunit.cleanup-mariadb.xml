@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/cleanup-mariadb-bootstrap.php" colors="true" cacheResult="false">
+    <testsuites>
+        <testsuite name="Isolated XAMPP MariaDB cleanup safety">
+            <file>tests/Feature/MariaDbCleanupSafetyTest.php</file>
+        </testsuite>
+    </testsuites>
+</phpunit>

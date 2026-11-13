@@ -4,9 +4,10 @@ namespace App\Console\Commands;
 
 use App\Models\CustomerRequest;
 use App\Models\FileNumberSequence;
+use App\Services\CleanupQueueInspector;
+use App\Services\CleanupSafety;
 use App\Services\ReferenceNumberService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -132,7 +133,7 @@ class CleanupProductionTestData extends Command
         if ($failedFiles !== []) {
             $this->components->warn('Database cleanup succeeded, but these now-orphaned private files could not be removed:');
             foreach ($failedFiles as $path) {
-                $this->line(' - '.$path);
+                $this->line(' - sha256:'.hash('sha256', $path));
             }
 
             return self::FAILURE;
@@ -151,6 +152,11 @@ class CleanupProductionTestData extends Command
             ->get(['id', 'reference_no', 'file_number', 'created_at']);
         $requestIds = $targets->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $errors = [];
+        // Never let reference reuse bypass the all-scope one-time cleanup journal.
+        // Presence alone blocks: invalid/incomplete journals must not be ignored.
+        if (Storage::disk('local')->exists(CleanupSafety::JOURNAL)) {
+            $errors[] = 'All-scope cleanup journal exists; limited cleanup is refused. Manual review required.';
+        }
 
         $found = $targets->pluck('reference_no')->all();
         $missing = array_values(array_diff(self::REFERENCES, $found));
@@ -207,13 +213,22 @@ class CleanupProductionTestData extends Command
 
         $ids = $this->ownedIds($requestIds);
         $counts = $this->ownedCounts($requestIds, $ids);
+        try {
+            $queueIds = app(CleanupQueueInspector::class)->inspect($requestIds, $ids['deliveries'], $ids['finalDeliveries'], $errors);
+            foreach ($queueIds as $table => $queuedIds) {
+                $counts[$table] = count($queuedIds);
+            }
+        } catch (\Throwable) {
+            $queueIds = ['jobs' => [], 'failed_jobs' => []];
+            $errors[] = 'Queue inspection failed; limited cleanup is refused.';
+        }
         $files = $this->ownedFiles($requestIds, $ids['dispatches']);
         foreach ($files as $file) {
             if (! $file['safe']) {
-                $errors[] = 'Unsafe private file path found: '.$file['path'].'.';
+                $errors[] = 'Unsafe private file path fingerprint: '.hash('sha256', $file['path']).'.';
             }
             if ($file['shared']) {
-                $errors[] = 'Private file path is also referenced by unrelated data: '.$file['path'].'.';
+                $errors[] = 'Shared private file path fingerprint: '.hash('sha256', $file['path']).'.';
             }
         }
 
@@ -221,7 +236,7 @@ class CleanupProductionTestData extends Command
             $errors[] = 'A target request notification event is also linked to an appointment; automatic deletion is refused.';
         }
 
-        return compact('targets', 'requestIds', 'ids', 'counts', 'files', 'sequence', 'lastFileNumber', 'lastReference', 'nextReferenceBeforeCleanup', 'errors');
+        return compact('targets', 'requestIds', 'ids', 'queueIds', 'counts', 'files', 'sequence', 'lastFileNumber', 'lastReference', 'nextReferenceBeforeCleanup', 'errors');
     }
 
     private function ownedIds(array $requestIds): array
@@ -260,10 +275,6 @@ class CleanupProductionTestData extends Command
         $counts['customer_notification_deliveries'] = count($ids['deliveries']);
         $counts['request_final_document_delivery_items'] = DB::table('request_final_document_delivery_items')->whereIn('delivery_id', $ids['finalDeliveries'])->count();
         $counts['request_revenue_entry_documents'] = DB::table('request_revenue_entry_documents')->whereIn('request_revenue_entry_id', $ids['revenueEntries'])->count();
-        $counts['queued_notification_jobs'] = $this->notificationJobIds('jobs', $ids['deliveries'])->count();
-        $counts['failed_notification_jobs'] = $this->notificationJobIds('failed_jobs', $ids['deliveries'])->count();
-        $counts['queued_final_document_jobs'] = $this->finalDocumentJobIds('jobs', $ids['finalDeliveries'])->count();
-        $counts['failed_final_document_jobs'] = $this->finalDocumentJobIds('failed_jobs', $ids['finalDeliveries'])->count();
 
         return $counts;
     }
@@ -299,13 +310,8 @@ class CleanupProductionTestData extends Command
         $ids = $audit['ids'];
 
         foreach (['jobs', 'failed_jobs'] as $table) {
-            $jobIds = $this->notificationJobIds($table, $ids['deliveries']);
-            if ($jobIds->isNotEmpty()) {
-                DB::table($table)->whereIn('id', $jobIds)->delete();
-            }
-            $finalJobIds = $this->finalDocumentJobIds($table, $ids['finalDeliveries']);
-            if ($finalJobIds->isNotEmpty()) {
-                DB::table($table)->whereIn('id', $finalJobIds)->delete();
+            foreach (array_chunk($audit['queueIds'][$table], 400) as $chunk) {
+                DB::table($table)->whereIn('id', $chunk)->delete();
             }
         }
         DB::table('request_final_document_delivery_items')->whereIn('delivery_id', $ids['finalDeliveries'])->delete();
@@ -317,38 +323,6 @@ class CleanupProductionTestData extends Command
         DB::table('request_contact_change_histories')->whereIn('request_id', $requestIds)->delete();
         CustomerRequest::query()->whereIn('id', $requestIds)->delete();
         FileNumberSequence::query()->where('year', self::YEAR)->delete();
-    }
-
-    private function notificationJobIds(string $table, array $deliveryIds): Collection
-    {
-        if ($deliveryIds === [] || ! Schema::hasTable($table) || ! Schema::hasColumn($table, 'payload')) {
-            return collect();
-        }
-
-        return DB::table($table)
-            ->where('payload', 'like', '%SendCustomerNotificationJob%')
-            ->where(function ($query) use ($deliveryIds): void {
-                foreach ($deliveryIds as $deliveryId) {
-                    $query->orWhere('payload', 'like', '%deliveryId";i:'.(int) $deliveryId.';%');
-                }
-            })
-            ->pluck('id');
-    }
-
-    private function finalDocumentJobIds(string $table, array $deliveryIds): Collection
-    {
-        if ($deliveryIds === [] || ! Schema::hasTable($table) || ! Schema::hasColumn($table, 'payload')) {
-            return collect();
-        }
-
-        return DB::table($table)
-            ->where('payload', 'like', '%SendFinalDocumentDeliveryJob%')
-            ->where(function ($query) use ($deliveryIds): void {
-                foreach ($deliveryIds as $deliveryId) {
-                    $query->orWhere('payload', 'like', '%deliveryId";i:'.(int) $deliveryId.';%');
-                }
-            })
-            ->pluck('id');
     }
 
     private function directForeignKeyTables(): array
@@ -393,7 +367,7 @@ class CleanupProductionTestData extends Command
         }
         foreach ($audit['files'] as $file) {
             $state = ! $file['safe'] ? 'UNSAFE' : ($file['shared'] ? 'SHARED' : ($file['exists'] ? 'exists' : 'missing'));
-            $this->line(" - [{$state}] {$file['path']}");
+            $this->line(" - [{$state}] sha256:".hash('sha256', $file['path']));
         }
 
         $this->newLine();

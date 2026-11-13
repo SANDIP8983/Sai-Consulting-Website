@@ -8,7 +8,7 @@ class ReferenceNumberService
 {
     public function generate(): string
     {
-        $year = date('Y');
+        $year = now()->format('Y');
 
         $lastRequest = CustomerRequest::whereYear('created_at', $year)
             ->latest('id')
