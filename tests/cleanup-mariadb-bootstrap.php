@@ -10,7 +10,7 @@ function cleanupMariaDbConnection(): PDO
     $identity = $pdo->query('SELECT DATABASE() AS db, VERSION() AS version, @@port AS port, @@datadir AS datadir, @@hostname AS hostname')->fetch(PDO::FETCH_ASSOC);
     $directory = strtolower(rtrim(str_replace('\\', '/', $identity['datadir']), '/'));
     if ($identity['db'] !== CLEANUP_MARIADB_DATABASE || (int) $identity['port'] !== 3306
-        || ! str_starts_with($identity['version'], '10.4.32-MariaDB')
+        || ! preg_match('/\A(?:10\.4\.32|10\.11\.16)-MariaDB(?:-[^\r\n]+)?\z/', $identity['version'])
         || $directory !== 'c:/xampp/mysql/data' || ! is_dir($directory)
         || strcasecmp($identity['hostname'], gethostname()) !== 0) {
         throw new RuntimeException('STOP: local XAMPP database isolation could not be verified.');

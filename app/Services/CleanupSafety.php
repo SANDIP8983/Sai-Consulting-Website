@@ -13,12 +13,18 @@ class CleanupSafety
 
     public const VERSION = 2;
 
+    public function hasSelectiveJournal(): bool
+    {
+        return collect(Storage::disk('local')->allFiles('maintenance'))
+            ->contains(fn ($path) => str_starts_with($path, 'maintenance/selective-cleanup-v1-'));
+    }
+
     public function deleteFile(string $path): bool
     {
         return Storage::disk('local')->delete($path);
     }
 
-    public function assertDatabaseSafety(): void
+    public function assertDatabaseSafety(array $absentQueueTables = [], bool $inspectBatches = false): void
     {
         if (DB::connection()->getDriverName() === 'sqlite') {
             if ((int) DB::selectOne('PRAGMA foreign_keys')->foreign_keys !== 1) {
@@ -33,9 +39,13 @@ class CleanupSafety
         if ((int) DB::selectOne('SELECT @@foreign_key_checks AS enabled')->enabled !== 1) {
             throw new CleanupRefused('Foreign key enforcement must be enabled.');
         }
-        $tables = [...self::TABLES, 'jobs', 'failed_jobs', 'file_number_sequences'];
-        $engines = DB::table('information_schema.TABLES')->where('TABLE_SCHEMA', DB::connection()->getDatabaseName())->whereIn('TABLE_NAME', $tables)->pluck('ENGINE');
-        if ($engines->count() !== count($tables) || $engines->contains(fn ($engine) => strtolower($engine) !== 'innodb')) {
+        $tables = [...self::TABLES, ...CleanupQueueInspector::TABLES, 'file_number_sequences'];
+        if ($inspectBatches) {
+            $tables[] = 'job_batches';
+        }
+        $required = array_diff($tables, array_intersect($absentQueueTables, CleanupQueueInspector::TABLES));
+        $engines = DB::table('information_schema.TABLES')->where('TABLE_SCHEMA', DB::connection()->getDatabaseName())->whereIn('TABLE_NAME', $required)->pluck('ENGINE');
+        if ($engines->count() !== count($required) || $engines->contains(fn ($engine) => strtolower($engine ?? '') !== 'innodb')) {
             throw new CleanupRefused('All cleanup tables must exist and use transactional InnoDB storage.');
         }
         if (DB::table('information_schema.TRIGGERS')->where('TRIGGER_SCHEMA', DB::connection()->getDatabaseName())->whereIn('EVENT_OBJECT_TABLE', $tables)->exists()) {
@@ -106,7 +116,8 @@ class CleanupSafety
             }
         }
 
-        foreach (Schema::getTables() as $tableInfo) {
+        $localSchema = DB::connection()->getDriverName() === 'sqlite' ? 'main' : DB::connection()->getDatabaseName();
+        foreach (Schema::getTables($localSchema) as $tableInfo) {
             $table = $tableInfo['name'];
             $columns = Schema::getColumnListing($table);
             sort($columns);
@@ -131,7 +142,6 @@ class CleanupSafety
                 if (! in_array($parent, [...self::TABLES, 'file_number_sequences', 'jobs', 'failed_jobs'], true)) {
                     continue;
                 }
-                $localSchema = DB::connection()->getDriverName() === 'sqlite' ? 'main' : DB::connection()->getDatabaseName();
                 if (! empty($fk['foreign_schema']) && $fk['foreign_schema'] !== $localSchema) {
                     $blockers[] = "Cross-database foreign key: $table.";
 
@@ -354,6 +364,9 @@ class CleanupSafety
 
     public function readJournal(): ?array
     {
+        if ($this->hasSelectiveJournal()) {
+            throw new CleanupRefused('Selective cleanup history exists; all-scope cleanup is refused.');
+        }
         if (Storage::disk('local')->exists('maintenance/test-data-cleanup-2026.json')) {
             throw new CleanupRefused('Legacy cleanup journal exists; reconcile it before using full-scope cleanup.');
         }

@@ -1,7 +1,13 @@
 # One-time full-scope customer test-data cleanup
 
-The owner confirms existing customer requests and associated records are test-only.
-This implementation has not been run against development or production data.
+Execution is restricted to the owner-confirmed references
+`SC/2026/000001` through `SC/2026/000019` and an inventory of exactly 20
+private files. A fresh execution requires the entire request table to match
+that scope. If any listed reference belongs to a real customer, stop. For a
+mixed dataset, stop and obtain a separate, independently reviewed cleanup plan.
+
+The limited `sai:cleanup-production-test-data` command remains inventory-only.
+A retry requires the signed recovery journal created for this 19-request scope.
 Before execution, verify a restorable database and private-storage backup under the operator backup policy. The signed recovery journal is an ID/path/hash manifest,
 not a backup of customer rows or document contents.
 
@@ -48,32 +54,44 @@ outside private storage block execution. Whole directories are never deleted.
 php artisan sai:cleanup-all-test-requests
 ```
 
-After reviewing a blocker-free report and completing the preparation below:
+After completing the preparation below, verify that the dry run lists only the
+19 confirmed references. Match the 20 recorded file hashes and their present or
+missing states against the approved inventory. Use the fingerprint from that run.
 
 ```bash
 php artisan sai:cleanup-all-test-requests --execute --confirm=DELETE-ALL-INVENTORIED-TEST-REQUESTS --approve="PASTE_DRY_RUN_FINGERPRINT" --workers-stopped --scheduler-stopped
 ```
 
-The original sai:cleanup-production-test-data retains its limited scope and token. The all-scope command rejects that token. No migration, seeder,
+The all-scope command requires its own confirmation token. No migration, seeder,
 truncation, credential change or environment edit is required.
-Both commands refuse chained queue work (including nested mailable chains and
-chain failure callbacks) until it has been explicitly reviewed. The limited
-command now uses the same safe queue inspector instead of payload text matching,
-including request-linked admin mail and failed jobs. It refuses whenever the
-all-scope journal exists, even if that journal is incomplete or invalid, so reused
-references cannot bypass the completed-cleanup protection.
+The queue inspector refuses chained work, including nested mailable chains and
+chain failure callbacks. It checks ownership for request-linked admin mail and
+failed jobs. The limited command's inventory refuses when the all-scope journal
+exists, including an incomplete or invalid journal.
 
 ## Production preparation
 
 1. Verify deployment/schema and target identities. Cleanup tables must use InnoDB
    with foreign keys enabled. Relevant triggers and cross-database dependencies
-   are refused. A DBA must verify metadata visibility across referencing schemas.
+   are refused. A DBA must verify metadata visibility across referencing schemas
+   and verify database scheduler events with an account that can see them.
    Validate the MySQL path in a disposable MySQL environment before production.
 2. Put every application node into maintenance. Stop workers, schedulers, retries,
    imports and all other DB/storage writers, including relevant database events.
-   Wait for in-flight work. The flags are operator attestations: the command cannot
-   independently prove all external processes are stopped.
-3. Only database jobs/failed_jobs on the default connection are supported.
+   Drain already-started HTTP requests, CLI tasks, scheduled runs, after-commit
+   callbacks and inline notification sends across all nodes. Verify that any
+   outstanding provider operations have settled. The flags attest that both
+   stopping and draining are complete. If either cannot be verified, do not
+   attest it or execute cleanup. Keep writers stopped through file recovery.
+3. The default queue may use `sync` or `database`. The database driver requires
+   both queue tables. The sync driver inspects every existing local queue table
+   and can proceed when one or both are absent. It verifies actual absence and
+   rejects pending or unreviewed notification deliveries regardless of queue
+   table presence or contents. Reconcile unresolved deliveries before approval.
+   It also checks batch storage, Laravel schedules and enabled
+   database events. Keep the deployed queue settings. Stop external scheduling,
+   retries, workers and schema changes and confirm the deployment has no custom
+   asynchronous integrations before running the cleanup.
    Redis/SQS, alternate tables/connections, reserved/encrypted/malformed jobs,
    unknown request jobs and target batch jobs require review and are refused.
    Never clear the entire queue to bypass a refusal.
@@ -84,6 +102,9 @@ references cannot bypass the completed-cleanup protection.
 5. Repeat dry-run with writers stopped and use its exact fingerprint. SQL ID
    operations are chunked, but the full snapshot/report still uses memory.
    Large datasets require a staging capacity and timing check.
+   Sync queue configuration, inspected table presence and the reviewed schedule
+   enter the fingerprint. A sync journal from an older release without that
+   runtime snapshot requires manual reconciliation before a retry.
 
 ## Local audit findings and deployment review
 
@@ -109,9 +130,9 @@ counter therefore yields the required first values without resetting IDs.
 Assigned file numbers require a counter at least as high as their maximum;
 consumed gaps are allowed because every request is explicitly inventoried.
 
-Before deploying, run the isolated tests below and review the entire working-tree
-diff (the checkout already contained staged changes). Deploy reviewed code through
-the normal release process; no schema migration is required by this change.
+Before deploying, run the isolated tests below and review the release diff.
+Deploy the reviewed changes through the normal release process. This change
+requires no schema migration.
 Keep the existing APP_KEY, environment and storage. Do not copy local test config
 to production. Validate two-connection insert blocking and rollback on disposable
 MySQL/InnoDB with the deployed engine/version before authorizing production use.
@@ -176,9 +197,12 @@ request to check numbering: it would consume the reference and may queue message
 ## Isolated tests
 
 ```bash
-php vendor/phpunit/phpunit/phpunit -c phpunit.cleanup.xml
+php vendor/phpunit/phpunit/phpunit -c phpunit.cleanup.xml --filter 'approved_scope|sync_missing|sync_still|unsupported_queue'
 ```
 
+Execution tests use 19 synthetic requests and 20 private files, exercise both
+queue drivers, and verify transactional rollback and retry. Out-of-scope fixtures
+exercise inventory and execution refusal.
 The dedicated runner avoids .env/deployed config cache, forces SQLite :memory:,
 removes real connections before RefreshDatabase, fakes storage/mail and blocks
 HTTP. Production guards are simulated only. Tests cover multiple years, more than
@@ -187,7 +211,7 @@ orphan/shared files, polymorphic links, rollback and recovery. SQLite results do
 not establish MySQL locking behavior; disposable MySQL validation is still needed.
 Additional regression coverage checks each execution guard without changing rows,
 files or journals, queue chains in both ownership directions in jobs/failed_jobs,
-nested mailable chains, batch/callback metadata, limited-command success and
+nested mailable chains, batch/callback metadata, legacy-command refusal and
 scope preservation, legacy refusal for completed/incomplete/invalid all-scope
 journals, and preserved-counter changes during recovery. Preservation fixtures
 include populated holidays, notification settings, active/inactive services and
@@ -195,9 +219,8 @@ admin users. Notification templates live in configuration and Blade files rather
 than a database template table; configuration values and view-file hashes are
 verified unchanged after the all-scope cleanup.
 
-Release review must include the untracked CleanupAllTestRequests.php and all final
-unstaged fixes; the previously staged snapshot alone is incomplete. Exclude
-desktop.ini and local environment/config caches, fake-storage output and journals.
+Exclude desktop.ini, local environment and config caches, fake-storage output,
+and journals from the release.
 
 ## Dedicated local MariaDB/InnoDB validation
 
@@ -205,7 +228,7 @@ desktop.ini and local environment/config caches, fake-storage output and journal
 php vendor/phpunit/phpunit/phpunit -c phpunit.cleanup-mariadb.xml --testdox
 ```
 
-This separate runner is pinned to local XAMPP MariaDB 10.4.32 at
+This separate runner accepts local XAMPP MariaDB 10.4.32 or 10.11.16 at
 127.0.0.1:3306 and sai_cleanup_test. It checks database name, server version,
 local hostname and XAMPP data-directory identity before loading Laravel. It never
 loads .env or deployed config caches, never discovers other database credentials,

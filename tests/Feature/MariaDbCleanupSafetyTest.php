@@ -146,6 +146,30 @@ class MariaDbCleanupSafetyTest extends TestCase
         return $this->fixture = compact('service', 'admin', 'ids') + ['historical' => $historical ?? null, 'path' => $path ?? null];
     }
 
+    private function approvedScopeFixture(): array
+    {
+        $fixture = $this->fixture();
+        DB::table('requests')->where('id', $fixture['historical'])->update([
+            'reference_no' => 'SC/2026/000004', 'file_number' => null, 'created_at' => '2026-11-01 12:00:00',
+        ]);
+        $targetIds = [...$fixture['ids'], $fixture['historical']];
+        foreach (range(5, 19) as $number) {
+            $targetIds[] = $this->insert('requests', ['service_id' => $fixture['service'], 'name' => 'Synthetic test request',
+                'mobile' => '9999999999', 'reference_no' => sprintf('SC/2026/%06d', $number),
+                'created_at' => '2026-11-01 12:00:00']);
+        }
+        $disk = Storage::disk('local');
+        foreach ($targetIds as $id) {
+            $disk->put("customer-requests/$id/scope.pdf", 'synthetic scope document');
+        }
+        $fixture['ids'] = $targetIds;
+        $fixture['files'] = $disk->allFiles();
+        $this->assertCount(19, $targetIds);
+        $this->assertCount(20, $fixture['files']);
+
+        return $fixture;
+    }
+
     private function snapshot(): array
     {
         return cleanupMariaDbBaseline(cleanupMariaDbConnection());
@@ -183,7 +207,7 @@ class MariaDbCleanupSafetyTest extends TestCase
 
     public function test_all_scope_dry_run_commit_numbering_and_populated_preservation(): void
     {
-        $fixture = $this->fixture();
+        $fixture = $this->approvedScopeFixture();
         app(CleanupSafety::class)->assertDatabaseSafety();
         $engines = DB::table('information_schema.TABLES')->where('TABLE_SCHEMA', CLEANUP_MARIADB_DATABASE)->pluck('ENGINE')->all();
         $this->assertNotEmpty($engines);
@@ -203,7 +227,9 @@ class MariaDbCleanupSafetyTest extends TestCase
         $this->assertSame($preserved, $this->preserved());
         $this->assertSame($templates, config('msg91-whatsapp.templates'));
         $this->assertSame($views, array_map(fn ($path) => hash_file('sha256', $path), glob(resource_path('views/emails/*.blade.php'))));
-        Storage::disk('local')->assertMissing($fixture['path']);
+        Storage::disk('local')->assertMissing($fixture['files']);
+        $this->assertDatabaseMissing('file_number_sequences', ['year' => 2026]);
+        $this->assertDatabaseHas('file_number_sequences', ['year' => 2025, 'last_number' => 1]);
         $this->assertTrue(app(CleanupSafety::class)->readJournal()['completed']);
         $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
         $id = $this->insert('requests', ['reference_no' => 'SC/2026/000001', 'service_id' => $fixture['service'],
@@ -217,26 +243,26 @@ class MariaDbCleanupSafetyTest extends TestCase
         $this->assertTrue(DB::table('requests')->where('id', $id)->exists());
     }
 
-    public function test_limited_command_preserves_historical_requests_and_business_records(): void
+    public function test_legacy_command_refuses_execution_and_preserves_requests_and_business_records(): void
     {
         $fixture = $this->fixture();
         DB::table('file_number_sequences')->where('year', 2026)->update(['last_number' => 3]);
         $before = $this->snapshot();
-        $preserved = $this->preserved();
         $this->assertSame(0, Artisan::call('sai:cleanup-production-test-data'));
         $this->assertSame($before, $this->snapshot());
         $this->app->detectEnvironment(fn () => 'production');
-        $this->assertSame(0, Artisan::call('sai:cleanup-production-test-data', ['--execute' => true, '--confirm' => 'DELETE-SC-2026-000001-000003']), Artisan::output());
-        $this->assertSame(1, DB::table('requests')->count());
+        $this->assertSame(1, Artisan::call('sai:cleanup-production-test-data', ['--execute' => true, '--confirm' => 'DELETE-SC-2026-000001-000003']));
+        $this->assertStringContainsString('Historical cleanup execution is disabled', Artisan::output());
+        $this->assertSame(4, DB::table('requests')->count());
         $this->assertTrue(DB::table('requests')->where('id', $fixture['historical'])->exists());
-        $this->assertSame($preserved, $this->preserved());
-        $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
-        Storage::disk('local')->assertMissing($fixture['path']);
+        $this->assertSame($before, $this->snapshot());
+        Storage::disk('local')->assertExists($fixture['path']);
+        Storage::disk('local')->assertMissing('maintenance/test-data-cleanup-2026.json');
     }
 
     public function test_real_innodb_failure_rolls_back_deleted_rows_before_file_deletion(): void
     {
-        $fixture = $this->fixture();
+        $fixture = $this->approvedScopeFixture();
         $before = $this->snapshot();
         $armed = true;
         DB::listen(function ($query) use (&$armed): void {
@@ -245,20 +271,36 @@ class MariaDbCleanupSafetyTest extends TestCase
                 throw new \RuntimeException('Synthetic failure after request DELETE, before commit.');
             }
         });
-        $this->assertSame(1, $this->execute());
-        $this->assertFalse($armed, 'Failure must occur after actual DELETE, not merely during preflight.');
+        try {
+            $exit = $this->execute();
+            $this->assertFalse($armed, 'Failure must occur after actual DELETE, not merely during preflight.');
+        } finally {
+            // An unexpected preflight error must not arm the failure injector
+            // against the test harness's own exact-ID fixture teardown.
+            $armed = false;
+        }
+        $this->assertSame(1, $exit);
         $this->assertSame($before, $this->snapshot());
-        Storage::disk('local')->assertExists($fixture['path']);
+        Storage::disk('local')->assertExists($fixture['files']);
         $this->assertFalse(app(CleanupSafety::class)->readJournal()['completed']);
         $this->assertSame(0, $this->execute(), Artisan::output());
         $this->assertTrue(app(CleanupSafety::class)->readJournal()['completed']);
+        Storage::disk('local')->assertMissing($fixture['files']);
     }
 
     #[TestWith([true])]
     #[TestWith([false])]
-    public function test_real_second_connection_inserts_and_updates_are_blocked_under_cleanup_range_locks(bool $populated): void
+    #[TestWith([true, 'sync'])]
+    public function test_real_second_connection_inserts_and_updates_are_blocked_under_cleanup_range_locks(bool $populatedQueue, string $queue = 'database'): void
     {
-        $fixture = $this->fixture($populated);
+        config(['queue.default' => $queue]);
+        $fixture = $this->approvedScopeFixture();
+        $queued = null;
+        if ($populatedQueue) {
+            $payload = (new \ReflectionMethod(Queue::class, 'createPayload'))->invoke(app('queue')->connection('database'), new \stdClass, 'default');
+            $queued = $this->insert('jobs', ['queue' => 'default', 'payload' => $payload, 'attempts' => 0,
+                'available_at' => 1, 'created_at' => 1]);
+        }
         $probe = new class(app(CleanupSafety::class), app(CleanupQueueInspector::class)) extends CleanupInventory
         {
             public int $calls = 0;
@@ -278,15 +320,16 @@ class MariaDbCleanupSafetyTest extends TestCase
         $secondary->exec('SET SESSION innodb_lock_wait_timeout = 1');
         $this->assertNotSame((int) $secondary->query('SELECT CONNECTION_ID()')->fetchColumn(), (int) DB::selectOne('SELECT CONNECTION_ID() AS id')->id);
         $timeouts = [];
-        $probe->probe = function () use ($secondary, $fixture, &$timeouts): void {
+        $probe->probe = function () use ($secondary, $fixture, $queued, &$timeouts): void {
             $this->assertSame(1, DB::connection()->transactionLevel());
             $queries = [
                 'request insert' => "INSERT INTO requests (reference_no,service_id,name,mobile,created_at) VALUES ('SC/2026/009999',{$fixture['service']},'Synthetic concurrent','9999999999','2026-11-13 12:00:00')",
-                'empty queue insert' => "INSERT INTO jobs (queue,payload,attempts,available_at,created_at) VALUES ('default','{}',0,1,1)",
+                'queue insert' => "INSERT INTO jobs (queue,payload,attempts,available_at,created_at) VALUES ('default','{}',0,1,1)",
                 'sequence insert' => 'INSERT INTO file_number_sequences (year,last_number) VALUES (2027,0)',
+                'request update' => "UPDATE requests SET name='Synthetic concurrent change' WHERE id=".$fixture['ids'][0],
             ];
-            if ($fixture['ids'] !== []) {
-                $queries['request update'] = "UPDATE requests SET name='Synthetic concurrent change' WHERE id=".$fixture['ids'][0];
+            if ($queued !== null) {
+                $queries['queue update'] = 'UPDATE jobs SET attempts=1 WHERE id='.$queued;
             }
             foreach ($queries as $name => $sql) {
                 try {
@@ -301,8 +344,11 @@ class MariaDbCleanupSafetyTest extends TestCase
         $approval = $this->approve();
         $this->app->instance(CleanupInventory::class, $probe);
         $this->assertSame(0, $this->execute($approval), Artisan::output());
-        $this->assertCount($populated ? 4 : 3, $timeouts);
-        $this->assertSame(0, DB::table('jobs')->count());
+        $this->assertCount($populatedQueue ? 5 : 4, $timeouts);
+        $this->assertDatabaseCount('jobs', $populatedQueue ? 1 : 0);
+        if ($queued !== null) {
+            $this->assertDatabaseHas('jobs', ['id' => $queued, 'attempts' => 0]);
+        }
         $this->assertSame(0, DB::table('requests')->count());
         // The independent connection can insert again after the command commits.
         $secondary->exec("INSERT INTO requests (reference_no,service_id,name,mobile,created_at) VALUES ('SC/2026/000001',{$fixture['service']},'Synthetic after commit','9999999999','2026-11-13 12:00:00')");
@@ -353,12 +399,13 @@ class MariaDbCleanupSafetyTest extends TestCase
 
     public function test_guards_reserved_queue_and_file_failure_recovery_on_mariadb(): void
     {
-        $fixture = $this->fixture();
+        $fixture = $this->approvedScopeFixture();
         $approval = $this->approve();
         $before = $this->snapshot();
         $this->app->detectEnvironment(fn () => 'production');
         $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests', ['--execute' => true,
             '--confirm' => 'DELETE-ALL-INVENTORIED-TEST-REQUESTS', '--approve' => $approval]));
+        $this->assertStringContainsString('--workers-stopped and --scheduler-stopped', Artisan::output());
         $this->assertSame($before, $this->snapshot());
         Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
         $event = $this->insert('customer_notification_events', ['request_id' => $fixture['ids'][0],
@@ -381,14 +428,16 @@ class MariaDbCleanupSafetyTest extends TestCase
         });
         $preserved = $this->preserved();
         $this->assertSame(1, $this->execute());
+        $this->assertStringContainsString('Database cleanup committed; private files remain', Artisan::output());
         $this->assertSame(0, DB::table('requests')->count());
         $this->assertSame(0, DB::table('jobs')->count());
         $this->assertSame($preserved, $this->preserved());
-        Storage::disk('local')->assertExists($fixture['path']);
+        Storage::disk('local')->assertExists($fixture['files']);
         $this->assertFalse(app(CleanupSafety::class)->readJournal()['completed']);
         $this->app->instance(CleanupSafety::class, new CleanupSafety);
         $this->assertSame(0, $this->execute(), Artisan::output());
         $this->assertTrue(app(CleanupSafety::class)->readJournal()['completed']);
-        Storage::disk('local')->assertMissing($fixture['path']);
+        Storage::disk('local')->assertMissing($fixture['files']);
     }
+
 }

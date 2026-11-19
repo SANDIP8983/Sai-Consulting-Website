@@ -7,27 +7,43 @@ use App\Jobs\SendCustomerNotificationJob;
 use App\Jobs\SendFinalDocumentDeliveryJob;
 use App\Mail\AdminNewCustomerRequestMail;
 use App\Models\CustomerRequest;
+use Illuminate\Console\Application;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\QueryException;
 use Illuminate\Mail\SendQueuedMailable;
 use Illuminate\Support\Facades\DB;
 
 /** Inspect serialized metadata without instantiating jobs or restoring models. */
 class CleanupQueueInspector
 {
-    public function inspect(array $requestIds, array $deliveryIds, array $finalDeliveryIds, array &$blockers = []): array
+    public const TABLES = ['jobs', 'failed_jobs'];
+
+    public function inspect(array $requestIds, array $deliveryIds, array $finalDeliveryIds, array &$blockers = [], bool $allowSync = false, array $absentTables = []): array
     {
         $connection = config('queue.default');
-        if (config("queue.connections.$connection.driver") !== 'database'
-            || (config("queue.connections.$connection.connection") ?: config('database.default')) !== config('database.default')
-            || config("queue.connections.$connection.table") !== 'jobs'
+        $driver = config("queue.connections.$connection.driver");
+        // Sync runs inline, but explicit database dispatches and older jobs can still persist.
+        $sync = $driver === 'sync' && $allowSync;
+        $persistent = $sync ? 'database' : $connection;
+        if (! ($driver === 'database' || $sync)
+            || config("queue.connections.$persistent.driver") !== 'database'
+            || (config("queue.connections.$persistent.connection") ?: config('database.default')) !== config('database.default')
+            || config("queue.connections.$persistent.table") !== 'jobs'
             || ! in_array(config('queue.failed.driver'), ['database', 'database-uuids'], true)
             || config('queue.failed.database') !== config('database.default')
             || config('queue.failed.table') !== 'failed_jobs') {
             throw new CleanupRefused('Cleanup requires database jobs and failed_jobs on the default database; other backends need a reviewed adapter.');
         }
 
-        $result = ['jobs' => [], 'failed_jobs' => []];
+        $result = array_fill_keys(self::TABLES, []);
         foreach (array_keys($result) as $table) {
-            foreach (DB::table($table)->orderBy('id')->cursor() as $row) {
+            if ($sync && $allowSync && in_array($table, $absentTables, true)) {
+                $this->assertTableAbsent($table);
+
+                continue;
+            }
+            foreach (DB::table($table)->useWritePdo()->orderBy('id')->cursor() as $row) {
                 try {
                     if ($table === 'jobs' && $row->reserved_at !== null) {
                         throw new CleanupRefused('Reserved jobs exist. Stop workers and resolve in-flight jobs before cleanup.');
@@ -44,6 +60,16 @@ class CleanupQueueInspector
                     }
                     $fields = $this->fields($object);
                     $this->assertNoChains($object);
+                    if ($sync) {
+                        if (! empty($fields['batchId'])) {
+                            throw new CleanupRefused('Batched queue work requires explicit review; cleanup refused.');
+                        }
+                        $allowed = [$connection, $persistent];
+                        if (($table === 'failed_jobs' && ! in_array($row->connection, $allowed, true))
+                            || (! empty($fields['connection']) && ! in_array($fields['connection'], $allowed, true))) {
+                            throw new CleanupRefused('Unreviewed queue connection; cleanup refused.');
+                        }
+                    }
                     $class = $fields['__PHP_Incomplete_Class_Name'] ?? '';
                     $owned = false;
                     if (in_array($class, [SendCustomerNotificationJob::class, SendFinalDocumentDeliveryJob::class], true)) {
@@ -86,6 +112,91 @@ class CleanupQueueInspector
         }
 
         return $result;
+    }
+
+    public function inspectSyncRuntime(array $schema, array $absentTables): string
+    {
+        if (DB::connection()->getTablePrefix() !== ''
+            || config('queue.batching.driver', 'database') !== 'database'
+            || config('queue.batching.database') !== config('database.default')
+            || config('queue.batching.table') !== 'job_batches') {
+            throw new CleanupRefused('Sync cleanup requires reviewed local queue and batch storage.');
+        }
+        if (! isset($schema['job_batches'])) {
+            $this->assertTableAbsent('job_batches');
+            $absentTables[] = 'job_batches';
+        }
+
+        if (isset($schema['job_batches']) && DB::table('job_batches')->useWritePdo()
+            ->where(fn ($query) => $query->whereNull('pending_jobs')->orWhere('pending_jobs', '<>', 0))->exists()) {
+            throw new CleanupRefused('Pending batched work exists; cleanup refused.');
+        }
+        // Inline and after-commit work can leave a pending delivery without a queue row.
+        foreach (['customer_notification_deliveries', 'request_final_document_deliveries'] as $table) {
+            if (DB::table($table)->useWritePdo()->where(fn ($query) => $query->whereNull('status')
+                ->orWhereNotIn('status', ['sent', 'skipped', 'failed']))->exists()) {
+                throw new CleanupRefused('Pending or unreviewed notification delivery exists in '.$table.'; verify and reconcile delivery state before cleanup.');
+            }
+        }
+
+        $schedule = [];
+        $allowed = array_map(Application::formatCommandString(...), ['notifications:prune', 'appointments:send-reminders']);
+        foreach (app(Schedule::class)->events() as $event) {
+            $state = (array) $event;
+            if (get_class($event) !== Event::class || ! in_array($event->command, $allowed, true)
+                || $event->runsInMaintenanceMode() || $event->runInBackground || $event->repeatSeconds !== null
+                || $event->user !== null || $event->mutexNameResolver !== null || $state["\0*\0beforeCallbacks"] !== []
+                || $state["\0*\0afterCallbacks"] !== [] || $state["\0*\0filters"] !== []
+                || ! $this->hasOnlyOverlapRejects($state["\0*\0rejects"])) {
+                throw new CleanupRefused('Unreviewed scheduled work exists; cleanup refused.');
+            }
+            $schedule[] = [$event->command, $event->expression, $event->timezone, $event->environments,
+                $event->withoutOverlapping, $event->onOneServer, $event->expiresAt];
+        }
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)
+            && DB::table('information_schema.EVENTS')->useWritePdo()->where('EVENT_SCHEMA', DB::connection()->getDatabaseName())
+                ->where('STATUS', 'ENABLED')->exists()) {
+            throw new CleanupRefused('Enabled database scheduler events exist; explicit review is required.');
+        }
+
+        return hash('sha256', json_encode([config('queue.default'), config('queue.connections'), config('queue.failed'),
+            config('queue.batching'), $schedule, $absentTables], JSON_THROW_ON_ERROR));
+    }
+
+    private function hasOnlyOverlapRejects(array $rejects): bool
+    {
+        $overlap = new \ReflectionMethod(Event::class, 'withoutOverlapping');
+        foreach ($rejects as $reject) {
+            if (! $reject instanceof \Closure) {
+                return false;
+            }
+            $callback = new \ReflectionFunction($reject);
+            if ($callback->getFileName() !== $overlap->getFileName()
+                || $callback->getStartLine() < $overlap->getStartLine() || $callback->getEndLine() > $overlap->getEndLine()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function assertTableAbsent(string $table): void
+    {
+        // A metadata entry hidden by permissions is not proof of absence.
+        try {
+            DB::table($table)->useWritePdo()->limit(0)->get(['id']);
+        } catch (QueryException $exception) {
+            $driver = DB::connection()->getDriverName();
+            if ((in_array($driver, ['mysql', 'mariadb'], true) && ($exception->errorInfo[0] ?? null) === '42S02'
+                    && ($exception->errorInfo[1] ?? null) === 1146)
+                || ($driver === 'sqlite' && ($exception->errorInfo[2] ?? null) === 'no such table: '.$table)) {
+                return;
+            }
+
+            throw new CleanupRefused('Could not verify absence of queue storage: '.$table.'.');
+        }
+
+        throw new CleanupRefused('Unreviewed queue storage exists: '.$table.'.');
     }
 
     private function fields(mixed $object): array

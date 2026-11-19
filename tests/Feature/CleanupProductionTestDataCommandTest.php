@@ -15,6 +15,7 @@ use App\Services\CleanupSafety;
 use App\Services\FileNumberService;
 use App\Services\ReferenceNumberService;
 use Database\Seeders\NotificationSettingsSeeder;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Contracts\Foundation\MaintenanceMode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,6 +39,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     {
         $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
         $app->loadEnvironmentFrom('.env.cleanup-tests-do-not-load');
+        $app->useStoragePath(sys_get_temp_dir().'/sai-all-cleanup-tests-'.bin2hex(random_bytes(10)));
         $app->make(Kernel::class)->bootstrap();
         // Before RefreshDatabase can migrate anything, remove every real connection.
         $app['config']->set('database.default', 'sqlite');
@@ -94,6 +96,234 @@ class CleanupProductionTestDataCommandTest extends TestCase
 
     private const CONFIRMATION = 'DELETE-ALL-INVENTORIED-TEST-REQUESTS';
 
+    #[TestWith(['sync'])]
+    #[TestWith(['database'])]
+    public function test_approved_scope_cleans_owned_jobs_files_and_numbering(string $connection): void
+    {
+        [$files, $fixture, $failed] = $this->approvedQueueFixture($connection);
+        $preserved = $this->preservedSnapshot();
+
+        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
+        $this->assertDatabaseCount('requests', 0);
+        $this->assertDatabaseCount('customer_notification_deliveries', 0);
+        $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_job_id']]);
+        $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_final_job_id']]);
+        $this->assertDatabaseHas('jobs', ['id' => $fixture['unrelated_job_id']]);
+        $this->assertDatabaseMissing('failed_jobs', ['id' => $failed]);
+        $this->assertDatabaseHas('file_number_sequences', ['year' => 2025, 'last_number' => 1]);
+        $this->assertDatabaseMissing('file_number_sequences', ['year' => 2026]);
+        $this->assertSame($preserved, $this->preservedSnapshot());
+        Storage::disk('local')->assertMissing($files);
+        Storage::disk('local')->assertExists('branding/keep.pdf');
+        $this->assertTrue(app(CleanupSafety::class)->readJournal()['completed']);
+        $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
+        $request = $fixture['targets'][0]->replicate(['file_number']);
+        $request->saveQuietly();
+        $this->assertSame('SC/2026/F000001', app(FileNumberService::class)->assign($request));
+    }
+
+    #[TestWith(['sync'])]
+    #[TestWith(['database'])]
+    #[TestWith(['sync', ['jobs', 'failed_jobs']])]
+    public function test_approved_scope_rolls_back_and_retries_with_either_queue(string $connection, array $absent = []): void
+    {
+        [$files] = $this->approvedQueueFixture($connection);
+        $this->removeSyntheticQueueTables($absent);
+        $before = $this->snapshot($absent);
+        DB::unprepared("CREATE TRIGGER refuse_cleanup BEFORE DELETE ON requests BEGIN SELECT RAISE(ABORT, 'test rollback'); END");
+
+        $this->assertSame(1, $this->executeCleanup());
+        $this->assertStringContainsString('Cleanup failed; raw exception suppressed.', Artisan::output());
+        $this->assertSame($before, $this->snapshot($absent));
+        Storage::disk('local')->assertExists($files);
+        $this->assertFalse(app(CleanupSafety::class)->readJournal()['completed']);
+
+        DB::unprepared('DROP TRIGGER refuse_cleanup');
+        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
+        Storage::disk('local')->assertMissing($files);
+    }
+
+    #[TestWith([[]])]
+    #[TestWith([['jobs']])]
+    #[TestWith([['failed_jobs']])]
+    #[TestWith([['jobs', 'failed_jobs']])]
+    #[TestWith([['jobs', 'failed_jobs', 'job_batches']])]
+    public function test_approved_scope_sync_uses_only_existing_queue_tables(array $absent): void
+    {
+        [$files, $fixture, $failed] = $this->approvedQueueFixture('sync');
+        $this->removeSyntheticQueueTables($absent);
+
+        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
+        $this->assertDatabaseCount('requests', 0);
+        $this->assertDatabaseMissing('file_number_sequences', ['year' => 2026]);
+        Storage::disk('local')->assertMissing($files);
+        Storage::disk('local')->assertExists('branding/keep.pdf');
+        foreach ($absent as $table) {
+            $this->assertFalse(Schema::hasTable($table));
+        }
+        if (! in_array('jobs', $absent, true)) {
+            $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_job_id']]);
+            $this->assertDatabaseHas('jobs', ['id' => $fixture['unrelated_job_id']]);
+        }
+        if (! in_array('failed_jobs', $absent, true)) {
+            $this->assertDatabaseMissing('failed_jobs', ['id' => $failed]);
+        }
+    }
+
+    #[TestWith(['customer_notification_deliveries', 'Pending or unreviewed notification'])]
+    #[TestWith(['request_final_document_deliveries', 'Pending or unreviewed notification'])]
+    #[TestWith(['schedule', 'Unreviewed scheduled work'])]
+    #[TestWith(['batch', 'Pending batched work'])]
+    #[TestWith(['reserved', 'Reserved jobs exist'])]
+    #[TestWith(['invalid', 'Uninspectable queue payload'])]
+    #[TestWith(['alternate', 'reviewed adapter'])]
+    #[TestWith(['alternate_batch', 'reviewed local queue and batch storage'])]
+    #[TestWith(['database', 'Queue inventory:'])]
+    #[TestWith(['view', 'Unreviewed queue storage exists'])]
+    public function test_sync_missing_queue_tables_refuse_unsafe_execution(string $condition, string $message): void
+    {
+        [$files, $fixture, $failed] = $this->approvedQueueFixture('sync');
+        $absent = $condition === 'reserved' ? ['failed_jobs'] : ['jobs'];
+        $this->removeSyntheticQueueTables($absent);
+        $fingerprint = $this->fingerprint();
+
+        match ($condition) {
+            'customer_notification_deliveries', 'request_final_document_deliveries' => DB::table($condition)->update(['status' => 'pending']),
+            'schedule' => app(Schedule::class)->call(fn () => null)->everyMinute(),
+            'batch' => DB::table('job_batches')->insert([
+                'id' => 'synthetic', 'name' => 'Synthetic', 'pending_jobs' => 1, 'total_jobs' => 1,
+                'failed_jobs' => 0, 'failed_job_ids' => '[]', 'created_at' => now()->timestamp,
+            ]),
+            'reserved' => DB::table('jobs')->where('id', $fixture['target_job_id'])->update(['reserved_at' => 1]),
+            'invalid' => DB::table('failed_jobs')->where('id', $failed)->update(['payload' => 'invalid']),
+            'alternate' => config(['queue.connections.database.connection' => 'alternate']),
+            'alternate_batch' => config(['queue.batching.driver' => 'dynamodb']),
+            'database' => config(['queue.default' => 'database']),
+            'view' => DB::statement('CREATE VIEW jobs AS SELECT id FROM failed_jobs'),
+        };
+
+        $before = $this->snapshot($absent);
+        $this->app->detectEnvironment(fn () => 'production');
+        $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests', $this->executionOptions($fingerprint)));
+        $this->assertStringContainsString($message, Artisan::output());
+        $this->assertSame($before, $this->snapshot($absent));
+        Storage::disk('local')->assertExists($files);
+        Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
+    }
+
+    public function test_sync_missing_queue_tables_invalidate_previous_approval(): void
+    {
+        [$files] = $this->approvedQueueFixture('sync');
+        DB::table('request_final_document_deliveries')->update(['status' => 'sent']);
+        $fingerprint = $this->fingerprint();
+        $this->removeSyntheticQueueTables(['jobs']);
+        $this->assertNotSame($fingerprint, $this->fingerprint());
+
+        $this->app->detectEnvironment(fn () => 'production');
+        $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests', $this->executionOptions($fingerprint)));
+        $this->assertStringContainsString('current approval fingerprint', Artisan::output());
+        $this->assertDatabaseCount('requests', 19);
+        Storage::disk('local')->assertExists($files);
+        Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
+    }
+
+    private function removeSyntheticQueueTables(array $tables): void
+    {
+        if ($tables !== []) {
+            DB::table('request_final_document_deliveries')->update(['status' => 'sent']);
+        }
+        foreach ($tables as $table) {
+            Schema::drop($table);
+        }
+    }
+
+    public function test_sync_still_blocks_unsafe_persistent_jobs_and_out_of_scope_requests(): void
+    {
+        [, $fixture] = $this->approvedQueueFixture('sync');
+        DB::table('jobs')->where('id', $fixture['target_job_id'])->update(['reserved_at' => 1]);
+        $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests'));
+        $this->assertStringContainsString('Reserved jobs exist', Artisan::output());
+
+        DB::table('jobs')->where('id', $fixture['target_job_id'])->update(['reserved_at' => null]);
+        $extra = $fixture['targets'][0]->replicate(['file_number']);
+        $extra->reference_no = 'SC/2026/000020';
+        $extra->saveQuietly();
+        $before = $this->snapshot();
+        $this->app->detectEnvironment(fn () => 'production');
+        $this->assertSame(1, $this->executeCleanup());
+        $this->assertStringContainsString('Execution requires exactly', Artisan::output());
+        $this->assertSame($before, $this->snapshot());
+        Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
+    }
+
+    #[TestWith(['customer_notification_deliveries', 'pending'])]
+    #[TestWith(['request_final_document_deliveries', 'pending'])]
+    #[TestWith(['customer_notification_deliveries', 'sending'])]
+    public function test_sync_blocks_unresolved_delivery_with_both_queue_tables_present(string $table, string $status): void
+    {
+        [$files] = $this->approvedQueueFixture('sync');
+        DB::table($table)->update(['status' => $status]);
+        $before = $this->snapshot();
+
+        $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests'));
+        $this->assertStringContainsString('Pending or unreviewed notification delivery exists in '.$table, Artisan::output());
+        $this->assertSame($before, $this->snapshot());
+        Storage::disk('local')->assertExists($files);
+        Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
+    }
+
+    public function test_sync_schedule_changes_invalidate_approval_and_background_work_blocks(): void
+    {
+        $this->approvedQueueFixture('sync');
+        $fingerprint = $this->fingerprint();
+        $event = app(Schedule::class)->events()[0];
+        $event->onOneServer = ! $event->onOneServer;
+        $this->assertNotSame($fingerprint, $this->fingerprint());
+
+        $event->runInBackground();
+        $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests'));
+        $this->assertStringContainsString('Unreviewed scheduled work', Artisan::output());
+    }
+
+    private function approvedQueueFixture(string $connection): array
+    {
+        Storage::fake('local');
+        $fixture = $this->completeApprovedFixture();
+        $disk = Storage::disk('local');
+        $files = $disk->allFiles();
+        $this->assertCount(20, $files);
+        $disk->put('branding/keep.pdf', '%PDF-keep');
+        $failed = DB::table('failed_jobs')->insertGetId([
+            'uuid' => 'approved-scope-failed-job', 'connection' => $connection, 'queue' => 'default',
+            'payload' => DB::table('jobs')->where('id', $fixture['target_job_id'])->value('payload'),
+            'exception' => 'Synthetic failed job',
+        ]);
+        config(['queue.default' => $connection]);
+        if ($connection === 'sync') {
+            DB::table('request_final_document_deliveries')->update(['status' => 'sent']);
+        }
+
+        return [$files, $fixture, $failed];
+    }
+
+    private function completeApprovedFixture(int $additionalFiles = 0): array
+    {
+        $fixture = $this->completeFixture();
+        $fixture['historical']->forceFill([
+            'reference_no' => 'SC/2026/000004', 'file_number' => null, 'created_at' => now(),
+        ])->saveQuietly();
+        foreach (range(5, 19) as $number) {
+            $request = $fixture['targets'][0]->replicate(['file_number']);
+            $request->reference_no = sprintf('SC/2026/%06d', $number);
+            $request->saveQuietly();
+            if ($number <= 19 - $additionalFiles) {
+                Storage::disk('local')->put("customer-requests/{$request->id}/test.pdf", '%PDF-test');
+            }
+        }
+
+        return $fixture;
+    }
+
     public function test_dry_run_reports_targets_and_changes_nothing(): void
     {
         Storage::fake('local');
@@ -119,7 +349,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_execute_removes_all_inventoried_requests_and_resets_numbering(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $this->app->detectEnvironment(fn (): string => 'production');
 
         $exit = $this->executeCleanup();
@@ -186,8 +416,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
             'name' => 'Older test', 'mobile' => '9888888888', 'created_at' => '2024-08-16 12:00:00']);
         $this->assertSame(0, Artisan::call('sai:cleanup-all-test-requests'));
         $this->assertStringContainsString('SC/2024/009999', Artisan::output());
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
-        $this->assertDatabaseCount('requests', 0);
+        $this->assertScopeRefusal();
     }
 
     public function test_shared_files_block_cleanup_even_when_counter_has_gaps(): void
@@ -225,7 +454,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_admin_mail_and_failed_jobs_are_scoped_and_revenue_data_is_removed(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture(1);
         $target = $fixture['targets'][0];
         $payload = $this->payload(new SendQueuedMailable(new AdminNewCustomerRequestMail($target)));
         $job = DB::table('jobs')->insertGetId(['queue' => 'customer-notifications', 'payload' => $payload, 'attempts' => 0, 'available_at' => now()->timestamp, 'created_at' => now()->timestamp]);
@@ -258,22 +487,21 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->assertDatabaseHas('file_number_sequences', ['year' => 2025, 'last_number' => 1]);
     }
 
-    public function test_safe_missing_reference_is_reported_and_empty_cleanup_is_idempotent(): void
+    public function test_missing_approved_reference_blocks_execution(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $fixture['targets'][2]->delete();
         DB::table('file_number_sequences')->where('year', 2026)->update(['last_number' => 2]);
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
-        $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
-        $this->assertDatabaseCount('requests', 0);
+        $this->assertScopeRefusal();
     }
 
-    public function test_partial_file_failure_resumes_from_signed_journal(): void
+    #[TestWith([[]])]
+    #[TestWith([['jobs', 'failed_jobs']])]
+    public function test_approved_scope_partial_file_failure_resumes_from_signed_journal(array $absent): void
     {
-        Storage::fake('local');
-        $fixture = $this->completeFixture();
+        [$files] = $this->approvedQueueFixture('sync');
+        $this->removeSyntheticQueueTables($absent);
         $safety = new class extends CleanupSafety
         {
             public bool $fail = true;
@@ -296,16 +524,17 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->assertFalse($safety->readJournal()['completed']);
         $this->assertSame(0, $this->executeCleanup(), Artisan::output());
         $this->assertTrue($safety->readJournal()['completed']);
-        Storage::disk('local')->assertMissing($fixture['historical_file']);
+        Storage::disk('local')->assertMissing($files);
     }
 
     public function test_database_failure_rolls_back_and_keeps_files_for_retry(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $before = $this->snapshot();
         DB::unprepared("CREATE TRIGGER refuse_cleanup BEFORE DELETE ON requests BEGIN SELECT RAISE(ABORT, 'test rollback'); END");
         $this->assertSame(1, $this->executeCleanup());
+        $this->assertFalse(app(CleanupSafety::class)->readJournal()['completed']);
         $this->assertSame($before, $this->snapshot());
         Storage::disk('local')->assertExists($fixture['target_file']);
         DB::unprepared('DROP TRIGGER refuse_cleanup');
@@ -315,7 +544,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_journal_failure_prevents_database_deletion(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $this->app->instance(CleanupSafety::class, new class extends CleanupSafety
         {
             public function writeJournal(array $journal): void
@@ -324,7 +553,9 @@ class CleanupProductionTestDataCommandTest extends TestCase
             }
         });
         $this->assertSame(1, $this->executeCleanup());
-        $this->assertDatabaseCount('requests', 4);
+        $this->assertStringContainsString('Cleanup failed; raw exception suppressed.', Artisan::output());
+        $this->assertDatabaseCount('requests', 19);
+        Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
         Storage::disk('local')->assertExists($fixture['target_file']);
     }
 
@@ -347,7 +578,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_new_real_request_reusing_reference_is_never_cleaned_again(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $this->assertSame(0, $this->executeCleanup());
         $real = CustomerRequest::query()->create(['reference_no' => app(ReferenceNumberService::class)->generate(), 'service_id' => $fixture['service']->id, 'name' => 'Real customer', 'mobile' => '9999999999']);
         $this->assertGreaterThan($fixture['historical']->id, $real->id);
@@ -424,12 +655,12 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_untracked_private_uploads_are_counted_and_removed_only_for_target_ids(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture(1);
         $orphan = 'customer-requests/'.$fixture['targets'][0]->id.'/orphan.pdf';
         Storage::disk('local')->put($orphan, '%PDF-orphan');
         Storage::disk('local')->put('settings/payments/keep.png', 'preserved');
         $this->assertSame(0, Artisan::call('sai:cleanup-all-test-requests'));
-        $this->assertStringContainsString('Private files recorded: 6', Artisan::output());
+        $this->assertStringContainsString('Private files recorded: 20', Artisan::output());
         Storage::disk('local')->assertExists($orphan);
         $this->assertSame(0, $this->executeCleanup(), Artisan::output());
         Storage::disk('local')->assertMissing($orphan);
@@ -440,7 +671,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_missing_files_and_all_missing_targets_are_safe_no_ops(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         Storage::disk('local')->delete($fixture['target_file']);
         $this->assertSame(0, $this->executeCleanup(), Artisan::output());
         $this->assertSame(0, Artisan::call('sai:cleanup-all-test-requests'));
@@ -448,12 +679,12 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->assertSame(0, $this->executeCleanup(), Artisan::output());
     }
 
-    public function test_empty_database_with_zero_sequence_can_be_cleaned(): void
+    public function test_empty_database_with_zero_sequence_cannot_start_cleanup(): void
     {
         Storage::fake('local');
         DB::table('file_number_sequences')->insert(['year' => 2026, 'last_number' => 0]);
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
+        $this->assertScopeRefusal();
+        $this->assertDatabaseHas('file_number_sequences', ['year' => 2026, 'last_number' => 0]);
         $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
     }
 
@@ -470,7 +701,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_changed_recovery_file_is_not_deleted(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $safety = new class extends CleanupSafety
         {
             public function deleteFile(string $path): bool
@@ -480,9 +711,11 @@ class CleanupProductionTestDataCommandTest extends TestCase
         };
         $this->app->instance(CleanupSafety::class, $safety);
         $this->assertSame(1, $this->executeCleanup());
+        $this->assertDatabaseCount('requests', 0);
         Storage::disk('local')->put($fixture['target_file'], 'replacement content');
         $this->app->instance(CleanupSafety::class, new CleanupSafety);
         $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests'));
+        $this->assertStringContainsString('Recovery file changed', Artisan::output());
         $this->assertSame('replacement content', Storage::disk('local')->get($fixture['target_file']));
     }
 
@@ -539,12 +772,11 @@ class CleanupProductionTestDataCommandTest extends TestCase
         foreach ([2023, 2024, 2027] as $year) {
             $this->assertStringContainsString("SC/$year/000099", $output);
         }
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
-        $this->assertDatabaseCount('requests', 0);
-        $this->assertDatabaseCount('file_number_sequences', 5);
+        $this->assertScopeRefusal();
+        $this->assertDatabaseCount('requests', 7);
+        $this->assertDatabaseCount('file_number_sequences', 6);
         $this->assertDatabaseHas('file_number_sequences', ['year' => 2040, 'last_number' => 50]);
         $this->assertSame($before, $this->preservedSnapshot());
-        $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
     }
 
     public function test_approval_fingerprint_is_stable_but_new_requests_invalidate_it(): void
@@ -565,7 +797,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_new_request_arriving_during_lock_acquisition_is_not_included(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $approved = $this->fingerprint();
         $inventory = new class(app(CleanupSafety::class), app(CleanupQueueInspector::class)) extends CleanupInventory
         {
@@ -586,14 +818,15 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->app->instance(CleanupInventory::class, $inventory);
         $this->app->detectEnvironment(fn () => 'production');
         $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests', $this->executionOptions($approved)));
-        $this->assertDatabaseCount('requests', 5);
+        $this->assertStringContainsString('Inventory changed after approval', Artisan::output());
+        $this->assertDatabaseCount('requests', 20);
         Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
     }
 
     public function test_change_after_journal_creation_prevents_deletion(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $safety = new class extends CleanupSafety
         {
             public function writeJournal(array $journal): void
@@ -604,14 +837,17 @@ class CleanupProductionTestDataCommandTest extends TestCase
         };
         $this->app->instance(CleanupSafety::class, $safety);
         $this->assertSame(1, $this->executeCleanup());
-        $this->assertDatabaseCount('requests', 4);
+        $this->assertContains('Inventory differs from the existing recovery journal; manual reconciliation required.',
+            app(CleanupInventory::class)->inspect()['blockers']);
+        $this->assertDatabaseCount('requests', 19);
+        $this->assertFalse($safety->readJournal()['completed']);
         Storage::disk('local')->assertExists($fixture['target_file']);
     }
 
     public function test_appointment_notifications_jobs_and_history_are_preserved(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $appointmentId = DB::table('appointments')->insertGetId(['reference_no' => 'APT/2026/000001', 'customer_name' => 'Appointment', 'mobile' => '9999999999', 'service_id' => $fixture['service']->id, 'scheduled_at' => now()]);
         $eventId = DB::table('customer_notification_events')->insertGetId(['appointment_id' => $appointmentId, 'source_type' => 'appointment', 'source_id' => $appointmentId, 'milestone' => 'appointment_confirmed', 'event_key' => 'preserve-appointment', 'occurred_at' => now()]);
         $deliveryId = DB::table('customer_notification_deliveries')->insertGetId(['notification_event_id' => $eventId, 'channel' => 'email', 'status' => 'pending', 'template_key' => 'appointment']);
@@ -687,10 +923,21 @@ class CleanupProductionTestDataCommandTest extends TestCase
             '--workers-stopped' => true, '--scheduler-stopped' => true];
     }
 
+    private function assertScopeRefusal(): void
+    {
+        $before = $this->snapshot();
+        $files = Storage::disk('local')->allFiles();
+        $this->assertSame(1, $this->executeCleanup());
+        $this->assertStringContainsString('Execution requires exactly', Artisan::output());
+        $this->assertSame($before, $this->snapshot());
+        $this->assertSame($files, Storage::disk('local')->allFiles());
+        Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
+    }
+
     public function test_known_polymorphic_sources_are_inventoried(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $requestId = $fixture['targets'][0]->id;
         $entry = DB::table('request_revenue_entries')->insertGetId(['request_id' => $requestId, 'status' => 'not_started']);
         foreach (['request' => $requestId, 'request_status' => $requestId,
@@ -707,7 +954,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_new_file_during_recovery_is_never_silently_included(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $this->app->instance(CleanupSafety::class, new class extends CleanupSafety
         {
             public function deleteFile(string $path): bool
@@ -747,9 +994,11 @@ class CleanupProductionTestDataCommandTest extends TestCase
         foreach (array_chunk($rows, 100) as $chunk) {
             DB::table('requests')->insert($chunk);
         }
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
-        $this->assertDatabaseCount('requests', 0);
-        $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
+        $audit = app(CleanupInventory::class)->inspect();
+        $this->assertSame([], $audit['blockers']);
+        $this->assertCount(414, $audit['ids']['requests']);
+        $this->assertContains('SC/2024/000410', array_column($audit['targets'], 'reference_no'));
+        $this->assertScopeRefusal();
     }
 
     public function test_legacy_reference_with_missing_timestamp_is_explicitly_inventoried(): void
@@ -761,7 +1010,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $output = Artisan::output();
         $this->assertStringContainsString('LEGACY-TEST', $output);
         $this->assertStringContainsString('unknown', $output);
-        $this->assertSame(0, $this->executeCleanup(), Artisan::output());
+        $this->assertScopeRefusal();
     }
 
     public function test_private_paths_and_document_names_are_never_reported(): void
@@ -809,7 +1058,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_schema_change_during_recovery_requires_manual_review(): void
     {
         Storage::fake('local');
-        $this->completeFixture();
+        $this->completeApprovedFixture();
         $this->app->instance(CleanupSafety::class, new class extends CleanupSafety
         {
             public function deleteFile(string $path): bool
@@ -878,53 +1127,32 @@ class CleanupProductionTestDataCommandTest extends TestCase
         Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
     }
 
-    public function test_legacy_command_successfully_cleans_only_three_targets_and_preserves_populated_business_data(): void
+    public function test_legacy_command_dry_runs_and_refuses_execution_without_mutation(): void
     {
         Storage::fake('local');
         $fixture = $this->completeFixture();
         $this->populatePreservedBusinessData();
         $targetMail = $this->payload(new SendQueuedMailable(new AdminNewCustomerRequestMail($fixture['targets'][0])));
-        $adminJob = DB::table('jobs')->insertGetId(['queue' => 'default', 'payload' => $targetMail,
+        DB::table('jobs')->insertGetId(['queue' => 'default', 'payload' => $targetMail,
             'attempts' => 0, 'available_at' => now()->timestamp, 'created_at' => now()->timestamp]);
-        $adminFailure = DB::table('failed_jobs')->insertGetId(['uuid' => 'legacy-admin-failure',
+        DB::table('failed_jobs')->insertGetId(['uuid' => 'legacy-admin-failure',
             'connection' => 'database', 'queue' => 'default', 'payload' => $targetMail, 'exception' => 'test']);
-        $historicalJob = DB::table('jobs')->insertGetId(['queue' => 'default',
+        DB::table('jobs')->insertGetId(['queue' => 'default',
             'payload' => $this->payload(new SendQueuedMailable(new AdminNewCustomerRequestMail($fixture['historical']))),
             'attempts' => 0, 'available_at' => now()->timestamp, 'created_at' => now()->timestamp]);
-        $preserved = $this->preservedSnapshot();
         $before = $this->snapshot();
         $this->assertSame(0, Artisan::call('sai:cleanup-production-test-data'), Artisan::output());
         $this->assertSame($before, $this->snapshot());
         Storage::disk('local')->assertExists($fixture['target_file']);
         $this->app->detectEnvironment(fn () => 'production');
-        $this->assertSame(0, Artisan::call('sai:cleanup-production-test-data', [
+        $files = Storage::disk('local')->allFiles();
+        $this->assertSame(1, Artisan::call('sai:cleanup-production-test-data', [
             '--execute' => true, '--confirm' => 'DELETE-SC-2026-000001-000003',
-        ]), Artisan::output());
-        $this->assertDatabaseCount('requests', 1);
-        $this->assertDatabaseHas('requests', ['id' => $fixture['historical']->id]);
-        $this->assertDatabaseHas('request_documents', ['request_id' => $fixture['historical']->id]);
-        $this->assertDatabaseHas('file_number_sequences', ['year' => 2025, 'last_number' => 1]);
-        $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_job_id']]);
-        $this->assertDatabaseMissing('jobs', ['id' => $fixture['target_final_job_id']]);
-        $this->assertDatabaseHas('jobs', ['id' => $fixture['unrelated_job_id']]);
-        $this->assertDatabaseHas('jobs', ['id' => $historicalJob]);
-        $this->assertDatabaseMissing('jobs', ['id' => $adminJob]);
-        $this->assertDatabaseMissing('failed_jobs', ['id' => $adminFailure]);
-        foreach (CleanupSafety::TABLES as $table) {
-            if (! in_array($table, ['requests', 'request_documents'], true)) {
-                $this->assertDatabaseCount($table, 0);
-            }
-        }
-        $this->assertSame($preserved, $this->preservedSnapshot());
-        Storage::disk('local')->assertMissing($fixture['target_file']);
-        Storage::disk('local')->assertMissing($fixture['final_file']);
-        Storage::disk('local')->assertMissing($fixture['proof_file']);
-        Storage::disk('local')->assertMissing($fixture['payment_proof_file']);
-        Storage::disk('local')->assertExists($fixture['historical_file']);
-        $this->assertSame('SC/2026/000001', app(ReferenceNumberService::class)->generate());
-        $new = CustomerRequest::query()->create(['reference_no' => 'SC/2026/000001',
-            'service_id' => $fixture['service']->id, 'name' => 'After limited cleanup', 'mobile' => '9999999999']);
-        $this->assertSame('SC/2026/F000001', app(FileNumberService::class)->assign($new));
+        ]));
+        $this->assertStringContainsString('Historical cleanup execution is disabled', Artisan::output());
+        $this->assertSame($before, $this->snapshot());
+        $this->assertSame($files, Storage::disk('local')->allFiles());
+        Storage::disk('local')->assertMissing('maintenance/test-data-cleanup-2026.json');
     }
 
     #[TestWith(['completed'])]
@@ -933,7 +1161,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_legacy_command_cannot_bypass_all_scope_journal(string $state): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $this->assertSame(0, $this->executeCleanup(), Artisan::output());
         if ($state === 'incomplete') {
             $safety = app(CleanupSafety::class);
@@ -957,7 +1185,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
         $this->assertSame(1, Artisan::call('sai:cleanup-production-test-data', [
             '--execute' => true, '--confirm' => 'DELETE-SC-2026-000001-000003',
         ]));
-        $this->assertStringContainsString('All-scope cleanup journal exists', Artisan::output());
+        $this->assertStringContainsString('Historical cleanup execution is disabled', Artisan::output());
         $this->assertSame($before, $this->snapshot());
         $this->assertSame($files, Storage::disk('local')->allFiles());
         $this->assertSame($journalBytes, Storage::disk('local')->get(CleanupSafety::JOURNAL));
@@ -966,7 +1194,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_all_scope_cleanup_preserves_populated_calendar_templates_settings_services_and_admins(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $this->populatePreservedBusinessData();
         // Templates are application views/configuration, not a database table.
         config(['msg91-whatsapp.templates.request_received' => ['name' => 'preserved_request_template',
@@ -1038,14 +1266,15 @@ class CleanupProductionTestDataCommandTest extends TestCase
 
     #[TestWith([false])]
     #[TestWith([true])]
-    public function test_legacy_execution_still_requires_production_and_its_own_token(bool $production): void
+    public function test_legacy_execution_is_disabled_in_every_environment(bool $production): void
     {
         Storage::fake('local');
         $this->completeFixture();
         $before = $this->snapshot();
         $this->app->detectEnvironment(fn () => $production ? 'production' : 'testing');
         $this->assertSame(1, Artisan::call('sai:cleanup-production-test-data', ['--execute' => true,
-            '--confirm' => $production ? self::CONFIRMATION : 'DELETE-SC-2026-000001-000003']));
+            '--confirm' => 'DELETE-SC-2026-000001-000003']));
+        $this->assertStringContainsString('Historical cleanup execution is disabled', Artisan::output());
         $this->assertSame($before, $this->snapshot());
         Storage::disk('local')->assertMissing(CleanupSafety::JOURNAL);
     }
@@ -1070,7 +1299,7 @@ class CleanupProductionTestDataCommandTest extends TestCase
     public function test_preserved_counter_change_during_recovery_blocks_further_deletion(): void
     {
         Storage::fake('local');
-        $fixture = $this->completeFixture();
+        $fixture = $this->completeApprovedFixture();
         $this->app->instance(CleanupSafety::class, new class extends CleanupSafety
         {
             public function deleteFile(string $path): bool
@@ -1129,10 +1358,10 @@ class CleanupProductionTestDataCommandTest extends TestCase
         User::factory()->create(['role' => 'admin', 'is_active' => false]);
     }
 
-    private function snapshot(): array
+    private function snapshot(array $absent = []): array
     {
         $snapshot = [];
-        foreach ([...CleanupSafety::TABLES, 'jobs', 'failed_jobs', 'file_number_sequences', 'users', 'settings', 'services'] as $table) {
+        foreach (array_diff([...CleanupSafety::TABLES, 'jobs', 'failed_jobs', 'file_number_sequences', 'users', 'settings', 'services'], $absent) as $table) {
             $snapshot[$table] = DB::table($table)->orderBy('id')->get()->toJson();
         }
 

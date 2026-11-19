@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Exceptions\CleanupRefused;
 use App\Services\CleanupInventory;
+use App\Services\CleanupQueueInspector;
 use App\Services\CleanupSafety;
 use App\Services\ReferenceNumberService;
 use Illuminate\Console\Command;
@@ -14,14 +15,16 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
 
 class CleanupAllTestRequests extends Command
 {
+    private const APPROVED_SCOPE = 'SC/2026/000001-SC/2026/000019';
+
     protected $signature = 'sai:cleanup-all-test-requests
         {--execute : Delete only the exact inventoried snapshot}
         {--confirm= : DELETE-ALL-INVENTORIED-TEST-REQUESTS}
         {--approve= : Exact fingerprint from a blocker-free dry run}
-        {--workers-stopped : Attest every queue worker and other writer is stopped}
-        {--scheduler-stopped : Attest scheduling and automated retries are stopped on all nodes}';
+        {--workers-stopped : Attest all writers are stopped and in-flight work, including inline notifications, has drained on every node}
+        {--scheduler-stopped : Attest schedulers and retries are stopped and already-started runs have drained on every node}';
 
-    protected $description = 'Inventory every existing test request across years; execute only its approved snapshot';
+    protected $description = 'Inventory every existing customer request and clean up only the confirmed 19-request snapshot';
 
     public function handle(CleanupInventory $inventory, CleanupSafety $safety): int
     {
@@ -39,6 +42,7 @@ class CleanupAllTestRequests extends Command
                 || ! hash_equals($audit['fingerprint'], (string) $this->option('approve'))) {
                 throw new CleanupRefused('Exact full-scope confirmation and current approval fingerprint are required.');
             }
+            $this->assertApprovedScope($audit);
             $years = array_unique([2026, ...array_column(array_filter($audit['sequences'], fn ($sequence) => $sequence['reset']), 'year')]);
             sort($years);
             $keys = ['cleanup:all-test-requests:v2', 'requests:reference-number', ...array_map(fn ($year) => "requests:file-number:$year", $years)];
@@ -46,11 +50,14 @@ class CleanupAllTestRequests extends Command
                 $this->assertExecutionGuards();
                 $current = $inventory->inspect();
                 $this->assertSameInventory($audit, $current);
+                $this->assertApprovedScope($current);
                 $journal = $current['journal'];
                 if ($journal === null) {
                     $journal = ['version' => CleanupSafety::VERSION, 'database' => $safety->databaseIdentity(),
+                        'approved_scope' => self::APPROVED_SCOPE,
                         'fingerprint' => $current['fingerprint'], 'ids' => $current['ids'], 'files' => $current['files'],
                         'schema_hash' => hash('sha256', json_encode($current['schema'], JSON_THROW_ON_ERROR)),
+                        'queue_runtime' => $current['queueRuntime'],
                         'preserved_sequences' => array_values(array_filter($current['sequences'], fn ($sequence) => ! $sequence['reset'])),
                         'completed' => false];
                     $safety->writeJournal($journal);
@@ -63,11 +70,14 @@ class CleanupAllTestRequests extends Command
                     DB::transaction(function () use ($inventory, $current): void {
                         // Full ranges also stop queue inserts without request foreign keys.
                         // Preserved rows are locked briefly, never selected for deletion.
-                        foreach (array_unique(['requests', 'file_number_sequences', 'jobs', 'failed_jobs', 'settings', ...CleanupSafety::TABLES]) as $table) {
+                        foreach (array_unique(['requests', 'file_number_sequences', ...$current['queueTables'], 'settings', ...CleanupSafety::TABLES]) as $table) {
                             DB::table($table)->where('id', '>=', 0)->orderBy('id')->lockForUpdate()->get(['id']);
                         }
+                        if ($current['inspectBatches']) {
+                            DB::table('job_batches')->orderBy('id')->lockForUpdate()->get(['id']);
+                        }
                         $this->assertSameInventory($current, $inventory->inspect());
-                        foreach (['jobs', 'failed_jobs', ...CleanupSafety::TABLES, 'file_number_sequences'] as $table) {
+                        foreach ([...$current['queueTables'], ...CleanupSafety::TABLES, 'file_number_sequences'] as $table) {
                             foreach (array_chunk($current['ids'][$table], 400) as $chunk) {
                                 $deleted = DB::table($table)->whereIn('id', $chunk)->delete();
                                 if ($deleted !== count($chunk)) {
@@ -138,6 +148,23 @@ class CleanupAllTestRequests extends Command
         }
     }
 
+    private function assertApprovedScope(array $audit): void
+    {
+        if ($audit['journal'] !== null && ($audit['journal']['approved_scope'] ?? null) !== self::APPROVED_SCOPE) {
+            throw new CleanupRefused('Recovery journal predates the approved 19-request scope. Manual reconciliation is required.');
+        }
+        if ($audit['resume']) {
+            return;
+        }
+
+        $references = array_column($audit['targets'], 'reference_no');
+        sort($references, SORT_STRING);
+        $approved = array_map(fn (int $number) => sprintf('SC/2026/%06d', $number), range(1, 19));
+        if ($references !== $approved || count($audit['files']) !== 20) {
+            throw new CleanupRefused('Execution requires exactly SC/2026/000001 through SC/2026/000019 and 20 inventoried private files.');
+        }
+    }
+
     private function assertClear(array $audit): void
     {
         if ($audit['blockers'] !== []) {
@@ -172,6 +199,10 @@ class CleanupAllTestRequests extends Command
         $this->table(['ID', 'Reference', 'Created year', 'File number'], array_map(fn ($target) => [
             $target['id'], $this->safeText($target['reference_no']), substr($target['created_at'] ?? '', 0, 4) ?: 'unknown', $this->safeText($target['file_number'] ?? '')], $audit['targets']));
         $this->table(['Table', 'Affected rows'], collect($audit['counts'])->map(fn ($count, $table) => [$table, $count])->values()->all());
+        $absentQueueTables = array_diff(CleanupQueueInspector::TABLES, $audit['queueTables']);
+        if ($audit['queueRuntime'] !== null && $absentQueueTables !== []) {
+            $this->line('Sync queue tables verified absent: '.implode(', ', $absentQueueTables));
+        }
         $this->table(['Sequence year', 'Current last number', 'Action'], array_map(fn ($sequence) => [$sequence['year'], $sequence['last_number'], $sequence['reset'] ? 'reset request file sequence' : 'preserve other year'], $audit['sequences']));
         $this->line('Private files recorded: '.count($audit['files']));
         $this->line('Private files currently present: '.collect($audit['files'])->where('exists', true)->count());

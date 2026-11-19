@@ -19,10 +19,12 @@ class CleanupInventory
         $journal = null;
         $resume = false;
         $nextReference = 'unavailable';
+        $queueRuntime = null;
+        $queueTables = CleanupQueueInspector::TABLES;
+        $inspectBatches = false;
         $this->capture($blockers, 'Reference preview', function () use (&$nextReference): void {
             $nextReference = app(ReferenceNumberService::class)->generate();
         });
-        $this->capture($blockers, 'Database safety preflight', fn () => $this->safety->assertDatabaseSafety());
         if ((int) now()->year !== 2026) {
             $blockers[] = 'This cleanup can reset numbering only during calendar year 2026.';
         }
@@ -37,12 +39,23 @@ class CleanupInventory
         $this->capture($blockers, 'Dependent row inventory', function () use (&$rows, &$blockers, &$schema, $requestIds): void {
             $rows = array_replace($rows, $this->safety->rows($requestIds, $blockers, $schema));
         });
-        $this->capture($blockers, 'Queue inventory', function () use (&$rows, &$blockers, $requestIds): void {
-            $queueIds = $this->queues->inspect($requestIds, array_keys($rows['customer_notification_deliveries']), array_keys($rows['request_final_document_deliveries']), $blockers);
+        $sync = config('queue.connections.'.config('queue.default').'.driver') === 'sync';
+        $absentQueueTables = $sync ? array_values(array_diff($queueTables, array_keys($schema))) : [];
+        $inspectBatches = $sync && isset($schema['job_batches']);
+        $queueTables = array_values(array_diff($queueTables, $absentQueueTables));
+        $this->capture($blockers, 'Database safety preflight', fn () => $this->safety->assertDatabaseSafety($absentQueueTables, $inspectBatches));
+        $this->capture($blockers, 'Queue inventory', function () use (&$rows, &$blockers, $requestIds, $absentQueueTables): void {
+            $queueIds = $this->queues->inspect($requestIds, array_keys($rows['customer_notification_deliveries']),
+                array_keys($rows['request_final_document_deliveries']), $blockers, allowSync: true, absentTables: $absentQueueTables);
             foreach ($queueIds as $table => $ids) {
                 $rows[$table] = $this->safety->selectedRows($table, 'id', $ids);
             }
         });
+        if ($sync) {
+            $this->capture($blockers, 'Sync runtime', function () use (&$queueRuntime, $schema, $absentQueueTables): void {
+                $queueRuntime = $this->queues->inspectSyncRuntime($schema, $absentQueueTables);
+            });
+        }
         $this->capture($blockers, 'Sequence inventory', function () use (&$sequences, &$rows, &$blockers, $targets): void {
             $maximums = [];
             foreach ($targets as $target) {
@@ -81,6 +94,9 @@ class CleanupInventory
             if (($journal['schema_hash'] ?? null) !== hash('sha256', json_encode($schema, JSON_THROW_ON_ERROR))) {
                 $blockers[] = 'Schema differs from the signed recovery journal; manual review required.';
             }
+            if (($journal['queue_runtime'] ?? null) !== $queueRuntime) {
+                $blockers[] = 'Queue runtime differs from the signed recovery journal; manual review required.';
+            }
             $this->capture($blockers, 'Recovery state', function () use (&$resume, &$blockers, $journal, $targets): void {
                 $remaining = false;
                 foreach ($journal['ids'] as $table => $ids) {
@@ -100,7 +116,11 @@ class CleanupInventory
         // Only stable database state, schema and file content enter the fingerprint.
         // Customer values and queue payloads are never printed or persisted in the journal.
         ksort($rows);
-        $fingerprint = hash('sha256', json_encode([CleanupSafety::VERSION, $this->safety->databaseIdentity(), $rows, $files, $schema, $sequences], JSON_THROW_ON_ERROR));
+        $snapshot = [CleanupSafety::VERSION, $this->safety->databaseIdentity(), $rows, $files, $schema, $sequences];
+        if ($queueRuntime !== null) {
+            $snapshot[] = $queueRuntime;
+        }
+        $fingerprint = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
         if ($resume) {
             $expected = array_column($journal['files'], null, 'path');
             foreach ($files as $file) {
@@ -139,7 +159,8 @@ class CleanupInventory
         unset($count);
         $blockers = array_values(array_unique($blockers));
 
-        return compact('targets', 'ids', 'counts', 'files', 'sequences', 'schema', 'fingerprint', 'blockers', 'resume', 'journal', 'nextReference');
+        return compact('targets', 'ids', 'counts', 'files', 'sequences', 'schema', 'fingerprint', 'blockers', 'resume', 'journal', 'nextReference',
+            'queueTables', 'queueRuntime', 'inspectBatches');
     }
 
     private function capture(array &$blockers, string $stage, callable $operation): void

@@ -57,6 +57,13 @@ class CleanupProductionTestData extends Command
 
     public function handle(): int
     {
+        // No dataset-wide test classification can be proven. No override exists.
+        if ($this->option('execute')) {
+            $this->error('Historical cleanup execution is disabled.');
+
+            return self::FAILURE;
+        }
+
         $execute = (bool) $this->option('execute');
         $this->components->info($execute ? 'EXECUTION MODE' : 'DRY-RUN MODE — no changes will be made');
 
@@ -75,8 +82,7 @@ class CleanupProductionTestData extends Command
         if (! $execute) {
             $this->newLine();
             $this->components->info('Dry run completed successfully. No data or files were changed.');
-            $this->line('Execute only after reviewing this report:');
-            $this->line('php artisan sai:cleanup-production-test-data --execute --confirm='.self::CONFIRMATION);
+            $this->line('Inventory only. Historical cleanup execution is disabled.');
 
             return self::SUCCESS;
         }
@@ -152,6 +158,9 @@ class CleanupProductionTestData extends Command
             ->get(['id', 'reference_no', 'file_number', 'created_at']);
         $requestIds = $targets->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $errors = [];
+        if (app(CleanupSafety::class)->hasSelectiveJournal()) {
+            $errors[] = 'Selective cleanup history exists; limited cleanup is refused.';
+        }
         // Never let reference reuse bypass the all-scope one-time cleanup journal.
         // Presence alone blocks: invalid/incomplete journals must not be ignored.
         if (Storage::disk('local')->exists(CleanupSafety::JOURNAL)) {
@@ -327,7 +336,9 @@ class CleanupProductionTestData extends Command
 
     private function directForeignKeyTables(): array
     {
-        return collect(Schema::getTables())
+        $schema = DB::connection()->getDriverName() === 'sqlite' ? 'main' : DB::connection()->getDatabaseName();
+
+        return collect(Schema::getTables($schema))
             ->pluck('name')
             ->filter(fn (string $table): bool => collect(Schema::getForeignKeys($table))->contains(
                 fn (array $foreign): bool => ($foreign['foreign_table'] ?? null) === 'requests'
