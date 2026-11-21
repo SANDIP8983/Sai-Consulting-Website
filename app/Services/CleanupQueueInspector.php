@@ -26,12 +26,16 @@ class CleanupQueueInspector
         // Sync runs inline, but explicit database dispatches and older jobs can still persist.
         $sync = $driver === 'sync' && $allowSync;
         $persistent = $sync ? 'database' : $connection;
+        $defaultDatabase = config('database.default');
+        $jobsDatabase = config("queue.connections.$persistent.connection");
+        // Full cleanup with inherited sync queue storage requires drained persistent tables.
+        $requireEmpty = $sync && $allowSync && $jobsDatabase === null;
         if (! ($driver === 'database' || $sync)
             || config("queue.connections.$persistent.driver") !== 'database'
-            || (config("queue.connections.$persistent.connection") ?: config('database.default')) !== config('database.default')
+            || ($jobsDatabase ?? $defaultDatabase) !== $defaultDatabase
             || config("queue.connections.$persistent.table") !== 'jobs'
             || ! in_array(config('queue.failed.driver'), ['database', 'database-uuids'], true)
-            || config('queue.failed.database') !== config('database.default')
+            || config('queue.failed.database') !== $defaultDatabase
             || config('queue.failed.table') !== 'failed_jobs') {
             throw new CleanupRefused('Cleanup requires database jobs and failed_jobs on the default database; other backends need a reviewed adapter.');
         }
@@ -99,10 +103,13 @@ class CleanupQueueInspector
                     } elseif ($this->containsRequest($fields)) {
                         throw new CleanupRefused('Unrecognized request-related job found; cleanup refused.');
                     }
+                    if ($owned && ! empty($fields['batchId'])) {
+                        throw new CleanupRefused('Target job belongs to a batch; review batch dependencies before cleanup.');
+                    }
+                    if ($requireEmpty) {
+                        throw new CleanupRefused('Sync cleanup with the default queue database requires empty jobs and failed_jobs tables.');
+                    }
                     if ($owned) {
-                        if (! empty($fields['batchId'])) {
-                            throw new CleanupRefused('Target job belongs to a batch; review batch dependencies before cleanup.');
-                        }
                         $result[$table][] = $row->id;
                     }
                 } catch (\Throwable $exception) {

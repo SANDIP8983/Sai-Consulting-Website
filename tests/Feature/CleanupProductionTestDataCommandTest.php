@@ -96,6 +96,58 @@ class CleanupProductionTestDataCommandTest extends TestCase
 
     private const CONFIRMATION = 'DELETE-ALL-INVENTORIED-TEST-REQUESTS';
 
+    private function useSyncWithDefaultQueueDatabase(): void
+    {
+        config([
+            'queue.default' => 'sync',
+            'queue.connections.database.connection' => null,
+            'queue.failed.database' => config('database.default'),
+            'queue.batching.database' => config('database.default'),
+        ]);
+    }
+
+    public function test_sync_with_default_queue_database_accepts_empty_tables_on_dry_run(): void
+    {
+        $this->useSyncWithDefaultQueueDatabase();
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertDatabaseCount('failed_jobs', 0);
+
+        $exit = Artisan::call('sai:cleanup-all-test-requests');
+        $output = Artisan::output();
+        $this->assertSame(0, $exit, $output);
+        $this->assertMatchesRegularExpression('/Approval fingerprint: [a-f0-9]{64}/', $output);
+        $this->assertStringContainsString('DRY-RUN MODE', $output);
+    }
+
+    #[TestWith(['queue.default', 'redis'])]
+    #[TestWith(['queue.connections.database.driver', 'redis'])]
+    #[TestWith(['queue.connections.database.connection', 'alternate'])]
+    #[TestWith(['queue.failed.database', 'alternate'])]
+    #[TestWith(['queue.failed.driver', 'file'])]
+    public function test_sync_with_default_queue_database_refuses_unreviewed_storage(string $key, string $value): void
+    {
+        $this->useSyncWithDefaultQueueDatabase();
+        config([$key => $value]);
+
+        $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests'));
+        $this->assertStringContainsString('other backends need a reviewed adapter', Artisan::output());
+    }
+
+    #[TestWith(['jobs'])]
+    #[TestWith(['failed_jobs'])]
+    public function test_sync_with_default_queue_database_refuses_any_persistent_job(string $table): void
+    {
+        $this->useSyncWithDefaultQueueDatabase();
+        $payload = $this->payload(new \stdClass);
+        DB::table($table)->insert($table === 'jobs'
+            ? ['queue' => 'default', 'payload' => $payload, 'attempts' => 0, 'available_at' => 1, 'created_at' => 1]
+            : ['uuid' => 'synthetic', 'connection' => 'database', 'queue' => 'default', 'payload' => $payload, 'exception' => 'synthetic']);
+
+        $this->assertSame(1, Artisan::call('sai:cleanup-all-test-requests'));
+        $this->assertStringContainsString('requires empty jobs and failed_jobs tables', Artisan::output());
+        $this->assertDatabaseCount($table, 1);
+    }
+
     #[TestWith(['sync'])]
     #[TestWith(['database'])]
     public function test_approved_scope_cleans_owned_jobs_files_and_numbering(string $connection): void
