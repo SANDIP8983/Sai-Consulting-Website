@@ -9,6 +9,6 @@ class DisabledWhatsAppChannel implements WhatsAppChannelInterface
 {
     public function send(CustomerNotificationDelivery $delivery, string $recipient, array $message): array
     {
-        return ['status' => 'skipped', 'provider' => 'disabled', 'provider_message_id' => null, 'failure_category' => 'provider_not_configured'];
+        return ['status' => 'skipped', 'provider' => 'disabled', 'provider_message_id' => null, 'failure_category' => 'provider_not_configured', 'failure_message' => null, 'provider_response' => null];
     }
 }

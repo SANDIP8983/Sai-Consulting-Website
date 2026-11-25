@@ -129,6 +129,11 @@ class CustomerRequest extends Model
         return $this->hasMany(RequestDispatchHistory::class, 'request_id');
     }
 
+    public function notificationEvents(): HasMany
+    {
+    return $this->hasMany(CustomerNotificationEvent::class, 'request_id');
+    }
+
     public function processing(): HasOne
     {
         return $this->hasOne(RequestProcessingDetail::class, 'request_id');

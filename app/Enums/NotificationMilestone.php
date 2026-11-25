@@ -62,6 +62,7 @@ enum NotificationMilestone: string
             self::RequestReceived, self::Accepted, self::Rejected, self::PaymentReceived,
             self::FinalDraftReady, self::Completed, self::Dispatched,
             self::RevenueEntryNumberReceived, self::RevenueEntryCertified, self::RevenueEntryRejected,
+            self::AppointmentConfirmed, self::AppointmentRescheduled, self::AppointmentCancelled,
         ], true);
     }
 }
